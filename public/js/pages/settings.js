@@ -30,7 +30,12 @@ export function masterPage(name, opts = {}) {
       tableHost.replaceChildren(table({ cols: colDefs(), rows, onRow: (r) => edit(r), name: title, empty: 'لا توجد بيانات — اضغط «جديد» لإضافة أول سجل' }));
     };
     const edit = (rec) => {
-      const defs = fieldDefs(M);
+      let lastAuto = null;   // آخر اسم اتعبّى تلقائياً من حقل مرتبط (علشان منكتبش فوق اسم كتبه المستخدم بإيده)
+      const defs = fieldDefs(M).map((f) => (f.fills ? { ...f, onChange: (v) => {
+        const src = byId(f.ref, v); if (!src || !fg) return;
+        const cur = fg.values()[f.fills];
+        if (!cur || cur === lastAuto) { fg.set(f.fills, src.name); lastAuto = src.name; }
+      } } : f));
       const fg = formGrid([{ k: 'code', l: 'الكود', t: 'text', ph: rec ? '' : 'تلقائي — اتركه فارغاً' }, ...defs], rec || (opts.defaults || {}), 2);
       const body = h('div', fg.el, rec ? h('label.fld', { style: { marginTop: '10px', flexDirection: 'row', alignItems: 'center', gap: '8px' } }, (() => { const c = fieldInput({ t: 'bool' }, rec.active); fg.active = c; return c; })(), h('span', 'نشط')) : null);
       modal({
