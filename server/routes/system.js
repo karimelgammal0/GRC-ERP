@@ -44,11 +44,12 @@ export async function systemRouter() {
     settings: await allSettings(), opening_locked: await openingLocked(),
   }));
   r.get('/lookups', async (req, res) => {
-    const out = {};
-    for (const [k, M] of Object.entries(MASTERS)) out[k] = await all(`SELECT * FROM ${M.table} ORDER BY code`);
-    out.accounts = await all('SELECT id,code,name,type,postable,active,parent_id FROM accounts ORDER BY code');
-    out.periods = await all('SELECT * FROM fiscal_periods ORDER BY start_date');
-    res.json(out);
+    // بالتوازي: ~25 استعلام ورا بعض كانوا بيضربوا زمن الذهاب والإياب لقاعدة البيانات في كل مرة
+    const jobs = [...Object.entries(MASTERS).map(([k, M]) => [k, `SELECT * FROM ${M.table} ORDER BY code`]),
+      ['accounts', 'SELECT id,code,name,type,postable,active,parent_id FROM accounts ORDER BY code'],
+      ['periods', 'SELECT * FROM fiscal_periods ORDER BY start_date']];
+    const rows = await Promise.all(jobs.map(([, q]) => all(q)));
+    res.json(Object.fromEntries(jobs.map(([k], i) => [k, rows[i]])));
   });
 
   // ----- إعدادات عامة وربط الحسابات والترقيم -----

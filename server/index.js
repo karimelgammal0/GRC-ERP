@@ -12,11 +12,20 @@ import { accountsRouter } from './routes/accounts.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 await initSchema();
+{ // زمن الذهاب والإياب لقاعدة البيانات (لو كبير: السيرفر وقاعدة البيانات في مناطق بعيدة)
+  const t = []; for (let i = 0; i < 3; i++) { const s0 = performance.now(); await get('SELECT 1 AS ok'); t.push(Math.round(performance.now() - s0)); }
+  console.log(`زمن استعلام قاعدة البيانات (ms): ${t.join(' / ')}`);
+}
 await ensureBaseData();
 if (await isEmpty()) { await seedAll(); console.log('تمت تهيئة قاعدة البيانات بالبيانات الأساسية. المستخدم: admin / admin123'); }
 
 export const app = express();
 app.use(express.json({ limit: '5mb' }));
+app.use('/api', (req, res, next) => { // تسجيل الطلبات البطيئة في لوج Railway
+  const s0 = performance.now();
+  res.on('finish', () => { const ms = Math.round(performance.now() - s0); if (ms > 700 && req.path !== '/health') console.log(`[slow] ${req.method} ${req.originalUrl.split('?')[0]} ${ms}ms`); });
+  next();
+});
 app.use(express.static(path.join(here, '..', 'public')));
 
 // تنفيذ طلبات التعديل واحد تلو الآخر (إعادة التقييم بالمتوسط المرجح لازم تكون متسلسلة)
