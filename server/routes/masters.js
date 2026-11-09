@@ -23,7 +23,7 @@ export const MASTERS = {
   suppliers: {
     title: 'الموردين', table: 'suppliers', seq: 'supplier',
     fields: [T('name', 'اسم المورد', 'text', { req: 1 }), T('phone', 'الهاتف'), T('address', 'العنوان'), T('tax_no', 'الرقم الضريبي'), T('credit_days', 'مدة الائتمان (يوم)', 'number'), T('notes', 'ملاحظات', 'textarea')],
-    cols: ['code', 'name', 'phone', 'credit_days'], used: [['purchase_invoices', 'supplier_id'], ['goods_receipts', 'supplier_id'], ['purchase_orders', 'supplier_id'], ['vouchers', 'supplier_id'], ['purchase_returns', 'supplier_id']],
+    cols: ['code', 'name', 'phone', 'credit_days'], used: [['purchase_invoices', 'supplier_id'], ['goods_receipts', 'supplier_id'], ['purchase_orders', 'supplier_id'], ['purchase_requests', 'supplier_id'], ['vouchers', 'supplier_id'], ['purchase_returns', 'supplier_id']],
   },
   projects: {
     title: 'المشروعات', table: 'projects', seq: 'project',

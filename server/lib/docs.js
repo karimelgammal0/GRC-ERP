@@ -72,9 +72,9 @@ export async function voidDoc(type, id, user) {
 // ============================================================
 DOCS.purchase_request = {
   table: 'purchase_requests', lines: 'purchase_request_lines', fk: 'request_id', seq: 'purchase_request',
-  cols: ['date', 'requested_by_id', 'project_id', 'needed_date', 'notes'], lineCols: ['material_id', 'qty', 'notes'],
+  cols: ['date', 'requested_by_id', 'supplier_id', 'project_id', 'needed_date', 'notes'], lineCols: ['material_id', 'qty', 'notes'],
   blank: (l) => !l.material_id,
-  async validate(p, lines) { for (const l of lines) { await must('materials', l.material_id, 'الخامة'); posQty(l); } },
+  async validate(p, lines) { if (p.supplier_id) await must('suppliers', p.supplier_id, 'المورد'); else p.supplier_id = null; for (const l of lines) { await must('materials', l.material_id, 'الخامة'); posQty(l); } },
   async unpost(cur) {
     if (await val('SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=? AND ordered_qty>0', cur.id))
       throw new AppError('تم إصدار أمر شراء على هذا الطلب — ألغِ أمر الشراء أولاً');

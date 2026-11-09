@@ -13,10 +13,11 @@ const sup = (r) => r.supplier_name;
 
 // ---------------- طلبات الشراء ----------------
 export const requestsPage = docScreen({
-  type: 'purchase_request', title: 'طلبات الشراء', noun: 'طلب شراء', newLabel: 'طلب شراء جديد', statuses: [['open', 'مفتوح'], ['ordered', 'تم الأمر']],
-  listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'requested_by', l: 'مقدم الطلب' }, { k: 'project_name', l: 'المشروع' }, { k: 'n_lines', l: 'البنود', num: true }, { k: 'needed_date', l: 'مطلوب في' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
+  type: 'purchase_request', title: 'طلبات الشراء', noun: 'طلب شراء', newLabel: 'طلب شراء جديد', defaultFrom: monthStart, defaultTo: today, statuses: [['open', 'مفتوح'], ['ordered', 'تم الأمر']],
+  filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
+  listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'requested_by', l: 'مقدم الطلب' }, { k: 'supplier_name', l: 'المورد' }, { k: 'project_name', l: 'المشروع' }, { k: 'n_lines', l: 'البنود', num: true }, { k: 'needed_date', l: 'مطلوب في' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
-    cols: 3, header: [dateF, { k: 'requested_by_id', l: 'مقدم الطلب', t: 'fk', ref: 'employees', combo: true }, { k: 'project_id', l: 'المشروع (اختياري)', t: 'fk', ref: 'projects', combo: true }, { k: 'needed_date', l: 'مطلوب في تاريخ', t: 'date' }, { ...notesF, wide: false }],
+    cols: 3, header: [dateF, { k: 'requested_by_id', l: 'مقدم الطلب', t: 'fk', ref: 'employees', combo: true }, { k: 'supplier_id', l: 'المورد (اختياري)', t: 'fk', ref: 'suppliers', combo: true }, { k: 'project_id', l: 'المشروع (اختياري)', t: 'fk', ref: 'projects', combo: true }, { k: 'needed_date', l: 'مطلوب في تاريخ', t: 'date' }, { ...notesF, wide: false }],
     lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المطلوبة', w: '170px' }), unitCol, { l: 'تم أمر شراء بـ', calc: (l) => l.ordered_qty ?? 0, fmt: fq }, { k: 'notes', l: 'ملاحظة', t: 'text' }] },
     totals: (ctx) => [['عدد البنود', String(ctx.lines.filter((l) => l.material_id).length)]],
   },

@@ -454,3 +454,6 @@ CREATE TABLE IF NOT EXISTS warehouse_categories (
   category_id INTEGER NOT NULL REFERENCES material_categories(id) ON DELETE CASCADE,
   PRIMARY KEY (warehouse_id, category_id)
 );
+
+-- المورد في طلب الشراء (اختياري)
+ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFERENCES suppliers(id);

@@ -247,6 +247,15 @@ await run(`INSERT INTO users(username,name,pass_hash,role,modules) VALUES('u_per
 const ckOf = async (u) => (await fetch(base + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: 'admin123' }) })).headers.get('set-cookie').split(';')[0];
 ok((await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: 'بند ممنوع' }, await ckOf('u_inv'))).status === 403, 'مستخدم بدون صلاحية مرفوض');
 ok((await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: 'بند مسموح' }, await ckOf('u_perm'))).status === 200, 'مستخدم بصلاحية الإضافة مقبول');
+
+section('14) المورد (اختياري) في طلب الشراء');
+const supQ = await val('SELECT id FROM suppliers LIMIT 1'); const matQ = await val('SELECT id FROM materials LIMIT 1');
+const prA = await saveDoc('purchase_request', { date: '2026-11-08', supplier_id: supQ, lines: [{ material_id: matQ, qty: 1 }] }, null, U);
+const prB = await saveDoc('purchase_request', { date: '2026-11-08', lines: [{ material_id: matQ, qty: 1 }] }, null, U);
+ok((await get('SELECT supplier_id FROM purchase_requests WHERE id=?', prA.id)).supplier_id === supQ, 'طلب شراء بمورد');
+ok((await get('SELECT supplier_id FROM purchase_requests WHERE id=?', prB.id)).supplier_id === null, 'طلب شراء بدون مورد');
+await throws(async () => await saveDoc('purchase_request', { date: '2026-11-08', supplier_id: 999999, lines: [{ material_id: matQ, qty: 1 }] }, null, U), null, 'مورد غير موجود');
+const lst = await api(`/api/doc/purchase_request?supplier_id=${supQ}`); ok(lst.length >= 1 && lst[0].supplier_name, 'قائمة الطلبات بالمورد والفلتر');
 server.close();
 
 console.log(`\n${fail ? '✗' : '✓'} ${pass} اختبار نجح، ${fail} فشل`);

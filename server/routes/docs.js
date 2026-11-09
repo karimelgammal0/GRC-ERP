@@ -23,8 +23,8 @@ function where(q, base = []) {
 }
 
 const LISTS = {
-  purchase_request: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, COALESCE(re.name, d.requested_by) requested_by,
-      (SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=d.id) n_lines FROM purchase_requests d LEFT JOIN projects pr ON pr.id=d.project_id LEFT JOIN employees re ON re.id=d.requested_by_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
+  purchase_request: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, sp.name supplier_name, COALESCE(re.name, d.requested_by) requested_by,
+      (SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=d.id) n_lines FROM purchase_requests d LEFT JOIN projects pr ON pr.id=d.project_id LEFT JOIN suppliers sp ON sp.id=d.supplier_id LEFT JOIN employees re ON re.id=d.requested_by_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   purchase_order: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, s.name supplier_name,
       (SELECT COALESCE(SUM(qty*unit_price),0) FROM purchase_order_lines WHERE order_id=d.id) total FROM purchase_orders d JOIN suppliers s ON s.id=d.supplier_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   goods_receipt: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, s.name supplier_name, w.name warehouse_name,
