@@ -53,7 +53,7 @@ export const issuesPage = docScreen({
 export const siteTransfersPage = docScreen({
   type: 'stock_issue', title: 'التحويل للمواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' },
   note: 'تحويل خامات من المخزن لمشروع. لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
-  filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true }],
+  filters: (() => { let fp = null; return [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, onChange: (v) => { fp = v; } }, { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, filter: (x) => !fp || x.project_id === Number(fp) }]; })(),
   listCols: [
     { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'project_name', l: 'المشروع' }, { k: 'site_name', l: 'الموقع' },
     { k: 'total', l: 'التكلفة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
