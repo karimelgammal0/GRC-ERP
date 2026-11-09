@@ -1,0 +1,23 @@
+{
+  "name": "grc-factory-erp",
+  "version": "0.1.0",
+  "description": "نظام ERP لمصنع GRC — النسخة الأولى المبسطة (Node + Postgres / Supabase)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "reset-db": "node server/reset.js",
+    "apply-coa": "node server/migrate-coa.js",
+    "test": "node tests/scenario.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.15",
+    "express": "^4.21.2",
+    "express-async-errors": "^3.1.1",
+    "pg": "^8.23.1"
+  }
+}
