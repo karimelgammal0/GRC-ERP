@@ -93,6 +93,17 @@ const iss1 = await saveDoc('stock_issue', { date: '2026-11-06', kind: 'productio
 near(iss1.lines[0].unit_cost, 16.9048, 'تكلفة الصرف = المتوسط', 0.001); near(iss1.lines[0].total, r2(50 * 3550 / 210), 'قيمة الصرف');
 const iss2 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, item_id: item2, stage_id: stage.mold, lines: [{ material_id: T1, qty: 20 }] }, null, U);
 const iss3 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'site', warehouse_id: wh, project_id: prj, site_id: site, lines: [{ material_id: T1, qty: 10 }] }, null, U);
+// التحويل لموقع: الموقع مطلوب بس لو المشروع متكود له مواقع
+await run(`INSERT INTO sites(code,name,project_id) VALUES('SITE-T2','موقع مشروع تاني',?)`, prj2); const site2 = await val(`SELECT id FROM sites WHERE code='SITE-T2'`);
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'site', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, qty: 1 }] }, null, U), /اختر الموقع/, 'مشروع له مواقع من غير اختيار موقع');
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'site', warehouse_id: wh, project_id: prj, site_id: site2, lines: [{ material_id: T1, qty: 1 }] }, null, U), /لا يتبع المشروع/, 'موقع تابع لمشروع تاني');
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'site', warehouse_id: wh, lines: [{ material_id: T1, qty: 1 }] }, null, U), /المشروع/, 'تحويل لموقع من غير مشروع');
+const prj3 = (await get(`SELECT id FROM projects WHERE id NOT IN (?,?) AND NOT EXISTS (SELECT 1 FROM sites WHERE project_id=projects.id) LIMIT 1`, prj, prj2))?.id;
+if (prj3) {
+  const nosite = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'site', warehouse_id: wh, project_id: prj3, site_id: site, lines: [{ material_id: T1, qty: 1 }] }, null, U);
+  ok(!(await val('SELECT site_id FROM stock_issues WHERE id=?', nosite.id)), 'مشروع من غير مواقع: الموقع بيتساب فاضي');
+  await voidDoc('stock_issue', nosite.id, U);
+} else ok(false, 'لازم يكون فيه مشروع تالت في البيانات الأساسية');
 const iss4 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, qty: 5 }] }, null, U);
 const avgNow = r2(3550 / 210);
 near((await get('SELECT avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 16.9048, 'الصرف لا يغيّر المتوسط', 0.001);

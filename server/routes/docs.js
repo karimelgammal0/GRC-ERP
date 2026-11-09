@@ -15,7 +15,7 @@ function where(q, base = []) {
   if (q.from) { w.push('d.date>=?'); p.push(q.from); }
   if (q.to) { w.push('d.date<=?'); p.push(q.to); }
   eq('d.status', 'status'); eq('d.supplier_id', 'supplier_id'); eq('d.project_id', 'project_id'); eq('d.kind', 'kind');
-  eq('d.warehouse_id', 'warehouse_id'); eq('d.treasury_id', 'treasury_id'); eq('d.custodian_id', 'custodian_id');
+  eq('d.warehouse_id', 'warehouse_id'); eq('d.site_id', 'site_id'); eq('d.treasury_id', 'treasury_id'); eq('d.custodian_id', 'custodian_id');
   if (q.q) { w.push('d.no LIKE ?'); p.push(`%${q.q}%`); }
   return { sql: w.length ? 'WHERE ' + w.join(' AND ') : '', p };
 }
@@ -35,7 +35,7 @@ const LISTS = {
     return rows.map((r) => ({ ...r, open_amount: r.payment_type === 'cash' || r.status === 'void' ? 0 : r2(r.total - r.paid) })); },
   purchase_return: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, s.name supplier_name FROM purchase_returns d JOIN suppliers s ON s.id=d.supplier_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   stock_issue: async (q) => {
-    const base = []; if (q.only === 'issues') base.push(`d.kind<>'return'`); if (q.only === 'returns') base.push(`d.kind='return'`);
+    const base = []; if (q.only === 'issues') base.push(`d.kind IN ('production','overhead')`); if (q.only === 'site_transfers') base.push(`d.kind='site'`); if (q.only === 'returns') base.push(`d.kind='return'`);
     if (q.stage_id) base.push(`d.stage_id=${Number(q.stage_id)}`); if (q.item_id) base.push(`d.item_id=${Number(q.item_id)}`);
     const { sql, p } = where(q, base);
     return await all(`SELECT d.*, pr.name project_name, it.name item_name, st.name stage_name, si.name site_name, COALESCE(rc.name, d.received_by) received_by,
