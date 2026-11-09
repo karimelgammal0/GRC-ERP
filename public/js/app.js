@@ -16,7 +16,7 @@ const NAV = [
     ['general', 'عام وربط الحسابات', generalPage], ['opening', 'الأرصدة الافتتاحية', openingPage],
     ['materials', 'الخامات', M('materials')], ['categories', 'فئات الخامات', M('material_categories')], ['units', 'وحدات القياس', M('units')], ['warehouses', 'المخازن', M('warehouses')],
     ['clients', 'العملاء', M('clients')], ['projects', 'المشروعات', M('projects')], ['project-items', 'بنود المشروعات', M('project_items')], ['stages', 'مراحل التصنيع', M('stages')], ['sites', 'المواقع', M('sites')],
-    ['suppliers', 'الموردين', M('suppliers')], ['treasuries', 'الخزن والبنوك', M('treasuries')], ['custodians', 'أصحاب العهد', M('custodians')],
+    ['suppliers', 'الموردين', M('suppliers')], ['treasuries', 'الخزن والبنوك', M('treasuries')], ['custodians', 'العهد', M('custodians')],
     ['expense-cats', 'فئات المصروفات', M('expense_categories')], ['employees', 'العاملين', M('employees')], ['sequences', 'ترقيم المستندات', sequencesPage], ['users', 'المستخدمون', usersPage], ['audit', 'سجل العمليات', auditPage]] },
   { id: 'inventory', ico: '▣', title: 'مخازن المواد الخام', items: [
     ['issues', 'صرف / تحويل للمواقع', inv.issuesPage], ['returns', 'مرتجع للمخزن', inv.returnsPage], ['adjustments', 'جرد وتسويات', inv.adjustmentsPage],
