@@ -1,0 +1,21 @@
+name: Deploy to Hugging Face Space
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Push to Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}   # مثال: karimelgammal0/grc-erp
+        run: |
+          # ملف إعداد الـSpace (Docker) بيتضاف في README بتاع النسخة المرفوعة فقط
+          printf -- '---\ntitle: GRC ERP\nsdk: docker\napp_port: 7860\n---\n' | cat - README.md > README.hf && mv README.hf README.md
+          git config user.email ci@example.com && git config user.name ci
+          git add -A && git commit -qm "hf config" || true
+          git push --force "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" HEAD:main
