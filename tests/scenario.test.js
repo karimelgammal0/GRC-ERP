@@ -263,6 +263,7 @@ ok(e1.status === 200 && e1.j.daily_rate === 0, 'موظف بدون أجر يوم'
 const e2 = await send('PUT', `/api/m/employees/${e1.j.id}`, { daily_rate: '' }); ok(e2.status === 200 && e2.j.daily_rate === 0, 'تفريغ أجر اليوم عند التعديل');
 const m1 = await send('POST', '/api/m/materials', { name: 'خامة بدون حد', unit_id: await val('SELECT id FROM units LIMIT 1'), min_qty: '' }); ok(m1.status === 200 && m1.j.min_qty === 0, 'خامة بدون حد طلب');
 const s1 = await send('POST', '/api/m/suppliers', { name: 'مورد بدون ائتمان', credit_days: '' }); ok(s1.status === 200 && s1.j.credit_days === 0, 'مورد بدون مدة ائتمان');
+const sq = await api('/api/sequences'); ok(sq.length > 20 && sq[0].key === 'unit', 'شاشة الترقيم');
 server.close();
 
 console.log(`\n${fail ? '✗' : '✓'} ${pass} اختبار نجح، ${fail} فشل`);

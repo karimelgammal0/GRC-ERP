@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { all, get, run, val, tx, insertRow, updateRow, AppError, r2 } from '../db.js';
-import { allSettings, setSetting, ACC_KEYS, audit, getSetting } from '../lib/core.js';
+import { allSettings, setSetting, ACC_KEYS, audit, getSetting, DEFAULT_SEQUENCES } from '../lib/core.js';
 import { applyOpening, lockOpening, unlockOpening, openingLocked } from '../lib/opening.js';
 import { MASTERS, withLinks } from './masters.js';
 import { hashPassword, checkPassword } from '../lib/seed.js';
@@ -67,7 +67,7 @@ export async function systemRouter() {
     }
     await audit(req.user, 'settings', 'settings', 0, Object.keys(req.body)); res.json(await allSettings());
   });
-  r.get('/sequences', async (req, res) => res.json(await all('SELECT * FROM sequences ORDER BY rowid')));
+  r.get('/sequences', async (req, res) => { const ord = DEFAULT_SEQUENCES.map((x) => x[0]); const rows = await all('SELECT * FROM sequences'); res.json(rows.sort((a, b) => (ord.indexOf(a.key) + 1 || 999) - (ord.indexOf(b.key) + 1 || 999) || a.key.localeCompare(b.key))); });
   r.put('/sequences/:key', async (req, res) => {
     adminOnly(req);
     const b = req.body; const cur = await get('SELECT * FROM sequences WHERE key=?', req.params.key); if (!cur) throw new AppError('غير موجود', 404);
