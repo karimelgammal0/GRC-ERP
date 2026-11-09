@@ -20,7 +20,7 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(here, '..', 'public')));
 
 // تنفيذ طلبات التعديل واحد تلو الآخر (إعادة التقييم بالمتوسط المرجح لازم تكون متسلسلة)
-// فحص الصحة: بيلمس قاعدة البيانات (بيمنع Supabase من الإيقاف ويصحّي Render)
+// فحص الصحة: بيلمس قاعدة البيانات (بيستخدمه Railway للـ Healthcheck)
 app.get('/api/health', async (req, res) => { await get('SELECT 1 AS ok'); res.json({ ok: true, t: new Date().toISOString() }); });
 let chain = Promise.resolve();
 app.use('/api', (req, res, next) => {
