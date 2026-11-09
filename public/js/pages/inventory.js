@@ -11,33 +11,64 @@ const mapStock = async (ctx) => {
 const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) || {}).id;
 
 // ---------------- إذن صرف ----------------
+// المواقع المكوّدة لمشروع (نشطة فقط)
+const sitesOf = (projectId) => (L.sites || []).filter((x) => x.active !== 0 && projectId && x.project_id === Number(projectId));
+const ISSUE_KINDS = KINDS.filter(([k]) => k !== 'site');
+const issueLines = { blank: () => ({ material_id: null, qty: null }), cols: [
+  { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '36%', onChange: matChange }, qtyCol({ l: 'الكمية', w: '170px' }),
+  { l: 'الوحدة', calc: (l) => unitOf(l.material_id), w: '80px' },
+  { l: 'الرصيد المتاح', calc: (l, c) => c.stock?.[l.material_id]?.qty ?? 0, fmt: fq, w: '110px' },
+  { l: 'متوسط التكلفة', calc: (l, c) => c.stock?.[l.material_id]?.avg_cost ?? 0, fmt: (v) => fmt(v, 4), w: '110px' },
+  { l: 'التكلفة', calc: (l, c) => (l.total ?? (Number(l.qty) || 0) * (c.stock?.[l.material_id]?.avg_cost ?? 0)), fmt: (v) => fmt(v), w: '110px' }] };
+const issueTotals = (ctx) => { const t = total(ctx.lines, (l) => l.total ?? (Number(l.qty) || 0) * (ctx.stock?.[l.material_id]?.avg_cost ?? 0)); return [[ctx.doc ? 'إجمالي تكلفة الصرف' : 'تكلفة تقديرية (الفعلية تُحسب عند الحفظ)', fmt(t)]]; };
+const whF = (ctx) => ({ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw', onChange: () => mapStock(ctx) });
+const receivedF = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true };
+
+// ---------------- إذن صرف (إنتاج / تشغيل غير مباشر) ----------------
 export const issuesPage = docScreen({
   type: 'stock_issue', title: 'أذون الصرف', noun: 'إذن صرف', newLabel: 'إذن صرف جديد', fixed: { only: 'issues' },
-  note: 'كل صرف من المخزن بيتحدد له: المشروع + البند + المرحلة — ومنها بتتجمّع تكلفة كل مشروع وكل مرحلة تلقائياً بالمتوسط المرجح.',
-  filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...KINDS] }],
+  note: 'كل صرف من المخزن بيتحدد له: المشروع + البند + المرحلة — ومنها بتتجمّع تكلفة كل مشروع وكل مرحلة تلقائياً بالمتوسط المرجح. (تحويل الخامات لمواقع المشاريع له شاشة منفصلة.)',
+  filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...ISSUE_KINDS] }],
   listCols: [
     { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'kind', l: 'النوع', text: (r) => labelOf(KINDS, r.kind).split(' (')[0] },
-    { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة', text: (r) => r.stage_name || r.site_name || '' },
+    { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' },
     { k: 'total', l: 'التكلفة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   listFoot: (c, rows) => (c.k === 'total' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.total)) : c.k === 'no' ? 'الإجمالي' : ''),
   editor: {
     cols: 3, rebuildOn: ['kind', 'project_id'], defaults: () => ({ kind: 'production', warehouse_id: defaultWh() }),
     header: (ctx) => {
       const k = ctx.header.kind; const p = ctx.header.project_id;
-      return [dateF, { k: 'kind', l: 'نوع الصرف', t: 'select', options: KINDS, lockOnEdit: true, req: 1 }, { k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw', onChange: () => mapStock(ctx) },
+      return [dateF, { k: 'kind', l: 'نوع الصرف', t: 'select', options: ISSUE_KINDS, lockOnEdit: true, req: 1 }, whF(ctx),
         k !== 'overhead' && { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', req: 1, combo: true, onChange: (v, c) => { const it = byId('project_items', c.header.item_id); if (it && it.project_id !== v) c.setHeader('item_id', null); c.header.site_id = null; } },
         k === 'production' && { k: 'item_id', l: 'البند داخل المشروع', t: 'fk', ref: 'project_items', req: 1, combo: true, filter: (x) => !p || x.project_id === p, help: p ? '' : 'اختر المشروع أولاً' },
-        k !== 'site' && { k: 'stage_id', l: k === 'overhead' ? 'المرحلة (اختياري)' : 'مرحلة التصنيع', t: 'fk', ref: 'stages', req: k === 'production' },
-        k === 'site' && { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', req: 1, filter: (x) => !p || !x.project_id || x.project_id === p },
-        { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true }, { ...notesF, wide: false }].filter(Boolean);
+        { k: 'stage_id', l: k === 'overhead' ? 'المرحلة (اختياري)' : 'مرحلة التصنيع', t: 'fk', ref: 'stages', req: k === 'production' },
+        receivedF, { ...notesF, wide: false }].filter(Boolean);
     },
-    lines: { blank: () => ({ material_id: null, qty: null }), cols: [
-      { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '36%', onChange: matChange }, qtyCol({ l: 'الكمية', w: '170px' }),
-      { l: 'الوحدة', calc: (l) => unitOf(l.material_id), w: '80px' },
-      { l: 'الرصيد المتاح', calc: (l, c) => c.stock?.[l.material_id]?.qty ?? 0, fmt: fq, w: '110px' },
-      { l: 'متوسط التكلفة', calc: (l, c) => c.stock?.[l.material_id]?.avg_cost ?? 0, fmt: (v) => fmt(v, 4), w: '110px' },
-      { l: 'التكلفة', calc: (l, c) => (l.total ?? (Number(l.qty) || 0) * (c.stock?.[l.material_id]?.avg_cost ?? 0)), fmt: (v) => fmt(v), w: '110px' }] },
-    totals: (ctx) => { const t = total(ctx.lines, (l) => l.total ?? (Number(l.qty) || 0) * (ctx.stock?.[l.material_id]?.avg_cost ?? 0)); return [[ctx.doc ? 'إجمالي تكلفة الصرف' : 'تكلفة تقديرية (الفعلية تُحسب عند الحفظ)', fmt(t)]]; },
+    lines: issueLines, totals: issueTotals,
+    onOpen: (ctx) => mapStock(ctx),
+  },
+});
+
+// ---------------- تحويل خامات لموقع (منفصل عن صرف الإنتاج) ----------------
+export const siteTransfersPage = docScreen({
+  type: 'stock_issue', title: 'التحويل للمواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' },
+  note: 'تحويل خامات من المخزن لمشروع. لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
+  filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true }],
+  listCols: [
+    { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'project_name', l: 'المشروع' }, { k: 'site_name', l: 'الموقع' },
+    { k: 'total', l: 'التكلفة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
+  listFoot: (c, rows) => (c.k === 'total' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.total)) : c.k === 'no' ? 'الإجمالي' : ''),
+  editor: {
+    cols: 3, rebuildOn: ['project_id'], defaults: () => ({ kind: 'site', warehouse_id: defaultWh() }),
+    header: (ctx) => {
+      const p = ctx.header.project_id; const sites = sitesOf(p);
+      return [dateF, whF(ctx),
+        { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', req: 1, combo: true, onChange: (v, c) => { const s = sitesOf(v); c.header.site_id = s.length === 1 ? s[0].id : null; } },
+        sites.length ? { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', req: 1, filter: (x) => x.project_id === Number(p) } : null,
+        receivedF, { ...notesF, wide: false }].filter(Boolean);
+    },
+    prepare: (payload) => { payload.kind = 'site'; if (!sitesOf(payload.project_id).length) payload.site_id = null; },
+    lines: issueLines, totals: issueTotals,
     onOpen: (ctx) => mapStock(ctx),
   },
 });

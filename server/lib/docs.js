@@ -379,7 +379,13 @@ DOCS.stock_issue = {
       p.site_id = null;
     }
     if (p.kind === 'site') {
-      if (!p.project_id || !p.site_id) throw new AppError('التحويل لموقع لازم يتحدد له: المشروع والموقع');
+      if (!p.project_id) throw new AppError('التحويل لموقع لازم يتحدد له المشروع');
+      // الموقع مطلوب بس لو المشروع متكود له مواقع (نشطة)؛ ولو مفيش مواقع بيتساب فاضي
+      const siteIds = (await all('SELECT id FROM sites WHERE project_id=? AND active=1', p.project_id)).map((x) => Number(x.id));
+      if (siteIds.length) {
+        if (!p.site_id) throw new AppError('اختر الموقع — المشروع ده متكود له مواقع');
+        if (!siteIds.includes(Number(p.site_id))) throw new AppError('الموقع المختار لا يتبع المشروع');
+      } else p.site_id = null;
       p.stage_id = null;
     }
     if (p.kind === 'overhead') { p.project_id = null; p.item_id = null; p.site_id = null; }

@@ -19,7 +19,7 @@ const NAV = [
     ['suppliers', 'الموردين', M('suppliers')], ['treasuries', 'الخزن والبنوك', M('treasuries')], ['custodians', 'العهد', M('custodians')],
     ['expense-cats', 'فئات المصروفات', M('expense_categories')], ['employees', 'العاملين', M('employees')], ['sequences', 'ترقيم المستندات', sequencesPage], ['users', 'المستخدمون', usersPage], ['audit', 'سجل العمليات', auditPage]] },
   { id: 'inventory', ico: '▣', title: 'مخازن المواد الخام', items: [
-    ['issues', 'صرف / تحويل للمواقع', inv.issuesPage], ['returns', 'مرتجع للمخزن', inv.returnsPage], ['adjustments', 'جرد وتسويات', inv.adjustmentsPage],
+    ['issues', 'صرف للإنتاج والتشغيل', inv.issuesPage], ['site-transfers', 'التحويل للمواقع', inv.siteTransfersPage], ['returns', 'مرتجع للمخزن', inv.returnsPage], ['adjustments', 'جرد وتسويات', inv.adjustmentsPage],
     ['balances', 'أرصدة المخزون', inv.balancesPage], ['stock-card', 'كارت الصنف', inv.stockCardPage], ['moves', 'حركة المخزون', inv.movesPage], ['fg', 'مخازن المنتجات التامة — قريباً', null]] },
   { id: 'purchases', ico: '⛟', title: 'المشتريات', items: [
     ['requests', 'طلبات الشراء', pur.requestsPage], ['orders', 'أوامر الشراء', pur.ordersPage], ['receipts', 'إذونات الاستلام', pur.receiptsPage], ['invoices', 'فواتير الشراء', pur.invoicesPage],
