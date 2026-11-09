@@ -51,7 +51,7 @@ export const MASTERS = {
     cols: ['code', 'name', 'type', 'account_id'], used: [['vouchers', 'treasury_id'], ['vouchers', 'to_treasury_id'], ['purchase_invoices', 'treasury_id']],
   },
   custodians: {
-    title: 'أصحاب العهد', table: 'custodians', seq: 'custodian',
+    title: 'العهد', table: 'custodians', seq: 'custodian',
     fields: [T('employee_id', 'الموظف (صاحب العهدة)', 'fk', { ref: 'employees' }), T('name', 'الاسم (يُؤخذ من الموظف لو فاضي)', 'text', { req: 1 }), T('phone', 'الهاتف')],
     cols: ['code', 'name', 'employee_id', 'phone'], used: [['vouchers', 'custodian_id'], ['purchase_invoices', 'custodian_id']],
   },

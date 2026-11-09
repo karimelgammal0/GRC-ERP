@@ -60,7 +60,7 @@ export const DEFAULT_SEQUENCES = [
   ['unit', 'الوحدات', 'UN-', 3], ['material_category', 'فئات الخامات', 'MC-', 3], ['material', 'الخامات', 'RM-', 4],
   ['warehouse', 'المخازن', 'WH-', 2], ['supplier', 'الموردين', 'SUP-', 4], ['project', 'المشروعات', 'PRJ-', 3],
   ['project_item', 'بنود المشروعات', 'BND-', 4], ['stage', 'المراحل', 'STG-', 2], ['site', 'المواقع', 'SITE-', 3],
-  ['treasury', 'الخزن والبنوك', 'TR-', 2], ['custodian', 'أصحاب العهد', 'CUS-', 3], ['client', 'العملاء', 'CL-', 3], ['expense_category', 'فئات المصروفات', 'EXC-', 3],
+  ['treasury', 'الخزن والبنوك', 'TR-', 2], ['custodian', 'العهد', 'CUS-', 3], ['client', 'العملاء', 'CL-', 3], ['expense_category', 'فئات المصروفات', 'EXC-', 3],
   ['employee', 'العاملين', 'EMP-', 4],
   ['purchase_request', 'طلبات الشراء', 'PR-', 5], ['purchase_order', 'أوامر الشراء', 'PO-', 5], ['goods_receipt', 'إذون الاستلام', 'GRN-', 5],
   ['purchase_invoice', 'فواتير الشراء', 'PINV-', 5], ['purchase_return', 'مرتجعات المشتريات', 'PRT-', 5],
