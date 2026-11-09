@@ -27,7 +27,8 @@ export function h(tag, props, ...kids) {
 // ---------- تنسيق ----------
 export const fmt = (n, d = 2) => (n === null || n === undefined || n === '' || Number.isNaN(Number(n))) ? '' : Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 export const fq = (n) => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 3 });
-export const today = () => new Date().toISOString().slice(0, 10);
+// التاريخ المحلي لجهاز المستخدم (toISOString كان بيرجّع تاريخ UTC — يعني بعد منتصف الليل بتوقيت القاهرة يطلع تاريخ امبارح)
+export const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 export const monthStart = () => today().slice(0, 8) + '01';
 export const yearStart = () => today().slice(0, 4) + '-01-01';
 
@@ -125,6 +126,10 @@ export function fieldInput(f, value) {
   } else if (f.t === 'select') {
     el = h('select', { onchange: () => f.onChange?.(el.value) }, (f.options || []).map(([k, l]) => h('option', { value: k, selected: String(value ?? f.def ?? '') === String(k) }, l)));
     el.get = () => el.value; el.set = (v) => { el.value = v ?? ''; };
+  } else if (f.t === 'multifk') {
+    const sel = new Set((Array.isArray(value) ? value : []).map(Number)); const boxes = [];
+    el = h('div.multi', (L[f.ref] || []).filter((x) => x.active !== 0).map((x) => { const c = h('input', { type: 'checkbox', checked: sel.has(x.id), onchange: () => { c.checked ? sel.add(x.id) : sel.delete(x.id); f.onChange?.([...sel]); } }); boxes.push([x.id, c]); return h('label.chk', c, ' ' + codeName(x)); }));
+    el.get = () => [...sel]; el.set = (v) => { sel.clear(); (v || []).forEach((i) => sel.add(Number(i))); boxes.forEach(([id, c]) => { c.checked = sel.has(id); }); };
   } else if (f.t === 'textarea') {
     el = h('textarea', { rows: 2 }, value ?? ''); el.get = () => el.value; el.set = (v) => { el.value = v ?? ''; };
   } else if (f.t === 'number') {
@@ -148,7 +153,7 @@ export function formGrid(fields, values = {}, cols = 2) {
   const inputs = {};
   const el = h('div.fgrid.c' + cols, fields.filter((f) => !f.hidden).map((f) => {
     const inp = fieldInput(f, values[f.k]); inputs[f.k] = inp;
-    return h('label.fld' + (f.wide ? '.wide' : '') + (f.req ? '.req' : ''), h('span', f.l), inp, f.help ? h('small', f.help) : null);
+    return h((f.t === 'multifk' ? 'div' : 'label') + '.fld' + (f.wide ? '.wide' : '') + (f.req ? '.req' : ''), h('span', f.l, f.action ? h('button.btn.sm.inline-act', { type: 'button', onclick: (e) => { e.preventDefault(); f.action.onClick(); } }, f.action.label) : null), inp, f.help ? h('small', f.help) : null);
   }));
   return { el, inputs, values: () => Object.fromEntries(Object.entries(inputs).map(([k, i]) => [k, i.get()])), set: (k, v) => inputs[k]?.set(v) };
 }

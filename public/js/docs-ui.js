@@ -2,7 +2,7 @@
 //  شاشة مستندات عامة: قائمة + فلاتر + محرر (رأس + بنود + إجماليات)
 // ============================================================
 import { entryUnits, toBaseQty } from './units.js';
-import { h, GET, POST, PUT, L, fmt, fq, today, yearStart, table, filterBar, formGrid, fieldInput, pageHead, card, toast, guard, confirmBox, statusBadge, byId, nameOf } from './core.js';
+import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, formGrid, fieldInput, pageHead, card, toast, guard, confirmBox, statusBadge, byId, nameOf } from './core.js';
 
 export function docScreen(cfg) {
   return function render(root, params = {}) {
@@ -16,7 +16,8 @@ export function docScreen(cfg) {
         const t = table({ cols: cfg.listCols, rows, onRow: (r) => showEditor(r.id), rowClass: (r) => (r.status === 'void' ? 'void' : ''), name: cfg.title, foot: cfg.listFoot, empty: `لا توجد ${cfg.title}` });
         tableHost.replaceChildren(t);
       };
-      const fb = filterBar(fields, load, { from: cfg.defaultFrom ?? yearStart() });
+      const dv = (v) => (typeof v === 'function' ? v() : v);
+      const fb = filterBar(fields, load, { from: dv(cfg.defaultFrom) ?? yearStart(), ...(cfg.defaultTo ? { to: dv(cfg.defaultTo) } : {}) });
       host.replaceChildren(pageHead(cfg.title, cfg.canCreate === false ? null : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`)), cfg.note ? h('div.note', cfg.note) : null, fb, tableHost);
       fb.run();
     };

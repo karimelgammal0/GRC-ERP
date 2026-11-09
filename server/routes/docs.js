@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { all, get, run, val, AppError, r2 } from '../db.js';
 import { DOCS, saveDoc, voidDoc, getDoc, invoiceOpenAmount, VOUCHER_KINDS } from '../lib/docs.js';
 import { stockOf } from '../lib/stock.js';
+import { nextNo, audit } from '../lib/core.js';
+import { insertRow } from '../db.js';
 
 const MODULE_OF = {
   purchase_request: 'purchases', purchase_order: 'purchases', goods_receipt: 'purchases', purchase_invoice: 'purchases', purchase_return: 'purchases',
@@ -101,6 +103,23 @@ export function helperRouter() {
     sheets: await all(`SELECT id,no,date,total,paid_amount, total-paid_amount remaining FROM labor_sheets WHERE status='posted' AND total-paid_amount>0.004 ORDER BY date`),
     runs: await all(`SELECT id,no,month,net total,paid_amount, net-paid_amount remaining FROM payroll_runs WHERE status='posted' AND net-paid_amount>0.004 ORDER BY month`),
   }));
+  // إضافة بند مشروع سريعة من شاشة الصرف — لصاحب صلاحية «إضافة بنود» (أو الإعدادات / المدير)
+  r.post('/quick-item', async (req, res) => {
+    if (!canUse(req.user, 'perm_add_items') && !canUse(req.user, 'settings')) throw new AppError('ليس لديك صلاحية إضافة بنود المشروعات', 403);
+    const b = req.body || {}; const name = String(b.name || '').trim();
+    if (!name) throw new AppError('اسم البند مطلوب');
+    const prj = await get('SELECT id, active FROM projects WHERE id=?', Number(b.project_id));
+    if (!prj || !prj.active) throw new AppError('اختر مشروعاً صحيحاً');
+    if (await get('SELECT 1 FROM project_items WHERE project_id=? AND LOWER(name)=LOWER(?) AND active=1', prj.id, name)) throw new AppError('فيه بند بنفس الاسم في المشروع ده');
+    const unit = b.unit_id ? Number(b.unit_id) : null;
+    if (unit && !await get('SELECT 1 FROM units WHERE id=?', unit)) throw new AppError('الوحدة غير موجودة');
+    const qty = b.qty === undefined || b.qty === null || b.qty === '' ? null : Number(b.qty);
+    if (qty !== null && !(qty >= 0)) throw new AppError('الكمية غير صحيحة');
+    const code = await nextNo('project_item');
+    const id = await insertRow('project_items', { code, name, project_id: prj.id, qty, unit_id: unit }, ['code', 'name', 'project_id', 'qty', 'unit_id']);
+    await audit(req.user, 'create', 'project_items', id, { code, via: 'issue-screen' });
+    res.json(await get('SELECT * FROM project_items WHERE id=?', id));
+  });
   r.get('/stock', async (req, res) => res.json(await stockOf(Number(req.query.warehouse_id), Number(req.query.material_id))));
   r.get('/stock-all', async (req, res) => res.json(await all(`SELECT material_id, qty, value, avg_cost FROM material_stock WHERE warehouse_id=?`, req.query.warehouse_id)));
   r.get('/project-items', async (req, res) => res.json(await all(`SELECT id,code,name FROM project_items WHERE project_id=? AND active=1 ORDER BY code`, req.query.project_id)));

@@ -447,3 +447,10 @@ CREATE INDEX IF NOT EXISTS ix_jtl_t ON journal_template_lines(template_id);
 -- وحدة فرعية + معدل تحويل (1 رئيسية = sub_factor فرعية): شيكارة = 50 كجم
 ALTER TABLE units ADD COLUMN IF NOT EXISTS sub_unit_id INTEGER REFERENCES units(id);
 ALTER TABLE units ADD COLUMN IF NOT EXISTS sub_factor NUMERIC;
+
+-- ربط فئات الخامات بالمخازن (المخزن بدون فئات مربوطة = كل الخامات)
+CREATE TABLE IF NOT EXISTS warehouse_categories (
+  warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES material_categories(id) ON DELETE CASCADE,
+  PRIMARY KEY (warehouse_id, category_id)
+);

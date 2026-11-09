@@ -150,3 +150,7 @@ input.ro, select.ro { background: #f1efe8; color: var(--ink2); }
 .qty-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .qty-entry input { width: 84px; }
 .qty-entry small { flex-basis: 100%; color: var(--ink2); font-size: 11px; }
+
+.multi { max-height: 190px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: #fff; columns: 2; }
+.multi .chk { display: flex; gap: 6px; align-items: center; margin: 3px 0; font-weight: 400; break-inside: avoid; }
+.inline-act { margin-inline-start: 8px; padding: 1px 8px; font-size: 12px; }

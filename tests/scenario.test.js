@@ -227,6 +227,26 @@ const ss = await api(`/api/reports/supplier-statement?supplier_id=${sup}`); near
 const tr = await api('/api/reports/treasury-balances'); ok(tr.length === 2, 'أرصدة الخزن');
 const dash = await api('/api/reports/dashboard'); near(dash.stock_value, await stockTotal(), 'لوحة التحكم');
 const lk = await api('/api/lookups'); ok(lk.materials.length >= 102 && lk.accounts.length > 30, 'القوائم المرجعية');
+section('13) ربط فئات الخامات بالمخازن + إضافة بند من شاشة الصرف');
+const send = async (method, p, body, ck = cookie) => { const r = await fetch(base + p, { method, headers: { cookie: ck, 'content-type': 'application/json' }, body: JSON.stringify(body || {}) }); return { status: r.status, j: await r.json() }; };
+const cats = await all('SELECT id FROM material_categories ORDER BY id LIMIT 2');
+const wL1 = await send('PUT', `/api/m/warehouses/${wh}`, { category_ids: [cats[0].id, cats[1].id] });
+ok(wL1.status === 200 && wL1.j.category_ids.length === 2, 'حفظ فئات المخزن');
+let lkW = await api('/api/lookups'); ok(lkW.warehouses.find((w) => w.id === wh).category_ids.length === 2, 'الفئات تظهر في lookups');
+const wL2 = await send('PUT', `/api/m/warehouses/${wh}`, { category_ids: [cats[0].id] });
+ok(wL2.j.category_ids.length === 1, 'استبدال الفئات');
+ok((await send('PUT', `/api/m/warehouses/${wh}`, { category_ids: [999999] })).status === 400, 'فئة غير موجودة مرفوضة');
+await send('PUT', `/api/m/warehouses/${wh}`, { category_ids: [] });
+lkW = await api('/api/lookups'); ok(lkW.warehouses.find((w) => w.id === wh).category_ids.length === 0, 'فك الربط = كل الخامات');
+const prjQ = prj;
+const qi1 = await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: 'بند سريع' });
+ok(qi1.status === 200 && qi1.j.project_id === prjQ && qi1.j.code, 'إضافة بند سريع بصلاحية المدير');
+ok((await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: ' بند سريع ' })).status === 400, 'منع تكرار اسم البند في نفس المشروع');
+await run(`INSERT INTO users(username,name,pass_hash,role,modules) VALUES('u_inv','x',(SELECT pass_hash FROM users WHERE username='admin'),'user','["inventory"]')`);
+await run(`INSERT INTO users(username,name,pass_hash,role,modules) VALUES('u_perm','y',(SELECT pass_hash FROM users WHERE username='admin'),'user','["inventory","perm_add_items"]')`);
+const ckOf = async (u) => (await fetch(base + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: 'admin123' }) })).headers.get('set-cookie').split(';')[0];
+ok((await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: 'بند ممنوع' }, await ckOf('u_inv'))).status === 403, 'مستخدم بدون صلاحية مرفوض');
+ok((await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: 'بند مسموح' }, await ckOf('u_perm'))).status === 200, 'مستخدم بصلاحية الإضافة مقبول');
 server.close();
 
 console.log(`\n${fail ? '✗' : '✓'} ${pass} اختبار نجح، ${fail} فشل`);

@@ -1,4 +1,4 @@
-import { h, GET, POST, L, META, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard } from '../core.js';
+import { h, GET, POST, L, META, loadLookups, modal, formGrid, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard } from '../core.js';
 import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 export const KINDS = [['production', 'صرف إنتاج (مشروع + بند + مرحلة)'], ['site', 'تحويل لموقع'], ['overhead', 'تشغيل غير مباشر (بدون مشروع)']];
@@ -8,6 +8,17 @@ const mapStock = async (ctx) => {
   const wh = ctx.header.warehouse_id; if (!wh) { ctx.stock = {}; return; }
   const rows = await GET('/helpers/stock-all', { warehouse_id: wh }); ctx.stock = Object.fromEntries(rows.map((r) => [r.material_id, r])); ctx.refresh();
 };
+// الخامات المتاحة في مخزن: لو المخزن مربوط بفئات خامات تظهر خاماتها بس، ولو مش مربوط بأي فئة تظهر كل الخامات
+const whAllows = (wid) => { const cats = byId('warehouses', wid)?.category_ids || []; return cats.length ? (m) => cats.includes(m.category_id) : () => true; };
+const canAddItems = () => { const me = META.me || {}; return me.role === 'admin' || (me.modules || []).some((m) => m === 'perm_add_items' || m === 'settings'); };
+const addItemDialog = (ctx) => {
+  const p = ctx.header.project_id; if (!p) { toast('اختر المشروع الأول', 'err'); return; }
+  const fg = formGrid([{ k: 'name', l: 'اسم البند', t: 'text', req: 1 }, { k: 'qty', l: 'الكمية (اختياري)', t: 'number' }, { k: 'unit_id', l: 'الوحدة (اختياري)', t: 'fk', ref: 'units' }], {}, 1);
+  modal({ title: `بند جديد في مشروع ${nameOf('projects', p)}`, body: fg.el, buttons: [{ label: 'حفظ واختيار البند', cls: 'primary', onClick: async () => {
+    const it = await POST('/helpers/quick-item', { ...fg.values(), project_id: p }); await loadLookups();
+    ctx.setHeader('item_id', it.id); ctx.rebuildHeader(); toast(`تم إضافة البند ${it.code}`);
+  } }] });
+};
 const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) || {}).id;
 
 // ---------------- إذن صرف ----------------
@@ -15,18 +26,23 @@ const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) 
 const sitesOf = (projectId) => (L.sites || []).filter((x) => x.active !== 0 && projectId && x.project_id === Number(projectId));
 const ISSUE_KINDS = KINDS.filter(([k]) => k !== 'site');
 const issueLines = { blank: () => ({ material_id: null, qty: null }), cols: [
-  { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '36%', onChange: matChange }, qtyCol({ l: 'الكمية', w: '170px' }),
+  { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '36%', onChange: matChange, filter: (x, l, c) => whAllows(c.header.warehouse_id)(x) }, qtyCol({ l: 'الكمية', w: '170px' }),
   { l: 'الوحدة', calc: (l) => unitOf(l.material_id), w: '80px' },
   { l: 'الرصيد المتاح', calc: (l, c) => c.stock?.[l.material_id]?.qty ?? 0, fmt: fq, w: '110px' },
   { l: 'متوسط التكلفة', calc: (l, c) => c.stock?.[l.material_id]?.avg_cost ?? 0, fmt: (v) => fmt(v, 4), w: '110px' },
   { l: 'التكلفة', calc: (l, c) => (l.total ?? (Number(l.qty) || 0) * (c.stock?.[l.material_id]?.avg_cost ?? 0)), fmt: (v) => fmt(v), w: '110px' }] };
 const issueTotals = (ctx) => { const t = total(ctx.lines, (l) => l.total ?? (Number(l.qty) || 0) * (ctx.stock?.[l.material_id]?.avg_cost ?? 0)); return [[ctx.doc ? 'إجمالي تكلفة الصرف' : 'تكلفة تقديرية (الفعلية تُحسب عند الحفظ)', fmt(t)]]; };
-const whF = (ctx) => ({ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw', onChange: () => mapStock(ctx) });
+const whF = (ctx) => ({ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw', onChange: (v) => {
+  const ok = whAllows(v); let n = 0;
+  ctx.lines.forEach((l) => { if (l.material_id && !ok(byId('materials', l.material_id))) { l.material_id = null; l.qty = null; l._eu = null; l._ev = undefined; n++; } });
+  if (n) { ctx.setLines(ctx.lines); toast(`تم مسح ${n} خامة مش تابعة لفئات المخزن المختار`, 'err'); }
+  mapStock(ctx);
+} });
 const receivedF = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true };
 
 // ---------------- إذن صرف (إنتاج / تشغيل غير مباشر) ----------------
 export const issuesPage = docScreen({
-  type: 'stock_issue', title: 'أذون الصرف', noun: 'إذن صرف', newLabel: 'إذن صرف جديد', fixed: { only: 'issues' },
+  type: 'stock_issue', title: 'أذون الصرف', noun: 'إذن صرف', newLabel: 'إذن صرف جديد', fixed: { only: 'issues' }, defaultFrom: monthStart, defaultTo: today,
   note: 'كل صرف من المخزن بيتحدد له: المشروع + البند + المرحلة — ومنها بتتجمّع تكلفة كل مشروع وكل مرحلة تلقائياً بالمتوسط المرجح. (تحويل الخامات لمواقع المشاريع له شاشة منفصلة.)',
   filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...ISSUE_KINDS] }],
   listCols: [
@@ -38,9 +54,9 @@ export const issuesPage = docScreen({
     cols: 3, rebuildOn: ['kind', 'project_id'], defaults: () => ({ kind: 'production', warehouse_id: defaultWh() }),
     header: (ctx) => {
       const k = ctx.header.kind; const p = ctx.header.project_id;
-      return [dateF, { k: 'kind', l: 'نوع الصرف', t: 'select', options: ISSUE_KINDS, lockOnEdit: true, req: 1 }, whF(ctx),
+      return [dateF, { k: 'kind', l: 'نوع الصرف', t: 'select', options: ISSUE_KINDS, lockOnEdit: true, req: 1, help: k === 'overhead' ? 'مواد تشغيل عامة للمصنع (زيوت، أدوات، نظافة…) مش تابعة لمشروع: تتحمّل كتكلفة غير مباشرة ومبتدخلش في تكلفة أي مشروع.' : 'مواد داخلة في تصنيع بند معين: تتحمّل على المشروع + البند + المرحلة وتدخل في تكلفة الإنتاج.' }, whF(ctx),
         k !== 'overhead' && { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', req: 1, combo: true, onChange: (v, c) => { const it = byId('project_items', c.header.item_id); if (it && it.project_id !== v) c.setHeader('item_id', null); c.header.site_id = null; } },
-        k === 'production' && { k: 'item_id', l: 'البند داخل المشروع', t: 'fk', ref: 'project_items', req: 1, combo: true, filter: (x) => !p || x.project_id === p, help: p ? '' : 'اختر المشروع أولاً' },
+        k === 'production' && { k: 'item_id', l: 'البند داخل المشروع', t: 'fk', ref: 'project_items', req: 1, combo: true, filter: (x) => !p || x.project_id === p, help: p ? '' : 'اختر المشروع أولاً', action: canAddItems() ? { label: '＋ بند جديد', onClick: () => addItemDialog(ctx) } : null },
         { k: 'stage_id', l: k === 'overhead' ? 'المرحلة (اختياري)' : 'مرحلة التصنيع', t: 'fk', ref: 'stages', req: k === 'production' },
         receivedF, { ...notesF, wide: false }].filter(Boolean);
     },
@@ -51,7 +67,7 @@ export const issuesPage = docScreen({
 
 // ---------------- تحويل خامات لموقع (منفصل عن صرف الإنتاج) ----------------
 export const siteTransfersPage = docScreen({
-  type: 'stock_issue', title: 'التحويل للمواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' },
+  type: 'stock_issue', title: 'التحويل للمواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' }, defaultFrom: monthStart, defaultTo: today,
   note: 'تحويل خامات من المخزن لمشروع. لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
   filters: (() => { let fp = null; return [
     { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, onChange: (v) => { fp = v; } },

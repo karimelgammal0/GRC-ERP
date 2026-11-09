@@ -16,6 +16,7 @@ export function masterPage(name, opts = {}) {
       ...M.cols.filter((c) => c !== 'code').map((c) => {
         const f = M.fields.find((x) => x.k === c) || { l: c, t: 'text' };
         if (f.t === 'fk') return { k: c, l: f.l, text: (r) => (f.ref === 'accounts' ? codeName(byId('accounts', r[c])) : nameOf(f.ref, r[c])) };
+        if (f.t === 'multifk') return { k: c, l: f.l, text: (r) => ((r[c] || []).length ? r[c].map((i) => nameOf(f.ref, i)).join('، ') : 'كل الخامات') };
         if (f.t === 'select') return { k: c, l: f.l, text: (r) => labelOf(f.options, r[c]) };
         if (f.t === 'number') return { k: c, l: f.l, num: true, text: (r) => (r[c] === null ? '' : fq(r[c])) };
         return { k: c, l: f.l, text: (r) => r[c] ?? '' };
@@ -149,7 +150,7 @@ export async function usersPage(root) {
     const fg = formGrid([{ k: 'username', l: 'اسم المستخدم', t: 'text', readonly: !!u, req: 1 }, { k: 'name', l: 'الاسم', t: 'text', req: 1 }, { k: 'password', l: u ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور', t: 'password' },
       { k: 'role', l: 'الدور', t: 'select', options: [['user', 'مستخدم (حسب الموديولات)'], ['admin', 'مدير (كل الصلاحيات)']] }], u || {}, 2);
     const checks = modsAll.map(([k, l]) => { const c = h('input', { type: 'checkbox', checked: u?.modules?.includes(k) }); return { k, c, el: h('label', { style: { display: 'flex', gap: '6px', margin: '3px 0' } }, c, l) }; });
-    modal({ title: u ? `تعديل ${u.name}` : 'مستخدم جديد', body: h('div', fg.el, h('h4', { style: { margin: '14px 0 4px' } }, 'الموديولات المسموحة'), h('div', checks.map((x) => x.el))), buttons: [{ label: 'حفظ', cls: 'primary', onClick: async () => {
+    modal({ title: u ? `تعديل ${u.name}` : 'مستخدم جديد', body: h('div', fg.el, h('h4', { style: { margin: '14px 0 4px' } }, 'الموديولات والصلاحيات المسموحة'), h('div', checks.map((x) => x.el))), buttons: [{ label: 'حفظ', cls: 'primary', onClick: async () => {
       const v = fg.values(); v.modules = checks.filter((x) => x.c.checked).map((x) => x.k); if (!v.password) delete v.password;
       if (u) await PUT(`/users/${u.id}`, v); else await POST('/users', v); toast('تم'); usersPage(root); } },
     u ? { label: u.active ? 'تعطيل' : 'تفعيل', close: true, onClick: async () => { await PUT(`/users/${u.id}`, { active: !u.active }); usersPage(root); } } : null].filter(Boolean) });

@@ -3,13 +3,14 @@ import crypto from 'node:crypto';
 import { all, get, run, val, tx, insertRow, updateRow, AppError, r2 } from '../db.js';
 import { allSettings, setSetting, ACC_KEYS, audit, getSetting } from '../lib/core.js';
 import { applyOpening, lockOpening, unlockOpening, openingLocked } from '../lib/opening.js';
-import { MASTERS } from './masters.js';
+import { MASTERS, withLinks } from './masters.js';
 import { hashPassword, checkPassword } from '../lib/seed.js';
 import { COST_CLASS, VOUCHER_KINDS } from '../lib/docs.js';
 
 export const MODULES = [
   ['dashboard', 'لوحة التحكم'], ['settings', 'الإعدادات'], ['inventory', 'مخازن المواد الخام'], ['purchases', 'المشتريات'],
   ['hr', 'الموارد البشرية'], ['finance', 'الإدارة المالية'], ['accounts', 'الحسابات'], ['reports', 'التقارير'],
+  ['perm_add_items', 'صلاحية: إضافة بنود المشروعات من شاشة الصرف'],
 ];
 const adminOnly = (req) => { if (req.user.role !== 'admin') throw new AppError('للمدير فقط', 403); };
 
@@ -49,7 +50,9 @@ export async function systemRouter() {
       ['accounts', 'SELECT id,code,name,type,postable,active,parent_id FROM accounts ORDER BY code'],
       ['periods', 'SELECT * FROM fiscal_periods ORDER BY start_date']];
     const rows = await Promise.all(jobs.map(([, q]) => all(q)));
-    res.json(Object.fromEntries(jobs.map(([k], i) => [k, rows[i]])));
+    const out = Object.fromEntries(jobs.map(([k], i) => [k, rows[i]]));
+    out.warehouses = await withLinks('warehouses', out.warehouses);
+    res.json(out);
   });
 
   // ----- إعدادات عامة وربط الحسابات والترقيم -----

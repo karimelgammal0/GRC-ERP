@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { all, get, run, val, insertRow, updateRow, AppError } from '../db.js';
+import { all, get, run, val, tx, insertRow, updateRow, AppError } from '../db.js';
 import { nextNo, audit } from '../lib/core.js';
 
 const T = (k, l, t = 'text', extra = {}) => ({ k, l, t, ...extra });
@@ -18,7 +18,8 @@ export const MASTERS = {
     cols: ['code', 'name', 'category_id', 'unit_id', 'min_qty'],
     used: [['stock_moves', 'material_id'], ['purchase_request_lines', 'material_id'], ['purchase_order_lines', 'material_id'], ['goods_receipt_lines', 'material_id'], ['purchase_invoice_lines', 'material_id'], ['stock_issue_lines', 'material_id'], ['stock_adjustment_lines', 'material_id'], ['purchase_return_lines', 'material_id']],
   },
-  warehouses: { title: 'المخازن', table: 'warehouses', seq: 'warehouse', fields: [T('name', 'الاسم', 'text', { req: 1 }), T('type', 'النوع', 'select', { options: [['raw', 'مخزن خامات'], ['finished', 'مخزن منتجات تامة (لاحقاً)']] })], cols: ['code', 'name', 'type'], used: [['stock_moves', 'warehouse_id']] },
+  warehouses: { title: 'المخازن', table: 'warehouses', seq: 'warehouse', fields: [T('name', 'الاسم', 'text', { req: 1 }), T('type', 'النوع', 'select', { options: [['raw', 'مخزن خامات'], ['finished', 'مخزن منتجات تامة (لاحقاً)']] }),
+      T('category_ids', 'فئات الخامات المسموحة في المخزن', 'multifk', { ref: 'material_categories', wide: true, help: 'الخامات اللي فئتها مختارة هنا بس هي اللي هتظهر عند الصرف والتحويل من المخزن ده. سيبها فاضية = كل الخامات.' })], cols: ['code', 'name', 'type', 'category_ids'], used: [['stock_moves', 'warehouse_id']] },
   suppliers: {
     title: 'الموردين', table: 'suppliers', seq: 'supplier',
     fields: [T('name', 'اسم المورد', 'text', { req: 1 }), T('phone', 'الهاتف'), T('address', 'العنوان'), T('tax_no', 'الرقم الضريبي'), T('credit_days', 'مدة الائتمان (يوم)', 'number'), T('notes', 'ملاحظات', 'textarea')],
@@ -75,11 +76,28 @@ export const MASTERS = {
   },
 };
 
-const allowed = (M) => ['code', 'active', ...M.fields.map((f) => f.k)];
+const allowed = (M) => ['code', 'active', ...M.fields.filter((f) => f.t !== 'multifk').map((f) => f.k)];
+
+/** حقول الربط متعدد القيم (many-to-many) */
+const LINKS = { warehouses: { table: 'warehouse_categories', col: 'warehouse_id', other: 'category_id', field: 'category_ids', ref: 'material_categories' } };
+async function saveLinks(name, id, body) {
+  const L = LINKS[name]; if (!L || body[L.field] === undefined) return;
+  const ids = [...new Set((Array.isArray(body[L.field]) ? body[L.field] : []).map(Number).filter(Number.isInteger))];
+  for (const x of ids) if (!await get(`SELECT 1 FROM ${L.ref} WHERE id=?`, x)) throw new AppError('فئة الخامات غير موجودة');
+  await run(`DELETE FROM ${L.table} WHERE ${L.col}=?`, id);
+  for (const x of ids) await run(`INSERT INTO ${L.table}(${L.col},${L.other}) VALUES(?,?)`, id, x);
+}
+/** يضيف حقول الربط (مصفوفات ids) على صفوف الجدول */
+export async function withLinks(name, rows) {
+  const L = LINKS[name]; if (!L) return rows;
+  const m = {}; for (const r of await all(`SELECT ${L.col} a, ${L.other} b FROM ${L.table} ORDER BY ${L.other}`)) (m[r.a] ||= []).push(r.b);
+  return rows.map((r) => ({ ...r, [L.field]: m[r.id] || [] }));
+}
 
 function clean(M, body, isNew) {
   const o = {};
   for (const f of M.fields) {
+    if (f.t === 'multifk') continue;
     let v = body[f.k];
     if (v === undefined) continue;
     if (v === '' || v === null) v = null;
@@ -87,7 +105,7 @@ function clean(M, body, isNew) {
     if (f.req && (v === null || v === undefined || Number.isNaN(v))) throw new AppError(`الحقل «${f.l}» مطلوب`);
     o[f.k] = v;
   }
-  if (isNew) for (const f of M.fields) if (f.req && (o[f.k] === undefined)) throw new AppError(`الحقل «${f.l}» مطلوب`);
+  if (isNew) for (const f of M.fields) if (f.req && f.t !== 'multifk' && (o[f.k] === undefined)) throw new AppError(`الحقل «${f.l}» مطلوب`);
   if (body.active !== undefined) o.active = body.active ? 1 : 0;
   return o;
 }
@@ -149,7 +167,7 @@ export async function masterRouter() {
   });
   r.get('/:name', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);
-    res.json(await all(`SELECT * FROM ${M.table} ORDER BY code`));
+    res.json(await withLinks(req.params.name, await all(`SELECT * FROM ${M.table} ORDER BY code`)));
   });
   await r.post('/:name', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);
@@ -157,9 +175,9 @@ export async function masterRouter() {
     const o = clean(M, req.body, true); await extraChecks(req.params.name, o, null);
     const code = (req.body.code || '').trim() || await nextNo(M.seq);
     if (await get(`SELECT 1 FROM ${M.table} WHERE code=?`, code)) throw new AppError(`الكود ${code} مستخدم من قبل`);
-    const id = await insertRow(M.table, { ...o, code }, allowed(M));
+    const id = await tx(async () => { const nid = await insertRow(M.table, { ...o, code }, allowed(M)); await saveLinks(req.params.name, nid, req.body); return nid; });
     await audit(req.user, 'create', M.table, id, { code });
-    res.json(await get(`SELECT * FROM ${M.table} WHERE id=?`, id));
+    res.json((await withLinks(req.params.name, [await get(`SELECT * FROM ${M.table} WHERE id=?`, id)]))[0]);
   });
   r.put('/:name/:id', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);
@@ -173,9 +191,9 @@ export async function masterRouter() {
       if (await get(`SELECT 1 FROM ${M.table} WHERE code=? AND id<>?`, code, id)) throw new AppError(`الكود ${code} مستخدم من قبل`);
       o.code = code;
     }
-    await updateRow(M.table, id, o, allowed(M));
+    await tx(async () => { await updateRow(M.table, id, o, allowed(M)); await saveLinks(req.params.name, id, req.body); });
     await audit(req.user, 'edit', M.table, id);
-    res.json(await get(`SELECT * FROM ${M.table} WHERE id=?`, id));
+    res.json((await withLinks(req.params.name, [await get(`SELECT * FROM ${M.table} WHERE id=?`, id)]))[0]);
   });
   r.delete('/:name/:id', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);
