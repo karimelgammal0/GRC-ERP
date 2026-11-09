@@ -145,3 +145,8 @@ input.ro, select.ro { background: #f1efe8; color: var(--ink2); }
   .side, .tbl-bar, .filters, .actions, .page-head .btn, .no-print, #toasts { display: none !important; }
   #app { display: block; } .main { padding: 0; } body { background: #fff; font-size: 12px; } .card, .tbl-wrap { box-shadow: none; }
 }
+
+/* إدخال الكمية بوحدة رئيسية/فرعية في أسطر المستندات */
+.qty-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.qty-entry input { width: 84px; }
+.qty-entry small { flex-basis: 100%; color: var(--ink2); font-size: 11px; }

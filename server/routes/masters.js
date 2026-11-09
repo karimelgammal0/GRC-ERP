@@ -7,7 +7,9 @@ const CLS = [['direct', 'مباشرة (مرحلة تصنيع)'], ['indirect', '�
 
 /** مواصفات شاشات التكويد — الواجهة بتبني الفورم والجدول منها */
 export const MASTERS = {
-  units: { title: 'الوحدات', table: 'units', seq: 'unit', fields: [T('name', 'الاسم', 'text', { req: 1 })], cols: ['code', 'name'], used: [['materials', 'unit_id'], ['project_items', 'unit_id']] },
+  units: { title: 'الوحدات', table: 'units', seq: 'unit',
+    fields: [T('name', 'الاسم', 'text', { req: 1 }), T('sub_unit_id', 'الوحدة الفرعية (اختياري)', 'fk', { ref: 'units' }), T('sub_factor', 'المعدل: 1 وحدة رئيسية = كم فرعية', 'number', { min: 0 })],
+    cols: ['code', 'name', 'sub_unit_id', 'sub_factor'], used: [['materials', 'unit_id'], ['project_items', 'unit_id'], ['units', 'sub_unit_id']] },
   material_categories: { title: 'فئات الخامات', table: 'material_categories', seq: 'material_category', fields: [T('name', 'الاسم', 'text', { req: 1 })], cols: ['code', 'name'], used: [['materials', 'category_id']] },
   materials: {
     title: 'الخامات (الأصناف)', table: 'materials', seq: 'material',
@@ -89,7 +91,22 @@ function clean(M, body, isNew) {
   return o;
 }
 
+/** وحدة فرعية + معدل: الاتنين مع بعض أو ولا واحد، المعدل > 0، والوحدة الفرعية غير الوحدة نفسها ولا بتحوّل ترجع للرئيسية */
+export async function checkUnitConversion(o, id) {
+  const cur = id ? await get('SELECT * FROM units WHERE id=?', id) : {};
+  const m = { ...cur, ...o };
+  const sub = m.sub_unit_id ?? null, f = m.sub_factor ?? null;
+  if (sub === null && f === null) { o.sub_unit_id = null; o.sub_factor = null; return; }
+  if (sub === null || f === null) throw new AppError('حدّد الوحدة الفرعية والمعدل معاً (أو سيبهم فاضيين)');
+  if (!(Number(f) > 0)) throw new AppError('المعدل لازم يكون أكبر من صفر');
+  if (id && Number(sub) === Number(id)) throw new AppError('الوحدة الفرعية لا يمكن أن تكون هي نفس الوحدة');
+  const s = await get('SELECT id, name, sub_unit_id FROM units WHERE id=?', Number(sub));
+  if (!s) throw new AppError('الوحدة الفرعية غير موجودة');
+  if (id && s.sub_unit_id !== null && Number(s.sub_unit_id) === Number(id)) throw new AppError(`«${s.name}» نفسها وحدتها الفرعية هي هذه الوحدة — التحويل دائري`);
+}
+
 async function extraChecks(name, o, id) {
+  if (name === 'units') await checkUnitConversion(o, id);
   if (name === 'employees') {
     const cur = id ? await get('SELECT * FROM employees WHERE id=?', id) : {};
     const m = { ...cur, ...o };
