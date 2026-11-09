@@ -35,7 +35,6 @@ export const payrollPage = docScreen({
   type: 'payroll', title: 'الرواتب الشهرية', noun: 'مسير رواتب', newLabel: 'مسير شهري جديد',
   note: 'المرتب الشهري للعامل المباشر بيتوزّع على المشروعات والمراحل بنسب (زر «توزيع») — والغير مباشر والإداري بيروحوا لحساباتهم.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'month', l: 'الشهر' }, { k: 'date', l: 'التاريخ' }, { k: 'n_lines', l: 'العاملين', num: true }, { k: 'gross', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }, { k: 'deductions', l: 'الاستقطاعات', num: true, fmt: (v) => fmt(v) }, { k: 'net', l: 'الصافي', num: true, fmt: (v) => fmt(v) }, { k: 'paid_amount', l: 'المصروف', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
-  defaultFrom: '',
   editor: {
     cols: 3, defaults: () => ({ month: today().slice(0, 7), date: today() }), header: [{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, dateF, { ...notesF, wide: false }],
     lines: { blank: () => ({ additions: 0, deductions: 0 }), cols: [

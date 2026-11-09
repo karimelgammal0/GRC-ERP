@@ -45,7 +45,7 @@ function pivotPage({ title, row, col, rowRef, colRef, rowLbl, extra = [], note }
       host.replaceChildren(h('div.kpis', kpi('إجمالي التكلفة', fmt(d.totals.total)), kpi('خامات', fmt(d.totals.material)), kpi('عمالة', fmt(d.totals.labor)), kpi('مصروفات', fmt(d.totals.expense))),
         table({ name: title, cols, rows: d.rows, foot }), h('div.hint', 'اضغط على أي رقم لعرض الحركات اللي كوّنته.'));
     };
-    const fb = filterBar([...COSTF, ...extra], run, { from: yearStart(), project_id: params.project_id ? Number(params.project_id) : null });
+    const fb = filterBar([...COSTF, ...extra], run, { from: monthStart(), project_id: params.project_id ? Number(params.project_id) : null });
     root.replaceChildren(pageHead(title), note ? h('div.note', note) : null, fb, host); fb.run();
   };
 }
@@ -68,7 +68,7 @@ function groupReport(title, endpoint, groups, cols, extraFilters = []) {
   return async (root) => {
     const host = h('div');
     const fb = filterBar([{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'group', l: 'تجميع حسب', t: 'select', options: groups }, ...extraFilters],
-      async (v) => { const rows = await GET(endpoint, v); host.replaceChildren(h('div.kpis', kpi('الإجمالي', fmt(rows.reduce((s, r) => s + r.amount, 0)))), table({ name: title, rows, cols, foot: (c) => (c.k === 'amount' ? fmt(rows.reduce((s, r) => s + r.amount, 0)) : c.k === 'name' ? 'الإجمالي' : '') })); }, { from: yearStart() });
+      async (v) => { const rows = await GET(endpoint, v); host.replaceChildren(h('div.kpis', kpi('الإجمالي', fmt(rows.reduce((s, r) => s + r.amount, 0)))), table({ name: title, rows, cols, foot: (c) => (c.k === 'amount' ? fmt(rows.reduce((s, r) => s + r.amount, 0)) : c.k === 'name' ? 'الإجمالي' : '') })); }, { from: monthStart() });
     root.replaceChildren(pageHead(title), fb, host); fb.run();
   };
 }
@@ -85,7 +85,7 @@ export async function trialBalancePage(root) {
       table({ name: 'ميزان المراجعة', compact: true, rows: d.rows, onRow: (r) => { location.hash = `#/reports/ledger?account_id=${r.id}&from=${v.from || ''}&to=${v.to || ''}`; }, cols: [
         { k: 'code', l: 'الكود', render: (r) => h('span', { style: { fontWeight: r.postable ? 400 : 700 } }, r.code) }, { k: 'name', l: 'الحساب', render: (r) => h('span', { style: { fontWeight: r.postable ? 400 : 700 } }, r.name) },
         { k: 'opening', l: 'رصيد أول', num: true, fmt: (n) => fmt(n) }, { k: 'debit', l: 'مدين', num: true, fmt: (n) => fmt(n) }, { k: 'credit', l: 'دائن', num: true, fmt: (n) => fmt(n) }, { k: 'closing', l: 'الرصيد', num: true, fmt: (n) => fmt(n) }] }));
-  }, { from: yearStart() });
+  }, { from: monthStart() });
   root.replaceChildren(pageHead('ميزان المراجعة'), fb, host); fb.run();
 }
 export async function ledgerPage(root, params) {
@@ -95,7 +95,7 @@ export async function ledgerPage(root, params) {
     const d = await GET('/reports/ledger', v);
     host.replaceChildren(h('div.kpis', kpi('رصيد أول', fmt(d.opening)), kpi('الرصيد الختامي', fmt(d.closing))),
       table({ name: 'أستاذ ' + d.account.name, compact: true, rows: [{ date: v.from || '', description: 'رصيد أول المدة', balance: d.opening }, ...d.rows], cols: [{ k: 'date', l: 'التاريخ' }, { k: 'no', l: 'القيد' }, { k: 'description', l: 'البيان', text: (r) => r.line_desc || r.description }, { k: 'debit', l: 'مدين', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'credit', l: 'دائن', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'balance', l: 'الرصيد', num: true, fmt: (n) => fmt(n) }] }));
-  }, { account_id: params.account_id ? Number(params.account_id) : null, from: params.from || yearStart(), to: params.to || '' });
+  }, { account_id: params.account_id ? Number(params.account_id) : null, from: params.from || monthStart(), to: params.to || '' });
   root.replaceChildren(pageHead('أستاذ الحساب'), fb, host); if (params.account_id) fb.run();
 }
 export async function incomePage(root) {
@@ -104,6 +104,6 @@ export async function incomePage(root) {
   const fb = filterBar([{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }], async (v) => {
     const d = await GET('/reports/income-summary', v);
     host.replaceChildren(h('div.kpis', kpi('الإيرادات', fmt(d.total_revenue)), kpi('المصروفات', fmt(d.total_expenses)), kpi('صافي الربح/الخسارة', fmt(d.net), '', d.net < 0 ? 'bad' : '')), h('div.grid2', card('الإيرادات', t(d.revenue)), card('المصروفات', t(d.expenses))));
-  }, { from: yearStart() });
+  }, { from: monthStart() });
   root.replaceChildren(pageHead('قائمة الدخل المبسطة'), h('div.note', 'تُحسب من القيود: تكلفة المنتج تحت التشغيل تبقى أصل (WIP) إلى أن تُنقل للتكلفة عند البيع (مرحلة المنتجات التامة لاحقاً).'), fb, host); fb.run();
 }

@@ -108,7 +108,7 @@ function statementPage(title, dimKey, dimRef, endpoint, backHref) {
         table({ name: title, compact: true, rows: [{ date: v.from || '', description: 'رصيد أول المدة', balance: r.opening, _o: 1 }, ...r.rows], rowClass: (x) => (x._o ? 'low' : ''),
           cols: [{ k: 'date', l: 'التاريخ' }, { k: 'no', l: 'القيد' }, { k: 'description', l: 'البيان' }, { k: 'debit', l: 'وارد / مدين', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'credit', l: 'منصرف / دائن', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'balance', l: 'الرصيد', num: true, fmt: (n) => fmt(n) }] }));
     };
-    const fb = filterBar([{ k: dimKey, l: dimRef.label, t: 'fk', ref: dimRef.ref, req: 1 }, { k: 'from', l: 'من تاريخ', t: 'date' }, { k: 'to', l: 'إلى تاريخ', t: 'date' }], run, { [dimKey]: params[dimKey] ? Number(params[dimKey]) : null, from: yearStart() });
+    const fb = filterBar([{ k: dimKey, l: dimRef.label, t: 'fk', ref: dimRef.ref, req: 1 }, { k: 'from', l: 'من تاريخ', t: 'date' }, { k: 'to', l: 'إلى تاريخ', t: 'date' }], run, { [dimKey]: params[dimKey] ? Number(params[dimKey]) : null, from: monthStart() });
     root.replaceChildren(pageHead(title, h('a.btn', { href: backHref }, 'الأرصدة')), fb, host); fb.run();
   };
 }

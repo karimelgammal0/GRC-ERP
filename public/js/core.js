@@ -197,6 +197,8 @@ export function card(title, ...body) { return h('section.card', title ? h('h3', 
 export function kpi(label, value, sub, kind) { return h('div.kpi' + (kind ? '.' + kind : ''), h('small', label), h('b', value), sub ? h('em', sub) : null); }
 export function filterBar(fields, onRun, init = {}) {
   let refresh = () => {};
+  // أي استعلام فيه من/إلى تاريخ: الافتراضي من أول الشهر لحد النهارده (إلا لو الشاشة حددت غير كده)
+  if (fields.some((x) => x.k === 'from') && fields.some((x) => x.k === 'to')) { init = { ...init }; if (init.from === undefined) init.from = monthStart(); if (init.to === undefined || init.to === '') init.to = today(); }
   const f = formGrid(fields.map((x) => ({ ...x, onChange: (v) => { x.onChange?.(v); refresh(); } })), init, fields.length > 4 ? 4 : fields.length);
   // حقول لها showIf(values) تظهر/تختفي حسب باقي الفلاتر
   refresh = () => { const vals = f.values(); for (const x of fields) if (x.showIf) { const lab = f.inputs[x.k]?.closest('label'); const on = x.showIf(vals); if (lab) lab.style.display = on ? '' : 'none'; if (!on) f.set(x.k, null); } };

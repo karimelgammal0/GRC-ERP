@@ -17,7 +17,7 @@ export function docScreen(cfg) {
         tableHost.replaceChildren(t);
       };
       const dv = (v) => (typeof v === 'function' ? v() : v);
-      const fb = filterBar(fields, load, { from: dv(cfg.defaultFrom) ?? yearStart(), ...(cfg.defaultTo ? { to: dv(cfg.defaultTo) } : {}) });
+      const fb = filterBar(fields, load, { from: dv(cfg.defaultFrom) ?? monthStart(), to: dv(cfg.defaultTo) ?? today() });
       host.replaceChildren(pageHead(cfg.title, cfg.canCreate === false ? null : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`)), cfg.note ? h('div.note', cfg.note) : null, fb, tableHost);
       fb.run();
     };
