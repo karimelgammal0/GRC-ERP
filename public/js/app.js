@@ -11,13 +11,7 @@ import { dashboardPage } from './pages/dashboard.js';
 const root = document.getElementById('root');
 const M = (n, o) => masterPage(n, o);
 const NAV = [
-  { id: 'dashboard', ico: '▦', title: 'لوحة التحكم', items: [['home', 'نظرة عامة', dashboardPage]] },
-  { id: 'settings', ico: '⚙', title: 'الإعدادات والتكويد', items: [
-    ['general', 'عام وربط الحسابات', generalPage], ['opening', 'الأرصدة الافتتاحية', openingPage],
-    ['materials', 'الخامات', M('materials')], ['categories', 'فئات الخامات', M('material_categories')], ['units', 'وحدات القياس', M('units')], ['warehouses', 'المخازن', M('warehouses')],
-    ['clients', 'العملاء', M('clients')], ['projects', 'المشروعات', M('projects')], ['project-items', 'بنود المشروعات', M('project_items')], ['stages', 'مراحل التصنيع', M('stages')], ['sites', 'المواقع', M('sites')],
-    ['suppliers', 'الموردين', M('suppliers')], ['treasuries', 'الخزن والبنوك', M('treasuries')], ['custodians', 'العهد', M('custodians')],
-    ['expense-cats', 'فئات المصروفات', M('expense_categories')], ['employees', 'العاملين', M('employees')], ['sequences', 'ترقيم المستندات', sequencesPage], ['users', 'المستخدمون', usersPage], ['audit', 'سجل العمليات', auditPage]] },
+  { id: 'dashboard', ico: '▦', title: 'لوحة التحكم', direct: true, items: [['home', 'نظرة عامة', dashboardPage]] },
   { id: 'inventory', ico: '▣', title: 'مخازن المواد الخام', items: [
     ['issues', 'صرف للإنتاج والتشغيل', inv.issuesPage], ['site-transfers', 'التحويل للمواقع', inv.siteTransfersPage], ['returns', 'مرتجع للمخزن', inv.returnsPage], ['adjustments', 'جرد وتسويات', inv.adjustmentsPage],
     ['balances', 'أرصدة المخزون', inv.balancesPage], ['stock-card', 'كارت الصنف', inv.stockCardPage], ['moves', 'حركة المخزون', inv.movesPage], ['fg', 'مخازن المنتجات التامة — قريباً', null]] },
@@ -34,6 +28,12 @@ const NAV = [
     ['hub', 'كل التقارير', rep.hub], ['project-stage', 'تكلفة المشاريع × المراحل', rep.projectStagePage], ['stage-project', 'تكلفة المراحل × المشاريع', rep.stageProjectPage], ['project-analysis', 'تحليل مشروع (بنود)', rep.projectAnalysisPage],
     ['material-usage', 'استهلاك الخامات', rep.materialUsagePage], ['cost-detail', 'تفاصيل التكاليف', rep.costDetailPage], ['expenses', 'المصروفات', rep.expensesReport], ['labor', 'العمالة', rep.laborReport],
     ['trial-balance', 'ميزان المراجعة', rep.trialBalancePage], ['ledger', 'أستاذ الحساب', rep.ledgerPage], ['income', 'قائمة الدخل', rep.incomePage]] },
+  { id: 'settings', ico: '⚙', title: 'الإعدادات', items: [
+    ['general', 'عام وربط الحسابات', generalPage], ['opening', 'الأرصدة الافتتاحية', openingPage],
+    ['materials', 'الخامات', M('materials')], ['categories', 'فئات الخامات', M('material_categories')], ['units', 'وحدات القياس', M('units')], ['warehouses', 'المخازن', M('warehouses')],
+    ['clients', 'العملاء', M('clients')], ['projects', 'المشروعات', M('projects')], ['project-items', 'بنود المشروعات', M('project_items')], ['stages', 'مراحل التصنيع', M('stages')], ['sites', 'المواقع', M('sites')],
+    ['suppliers', 'الموردين', M('suppliers')], ['treasuries', 'الخزن والبنوك', M('treasuries')], ['custodians', 'العهد', M('custodians')],
+    ['expense-cats', 'فئات المصروفات', M('expense_categories')], ['employees', 'العاملين', M('employees')], ['sequences', 'ترقيم المستندات', sequencesPage], ['users', 'المستخدمون', usersPage], ['audit', 'سجل العمليات', auditPage]] }
 ];
 const allowed = (m) => META.me.role === 'admin' || m === 'dashboard' || (META.me.modules || []).includes(m);
 const open = new Set(['dashboard']);
@@ -55,8 +55,8 @@ function shell() {
   const cur = parse();
   const draw = () => {
     nav.replaceChildren(...NAV.filter((g) => allowed(g.id)).map((g) => h('div.nav-group' + (open.has(g.id) ? '.open' : ''),
-      h('div.nav-title', { onclick: () => { open.has(g.id) ? open.delete(g.id) : open.add(g.id); draw(); } }, h('span.ico', g.ico), g.title, h('span.chev', '◀')),
-      h('div.nav-items', g.items.map(([k, t, fn]) => h('a' + (fn ? '' : '.soon') + (cur.mod === g.id && cur.page === k ? '.active' : ''), { href: fn ? `#/${g.id}/${k}` : '#' }, t))))));
+      h('div.nav-title', { onclick: () => { if (g.direct) { location.hash = `#/${g.id}/${g.items[0][0]}`; return; } open.has(g.id) ? open.delete(g.id) : open.add(g.id); draw(); } }, h('span.ico', g.ico), g.title, g.direct ? null : h('span.chev', '◀')),
+      g.direct ? null : h('div.nav-items', g.items.map(([k, t, fn]) => h('a' + (fn ? '' : '.soon') + (cur.mod === g.id && cur.page === k ? '.active' : ''), { href: fn ? `#/${g.id}/${k}` : '#' }, t))))));
   };
   root.replaceChildren(h('div#app', h('aside.side', h('div', { style: { padding: '18px 16px 8px', fontWeight: 800, fontSize: '17px', color: '#fff' } }, 'مصنع GRC'), nav,
     h('div.side-foot', h('div', META.me.name || META.me.username), h('div', { style: { marginTop: '6px', display: 'flex', gap: '6px' } }, h('button', { onclick: () => changePassword(false) }, 'كلمة المرور'), h('button', { onclick: async () => { await POST('/logout'); location.hash = ''; loginView(); } }, 'خروج')))), view));
