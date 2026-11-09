@@ -52,8 +52,9 @@ export const MASTERS = {
   },
   custodians: {
     title: 'العهد', table: 'custodians', seq: 'custodian',
-    fields: [T('employee_id', 'الموظف (صاحب العهدة)', 'fk', { ref: 'employees' }), T('name', 'الاسم (يُؤخذ من الموظف لو فاضي)', 'text', { req: 1 }), T('phone', 'الهاتف')],
-    cols: ['code', 'name', 'employee_id', 'phone'], used: [['vouchers', 'custodian_id'], ['purchase_invoices', 'custodian_id']],
+    fields: [T('employee_id', 'الموظف (صاحب العهدة)', 'fk', { ref: 'employees', fills: 'name', help: 'اختر الموظف وهيتعبّى الاسم تلقائياً — أو سيبه فاضي واكتب اسم شخص من برّه الشركة' }),
+      T('name', 'الاسم (يتعبّى من الموظف)', 'text'), T('phone', 'الهاتف')],
+    cols: ['code', 'employee_id', 'name', 'phone'], used: [['vouchers', 'custodian_id'], ['purchase_invoices', 'custodian_id']],
   },
   clients: {
     title: 'العملاء', table: 'clients', seq: 'client',
@@ -107,6 +108,15 @@ export async function checkUnitConversion(o, id) {
 
 async function extraChecks(name, o, id) {
   if (name === 'units') await checkUnitConversion(o, id);
+  if (name === 'custodians') {
+    const cur = id ? await get('SELECT * FROM custodians WHERE id=?', id) : {};
+    const m = { ...cur, ...o };
+    if (!m.employee_id && !String(m.name || '').trim()) throw new AppError('اختر الموظف أو اكتب اسم صاحب العهدة');
+    if (m.employee_id) {
+      const dup = await get('SELECT code, name FROM custodians WHERE employee_id=? AND active=1 AND id<>?', m.employee_id, id || 0);
+      if (dup) throw new AppError(`الموظف ده له عهدة بالفعل: ${dup.code} — ${dup.name}`);
+    }
+  }
   if (name === 'employees') {
     const cur = id ? await get('SELECT * FROM employees WHERE id=?', id) : {};
     const m = { ...cur, ...o };
