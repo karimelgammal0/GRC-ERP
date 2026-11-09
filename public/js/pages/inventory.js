@@ -53,7 +53,9 @@ export const issuesPage = docScreen({
 export const siteTransfersPage = docScreen({
   type: 'stock_issue', title: 'التحويل للمواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' },
   note: 'تحويل خامات من المخزن لمشروع. لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
-  filters: (() => { let fp = null; return [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, onChange: (v) => { fp = v; } }, { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, filter: (x) => !fp || x.project_id === Number(fp) }]; })(),
+  filters: (() => { let fp = null; return [
+    { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, onChange: (v) => { fp = v; } },
+    { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, showIf: (vals) => sitesOf(vals.project_id).length > 0, filter: (x) => !fp || x.project_id === Number(fp) }]; })(),
   listCols: [
     { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'project_name', l: 'المشروع' }, { k: 'site_name', l: 'الموقع' },
     { k: 'total', l: 'التكلفة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -64,10 +66,10 @@ export const siteTransfersPage = docScreen({
       const p = ctx.header.project_id; const sites = sitesOf(p);
       return [dateF, whF(ctx),
         { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', req: 1, combo: true, onChange: (v, c) => { const s = sitesOf(v); c.header.site_id = s.length === 1 ? s[0].id : null; } },
-        sites.length ? { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', req: 1, filter: (x) => x.project_id === Number(p) } : null,
+        sites.length ? { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', req: 1, readonly: sites.length === 1, filter: (x) => x.project_id === Number(p) } : null,
         receivedF, { ...notesF, wide: false }].filter(Boolean);
     },
-    prepare: (payload) => { payload.kind = 'site'; if (!sitesOf(payload.project_id).length) payload.site_id = null; },
+    prepare: (payload) => { payload.kind = 'site'; const ss = sitesOf(payload.project_id); if (!ss.length) payload.site_id = null; else if (ss.length === 1) payload.site_id = ss[0].id; },
     lines: issueLines, totals: issueTotals,
     onOpen: (ctx) => mapStock(ctx),
   },

@@ -191,7 +191,11 @@ export function pageHead(title, ...actions) { return h('div.page-head', h('h2', 
 export function card(title, ...body) { return h('section.card', title ? h('h3', title) : null, body); }
 export function kpi(label, value, sub, kind) { return h('div.kpi' + (kind ? '.' + kind : ''), h('small', label), h('b', value), sub ? h('em', sub) : null); }
 export function filterBar(fields, onRun, init = {}) {
-  const f = formGrid(fields.map((x) => ({ ...x })), init, fields.length > 4 ? 4 : fields.length);
+  let refresh = () => {};
+  const f = formGrid(fields.map((x) => ({ ...x, onChange: (v) => { x.onChange?.(v); refresh(); } })), init, fields.length > 4 ? 4 : fields.length);
+  // حقول لها showIf(values) تظهر/تختفي حسب باقي الفلاتر
+  refresh = () => { const vals = f.values(); for (const x of fields) if (x.showIf) { const lab = f.inputs[x.k]?.closest('label'); const on = x.showIf(vals); if (lab) lab.style.display = on ? '' : 'none'; if (!on) f.set(x.k, null); } };
+  setTimeout(refresh, 0);
   const run = guard(async () => onRun(f.values()));
   const bar = h('div.filters', f.el, h('button.btn.primary', { onclick: run }, 'عرض'));
   bar.values = f.values; bar.run = run; bar.set = f.set;
