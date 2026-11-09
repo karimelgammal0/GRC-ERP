@@ -14,7 +14,7 @@ export const MASTERS = {
   materials: {
     title: 'الخامات (الأصناف)', table: 'materials', seq: 'material',
     fields: [T('name', 'اسم الخامة', 'text', { req: 1 }), T('category_id', 'الفئة', 'fk', { ref: 'material_categories' }), T('unit_id', 'وحدة القياس', 'fk', { ref: 'units', req: 1 }),
-      T('min_qty', 'حد الطلب (تنبيه)', 'number'), T('notes', 'ملاحظات', 'textarea')],
+      T('min_qty', 'حد الطلب (تنبيه)', 'number', { def: 0 }), T('notes', 'ملاحظات', 'textarea')],
     cols: ['code', 'name', 'category_id', 'unit_id', 'min_qty'],
     used: [['stock_moves', 'material_id'], ['purchase_request_lines', 'material_id'], ['purchase_order_lines', 'material_id'], ['goods_receipt_lines', 'material_id'], ['purchase_invoice_lines', 'material_id'], ['stock_issue_lines', 'material_id'], ['stock_adjustment_lines', 'material_id'], ['purchase_return_lines', 'material_id']],
   },
@@ -22,7 +22,7 @@ export const MASTERS = {
       T('category_ids', 'فئات الخامات المسموحة في المخزن', 'multifk', { ref: 'material_categories', wide: true, help: 'الخامات اللي فئتها مختارة هنا بس هي اللي هتظهر عند الصرف والتحويل من المخزن ده. سيبها فاضية = كل الخامات.' })], cols: ['code', 'name', 'type', 'category_ids'], used: [['stock_moves', 'warehouse_id']] },
   suppliers: {
     title: 'الموردين', table: 'suppliers', seq: 'supplier',
-    fields: [T('name', 'اسم المورد', 'text', { req: 1 }), T('phone', 'الهاتف'), T('address', 'العنوان'), T('tax_no', 'الرقم الضريبي'), T('credit_days', 'مدة الائتمان (يوم)', 'number'), T('notes', 'ملاحظات', 'textarea')],
+    fields: [T('name', 'اسم المورد', 'text', { req: 1 }), T('phone', 'الهاتف'), T('address', 'العنوان'), T('tax_no', 'الرقم الضريبي'), T('credit_days', 'مدة الائتمان (يوم)', 'number', { def: 0 }), T('notes', 'ملاحظات', 'textarea')],
     cols: ['code', 'name', 'phone', 'credit_days'], used: [['purchase_invoices', 'supplier_id'], ['goods_receipts', 'supplier_id'], ['purchase_orders', 'supplier_id'], ['purchase_requests', 'supplier_id'], ['vouchers', 'supplier_id'], ['purchase_returns', 'supplier_id']],
   },
   projects: {
@@ -38,7 +38,7 @@ export const MASTERS = {
   },
   stages: {
     title: 'مراحل التصنيع', table: 'stages', seq: 'stage',
-    fields: [T('name', 'اسم المرحلة', 'text', { req: 1 }), T('seq', 'الترتيب', 'number'), T('account_id', 'حساب إنتاج تحت التشغيل', 'fk', { ref: 'accounts', req: 1 })],
+    fields: [T('name', 'اسم المرحلة', 'text', { req: 1 }), T('seq', 'الترتيب', 'number', { def: 1 }), T('account_id', 'حساب إنتاج تحت التشغيل', 'fk', { ref: 'accounts', req: 1 })],
     cols: ['code', 'name', 'seq', 'account_id'], used: [['stock_issues', 'stage_id'], ['cost_lines', 'stage_id'], ['employees', 'default_stage_id'], ['labor_sheet_lines', 'stage_id']],
   },
   sites: {
@@ -71,7 +71,7 @@ export const MASTERS = {
     title: 'العاملين', table: 'employees', seq: 'employee',
     fields: [T('name', 'الاسم', 'text', { req: 1 }), T('emp_type', 'نوع العمالة', 'select', { options: [['daily', 'يومية'], ['monthly', 'شهرية']] }),
       T('cost_class', 'تصنيف التكلفة', 'select', { options: CLS }), T('default_stage_id', 'المرحلة الافتراضية (للمباشرة)', 'fk', { ref: 'stages' }),
-      T('daily_rate', 'أجر اليوم', 'number'), T('monthly_salary', 'المرتب الشهري', 'number'), T('job_title', 'الوظيفة/الحرفة'), T('phone', 'الهاتف'), T('hire_date', 'تاريخ التعيين', 'date')],
+      T('daily_rate', 'أجر اليوم', 'number', { def: 0 }), T('monthly_salary', 'المرتب الشهري', 'number', { def: 0 }), T('job_title', 'الوظيفة/الحرفة'), T('phone', 'الهاتف'), T('hire_date', 'تاريخ التعيين', 'date')],
     cols: ['code', 'name', 'emp_type', 'cost_class', 'default_stage_id', 'daily_rate', 'monthly_salary'], used: [['labor_sheet_lines', 'employee_id'], ['payroll_lines', 'employee_id']],
   },
 };
@@ -100,7 +100,7 @@ function clean(M, body, isNew) {
     if (f.t === 'multifk') continue;
     let v = body[f.k];
     if (v === undefined) continue;
-    if (v === '' || v === null) v = null;
+    if (v === '' || v === null) v = f.def ?? null;   // الأعمدة الرقمية NOT NULL بتاخد قيمتها الافتراضية لو اتساب الحقل فاضي
     else if (f.t === 'number' || f.t === 'fk') v = Number(v);
     if (f.req && (v === null || v === undefined || Number.isNaN(v))) throw new AppError(`الحقل «${f.l}» مطلوب`);
     o[f.k] = v;

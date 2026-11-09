@@ -256,6 +256,13 @@ ok((await get('SELECT supplier_id FROM purchase_requests WHERE id=?', prA.id)).s
 ok((await get('SELECT supplier_id FROM purchase_requests WHERE id=?', prB.id)).supplier_id === null, 'طلب شراء بدون مورد');
 await throws(async () => await saveDoc('purchase_request', { date: '2026-11-08', supplier_id: 999999, lines: [{ material_id: matQ, qty: 1 }] }, null, U), null, 'مورد غير موجود');
 const lst = await api(`/api/doc/purchase_request?supplier_id=${supQ}`); ok(lst.length >= 1 && lst[0].supplier_name, 'قائمة الطلبات بالمورد والفلتر');
+
+section('15) حفظ تكويد بحقول رقمية فاضية');
+const e1 = await send('POST', '/api/m/employees', { name: 'عامل بدون أجر', emp_type: 'monthly', cost_class: 'admin', daily_rate: '', monthly_salary: null });
+ok(e1.status === 200 && e1.j.daily_rate === 0, 'موظف بدون أجر يوم');
+const e2 = await send('PUT', `/api/m/employees/${e1.j.id}`, { daily_rate: '' }); ok(e2.status === 200 && e2.j.daily_rate === 0, 'تفريغ أجر اليوم عند التعديل');
+const m1 = await send('POST', '/api/m/materials', { name: 'خامة بدون حد', unit_id: await val('SELECT id FROM units LIMIT 1'), min_qty: '' }); ok(m1.status === 200 && m1.j.min_qty === 0, 'خامة بدون حد طلب');
+const s1 = await send('POST', '/api/m/suppliers', { name: 'مورد بدون ائتمان', credit_days: '' }); ok(s1.status === 200 && s1.j.credit_days === 0, 'مورد بدون مدة ائتمان');
 server.close();
 
 console.log(`\n${fail ? '✗' : '✓'} ${pass} اختبار نجح، ${fail} فشل`);
