@@ -1,5 +1,5 @@
 import { h, GET, POST, L, META, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard } from '../core.js';
-import { docScreen, dateF, notesF, total } from '../docs-ui.js';
+import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 export const KINDS = [['production', 'صرف إنتاج (مشروع + بند + مرحلة)'], ['site', 'تحويل لموقع'], ['overhead', 'تشغيل غير مباشر (بدون مشروع)']];
 export const DOC_LABEL = { receipt: 'إذن استلام', invoice: 'فاتورة شراء', preturn: 'مرتجع مشتريات', issue: 'صرف', adjustment: 'جرد وتسوية', opening: 'رصيد افتتاحي' };
@@ -32,7 +32,7 @@ export const issuesPage = docScreen({
         { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true }, { ...notesF, wide: false }].filter(Boolean);
     },
     lines: { blank: () => ({ material_id: null, qty: null }), cols: [
-      { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '36%' }, { k: 'qty', l: 'الكمية', t: 'number', w: '120px' },
+      { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '36%', onChange: matChange }, qtyCol({ l: 'الكمية', w: '170px' }),
       { l: 'الوحدة', calc: (l) => unitOf(l.material_id), w: '80px' },
       { l: 'الرصيد المتاح', calc: (l, c) => c.stock?.[l.material_id]?.qty ?? 0, fmt: fq, w: '110px' },
       { l: 'متوسط التكلفة', calc: (l, c) => c.stock?.[l.material_id]?.avg_cost ?? 0, fmt: (v) => fmt(v, 4), w: '110px' },

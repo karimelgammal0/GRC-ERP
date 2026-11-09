@@ -1,6 +1,7 @@
 // ============================================================
 //  شاشة مستندات عامة: قائمة + فلاتر + محرر (رأس + بنود + إجماليات)
 // ============================================================
+import { entryUnits, toBaseQty } from './units.js';
 import { h, GET, POST, PUT, L, fmt, fq, today, yearStart, table, filterBar, formGrid, fieldInput, pageHead, card, toast, guard, confirmBox, statusBadge, byId, nameOf } from './core.js';
 
 export function docScreen(cfg) {
@@ -102,5 +103,33 @@ export function docScreen(cfg) {
 // حقول جاهزة مشتركة
 export const dateF = { k: 'date', l: 'التاريخ', t: 'date', req: 1 };
 export const notesF = { k: 'notes', l: 'ملاحظات', t: 'text', wide: true };
+/** عمود الكمية في أسطر المستندات: لو الخامة ليها وحدات فرعية/رئيسية مرتبطة، بتقدر تدخل الكمية بأي وحدة منهم
+ *  والقيمة المحفوظة (qty) دايماً بوحدة الخامة الأساسية. (_eu/_ev حالة واجهة فقط ومبتتحفظش) */
+export const qtyCol = ({ l = 'الكمية', w = '130px' } = {}) => ({
+  k: 'qty', l, w,
+  render(line, ctx, readonly) {
+    const baseId = byId('materials', line.material_id)?.unit_id;
+    const opts = entryUnits(L.units || [], baseId);
+    const baseName = opts[0]?.name || '';
+    const cur = opts.find((o) => o.id === line._eu) || opts[0];
+    const shown = cur && cur.toBase !== 1 && line._ev !== undefined ? line._ev : line.qty;
+    const inp = h('input', { type: 'number', step: 'any', min: 0, value: shown ?? '' });
+    const hint = h('small.muted');
+    const sel = opts.length > 1 ? h('select', { style: { minWidth: '70px' } }, opts.map((o) => h('option', { value: o.id, selected: o.id === cur.id }, o.name))) : null;
+    const curOpt = () => (sel ? opts.find((o) => o.id === Number(sel.value)) : opts[0]) || { toBase: 1 };
+    const sync = () => {
+      const o = curOpt(); const v = inp.value === '' ? null : Number(inp.value);
+      line._eu = o.id; line._ev = v; line.qty = v === null ? null : (o.toBase === 1 ? v : toBaseQty(v, o.toBase));
+      hint.textContent = o.toBase !== 1 && line.qty !== null ? `= ${fq(line.qty)} ${baseName}` : '';
+      ctx.refresh();
+    };
+    inp.onchange = sync; if (sel) sel.onchange = sync;
+    if (readonly) { inp.setAttribute('readonly', ''); inp.setAttribute('disabled', ''); sel?.setAttribute('disabled', ''); }
+    if (cur && cur.toBase !== 1 && line.qty !== null && line.qty !== undefined) hint.textContent = `= ${fq(line.qty)} ${baseName}`;
+    return h('div.qty-entry', inp, sel, hint);
+  },
+});
+/** لما الخامة تتغير: ارجع لوحدة الخامة وأعد رسم الأسطر (قائمة الوحدات بتتغير) */
+export const matChange = (v, l, ctx) => { l._eu = null; l._ev = undefined; ctx.setLines(ctx.lines); };
 export const total = (arr, f) => arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
 export { fmt, fq, nameOf, byId };

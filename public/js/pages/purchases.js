@@ -1,10 +1,10 @@
 import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, modal } from '../core.js';
-import { docScreen, dateF, notesF, total } from '../docs-ui.js';
+import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) || {}).id;
 const unitOf = (mid) => nameOf('units', byId('materials', mid)?.unit_id);
 const PAY = [['credit', 'آجل (على حساب المورد)'], ['cash', 'نقدي']];
-const matCol = { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '38%' };
+const matCol = { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '38%', onChange: matChange };
 const unitCol = { l: 'الوحدة', calc: (l) => unitOf(l.material_id), w: '80px' };
 const supF = { k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true, req: 1 };
 const lineTotal = { l: 'الإجمالي', calc: (l) => (Number(l.qty) || 0) * (Number(l.unit_price) || 0), fmt: (v) => fmt(v), w: '120px' };
@@ -17,7 +17,7 @@ export const requestsPage = docScreen({
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'requested_by', l: 'مقدم الطلب' }, { k: 'project_name', l: 'المشروع' }, { k: 'n_lines', l: 'البنود', num: true }, { k: 'needed_date', l: 'مطلوب في' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
     cols: 3, header: [dateF, { k: 'requested_by_id', l: 'مقدم الطلب', t: 'fk', ref: 'employees', combo: true }, { k: 'project_id', l: 'المشروع (اختياري)', t: 'fk', ref: 'projects', combo: true }, { k: 'needed_date', l: 'مطلوب في تاريخ', t: 'date' }, { ...notesF, wide: false }],
-    lines: { blank: () => ({}), cols: [matCol, { k: 'qty', l: 'الكمية المطلوبة', t: 'number', w: '140px' }, unitCol, { l: 'تم أمر شراء بـ', calc: (l) => l.ordered_qty ?? 0, fmt: fq }, { k: 'notes', l: 'ملاحظة', t: 'text' }] },
+    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المطلوبة', w: '170px' }), unitCol, { l: 'تم أمر شراء بـ', calc: (l) => l.ordered_qty ?? 0, fmt: fq }, { k: 'notes', l: 'ملاحظة', t: 'text' }] },
     totals: (ctx) => [['عدد البنود', String(ctx.lines.filter((l) => l.material_id).length)]],
   },
 });
@@ -31,7 +31,7 @@ export const ordersPage = docScreen({
     cols: 3, rebuildOn: [], defaults: () => ({ payment_type: 'credit' }),
     header: (ctx) => [dateF, { ...supF, lockOnEdit: true }, { k: 'request_id', l: 'طلب الشراء (اختياري)', t: 'select', lockOnEdit: true, options: [['', '— بدون —'], ...(ctx.reqOpts || [])] },
       { k: 'payment_type', l: 'نوع الشراء', t: 'select', options: PAY }, { k: 'expected_date', l: 'تاريخ التسليم المتوقع', t: 'date' }, { ...notesF, wide: false }],
-    lines: { blank: () => ({}), cols: [matCol, { k: 'qty', l: 'الكمية', t: 'number', w: '120px' }, unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal, { l: 'تم استلامه', calc: (l) => l.received_qty ?? 0, fmt: fq }] },
+    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal, { l: 'تم استلامه', calc: (l) => l.received_qty ?? 0, fmt: fq }] },
     tools: [{ label: 'سحب بنود من طلب الشراء', run: async (ctx) => {
       const id = Number(ctx.header.request_id); if (!id) throw new Error('اختر طلب الشراء أولاً');
       const rows = await GET('/helpers/request-lines', { request_id: id });
@@ -57,7 +57,7 @@ export const receiptsPage = docScreen({
       { k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw' },
       { k: 'order_id', l: 'أمر الشراء (اختياري)', t: 'select', lockOnEdit: true, options: [['', '— استلام بدون أمر —'], ...(ctx.ordOpts || [])] },
       { k: 'supplier_ref', l: 'رقم إذن/فاتورة المورد', t: 'text' }, { ...notesF, wide: false }],
-    lines: { blank: () => ({}), cols: [matCol, { k: 'qty', l: 'الكمية المستلمة', t: 'number', w: '130px' }, unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal, { l: 'تم تفويته', calc: (l) => l.invoiced_qty ?? 0, fmt: fq }] },
+    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المستلمة', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal, { l: 'تم تفويته', calc: (l) => l.invoiced_qty ?? 0, fmt: fq }] },
     tools: [{ label: 'سحب المتبقي من أمر الشراء', run: async (ctx) => {
       const id = Number(ctx.header.order_id); if (!id) throw new Error('اختر أمر الشراء أولاً');
       const rows = await GET('/helpers/order-lines', { order_id: id });
@@ -98,7 +98,7 @@ export const invoicesPage = docScreen({
         cash && { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } },
         { k: 'discount', l: 'خصم (مبلغ)', t: 'number' }, { k: 'freight', l: 'مصاريف نقل وتحميل (تُضاف للتكلفة)', t: 'number' }, { k: 'vat_percent', l: 'ضريبة القيمة المضافة %', t: 'number' }, { ...notesF }].filter(Boolean);
     },
-    lines: { blank: () => ({}), cols: [matCol, { k: 'qty', l: 'الكمية', t: 'number', w: '110px' }, unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal, { l: 'مطابقة استلام', calc: (l) => (l.grn_line_id ? (l._grn_no || 'مطابق ✓') : 'مباشر') }] },
+    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal, { l: 'مطابقة استلام', calc: (l) => (l.grn_line_id ? (l._grn_no || 'مطابق ✓') : 'مباشر') }] },
     tools: [{ label: 'سحب من استلامات غير مفوترة', run: async (ctx) => {
       const s = ctx.header.supplier_id; if (!s) throw new Error('اختر المورد أولاً');
       const rows = await GET('/helpers/uninvoiced-grn-lines', { supplier_id: s });
@@ -123,7 +123,7 @@ export const preturnsPage = docScreen({
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
     cols: 3, defaults: () => ({ warehouse_id: defaultWh() }), header: [dateF, { ...supF, lockOnEdit: true }, { k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw' }, { ...notesF }],
-    lines: { blank: () => ({}), cols: [matCol, { k: 'qty', l: 'الكمية', t: 'number', w: '120px' }, unitCol, { k: 'unit_price', l: 'سعر الإرجاع', t: 'number', w: '130px' }, lineTotal] },
+    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية', w: '170px' }), unitCol, { k: 'unit_price', l: 'سعر الإرجاع', t: 'number', w: '130px' }, lineTotal] },
     totals: (ctx) => [['قيمة المرتجع', fmt(total(ctx.lines, (l) => (Number(l.qty) || 0) * (Number(l.unit_price) || 0)))]],
   },
 });
