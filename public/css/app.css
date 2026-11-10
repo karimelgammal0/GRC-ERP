@@ -154,3 +154,10 @@ input.ro, select.ro { background: #f1efe8; color: var(--ink2); }
 .multi { max-height: 190px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: #fff; columns: 2; }
 .multi .chk { display: flex; gap: 6px; align-items: center; margin: 3px 0; font-weight: 400; break-inside: avoid; }
 .inline-act { margin-inline-start: 8px; padding: 1px 8px; font-size: 12px; }
+
+.perm-mod { border: 1px solid var(--line); border-radius: 8px; margin: 6px 0; background: #fff; }
+.perm-mod > summary { cursor: pointer; padding: 8px 12px; background: #f6f4ee; border-radius: 8px; display: flex; align-items: center; gap: 6px; }
+.perm-mod[open] > summary { border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; }
+.perm.perm, table.perm { width: 100%; border-collapse: collapse; } table.perm td { padding: 6px 12px; border-bottom: 1px solid var(--line2); vertical-align: middle; }
+table.perm td.pg { width: 34%; font-weight: 600; } table.perm label.act { display: inline-flex; gap: 4px; align-items: center; margin-inline-end: 16px; font-size: 13px; }
+.perm-editor { max-height: 52vh; overflow: auto; }

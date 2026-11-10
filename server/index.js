@@ -6,7 +6,7 @@ import { get, AppError, initSchema, MODE } from './db.js';
 import { isEmpty, seedAll, ensureBaseData } from './lib/seed.js';
 import { authRoutes, systemRouter } from './routes/system.js';
 import { masterRouter } from './routes/masters.js';
-import { docRouter, helperRouter, canUse } from './routes/docs.js';
+import { docRouter, helperRouter } from './routes/docs.js';
 import { reportRouter } from './routes/reports.js';
 import { accountsRouter } from './routes/accounts.js';
 
@@ -49,12 +49,12 @@ app.use('/api', async (req, res, next) => {
   if (!u) return res.status(401).json({ error: 'سجّل الدخول أولاً' });
   req.user = u; req.token = token; next();
 });
-const need = (mod) => (req, res, next) => (canUse(req.user, mod) ? next() : res.status(403).json({ error: 'ليس لديك صلاحية على هذا الموديول' }));
+
 app.use('/api', await systemRouter());
 app.use('/api/m', await masterRouter());           // قراءة التكويد متاحة للكل؛ التعديل لصاحب الإعدادات
 app.use('/api/doc', await docRouter());
 app.use('/api/helpers', helperRouter());
-app.use('/api/reports', need('reports'), reportRouter());
+app.use('/api/reports', reportRouter());
 app.use('/api/acc', await accountsRouter());
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'غير موجود' }));

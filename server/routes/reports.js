@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { can } from '../lib/perms.js';
 import { all, get, val, AppError, r2 } from '../db.js';
 import { acc, getSetting } from '../lib/core.js';
 
@@ -31,8 +32,21 @@ const DIM = {
 const dict = async (t) => Object.fromEntries((await all(`SELECT id,name FROM ${t}`)).map((r) => [r.id, r.name]));
 const nameOf = (names, k) => (k === 0 || k === '0' ? 'غير محدد' : names[k] ?? String(k));
 
+// كل تقرير ليه صفحة (أو أكتر) بتستخدمه — المستخدم لازم يكون له صلاحية على واحدة منهم
+const REPORT_PAGES = {
+  'cost-pivot': ['reports.project-stage', 'reports.stage-project', 'reports.project-analysis'], 'cost-lines': ['reports.cost-detail', 'reports.material-usage', 'reports.project-stage', 'reports.stage-project', 'reports.project-analysis'],
+  'stock-card': ['inventory.stock-card'], 'stock-balances': ['inventory.balances'], 'stock-moves': ['inventory.moves'],
+  'supplier-statement': ['purchases.supplier-statement'], 'supplier-balances': ['purchases.supplier-balances'],
+  'treasury-statement': ['finance.treasury-statement'], 'treasury-balances': ['finance.treasuries'], 'custody-statement': ['finance.custody-statement'], 'custody-balances': ['finance.treasuries'],
+  expenses: ['reports.expenses'], labor: ['reports.labor'], 'trial-balance': ['reports.trial-balance'], ledger: ['reports.ledger'], 'income-summary': ['reports.income'],
+};
 export function reportRouter() {
   const r = Router();
+  r.use((req, res, next) => {
+    const name = req.path.split('/')[1]; if (name === 'dashboard') return next();
+    const keys = REPORT_PAGES[name]; if (keys && can(req.user, keys)) return next();
+    res.status(403).json({ error: 'ليس لديك صلاحية على هذا التقرير' });
+  });
 
   // مصفوفة التكلفة: صف × عمود (مثلاً مشروع × مرحلة، أو مرحلة × مشروع)
   r.get('/cost-pivot', async (req, res) => {

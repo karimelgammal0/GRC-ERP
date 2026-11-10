@@ -2,7 +2,7 @@
 //  شاشة مستندات عامة: قائمة + فلاتر + محرر (رأس + بنود + إجماليات)
 // ============================================================
 import { entryUnits, toBaseQty } from './units.js';
-import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, formGrid, fieldInput, pageHead, card, toast, guard, confirmBox, statusBadge, byId, nameOf } from './core.js';
+import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, formGrid, fieldInput, pageHead, card, toast, guard, confirmBox, statusBadge, byId, nameOf, can } from './core.js';
 
 export function docScreen(cfg) {
   return function render(root, params = {}) {
@@ -18,7 +18,7 @@ export function docScreen(cfg) {
       };
       const dv = (v) => (typeof v === 'function' ? v() : v);
       const fb = filterBar(fields, load, { from: dv(cfg.defaultFrom) ?? monthStart(), to: dv(cfg.defaultTo) ?? today() });
-      host.replaceChildren(pageHead(cfg.title, cfg.canCreate === false ? null : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`)), cfg.note ? h('div.note', cfg.note) : null, fb, tableHost);
+      host.replaceChildren(pageHead(cfg.title, cfg.canCreate === false || (cfg.perm && !can(cfg.perm + '.create')) ? null : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`)), cfg.note ? h('div.note', cfg.note) : null, fb, tableHost);
       fb.run();
     };
 
@@ -27,7 +27,9 @@ export function docScreen(cfg) {
       const doc = id ? await GET(`/doc/${cfg.type}/${id}`) : null;
       const st = { header: { date: today(), ...(E.defaults?.() || {}), ...(init || {}), ...(doc || {}) }, lines: doc?.lines ? doc.lines.map((l) => ({ ...l })) : (init?.lines ? init.lines : []), doc, ctx: null };
       if (!doc && E.lines && !st.lines.length) st.lines = [E.lines.blank?.() || {}];
-      const readonly = doc?.status === 'void';
+      const voided = doc?.status === 'void';
+      const noEdit = !!cfg.perm && !can(cfg.perm + (doc ? '.edit' : '.create'));
+      const readonly = voided || noEdit;
       const ctx = {
         st, get header() { return st.header; }, get lines() { return st.lines; }, doc,
         setHeader(k, v) { st.header[k] = v; hf?.set(k, v); },
@@ -87,8 +89,8 @@ export function docScreen(cfg) {
         h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); showList(); } }, '← ' + cfg.title)),
         h('div.doc-head', h('span.doc-no', doc ? doc.no : `${cfg.noun} جديد`), doc ? statusBadge(doc.status) : null, h('span.grow'),
           doc ? h('button.btn.sm', { onclick: () => window.print() }, '🖨 طباعة') : null,
-          doc && !readonly && cfg.canVoid !== false ? h('button.btn.sm.danger', { onclick: voidIt }, 'إلغاء المستند') : null),
-        readonly ? h('div.note.bad', 'هذا المستند ملغي — للعرض فقط.') : null,
+          doc && !voided && cfg.canVoid !== false && (!cfg.perm || can(cfg.perm + '.void')) ? h('button.btn.sm.danger', { onclick: voidIt }, 'إلغاء المستند') : null),
+        voided ? h('div.note.bad', 'هذا المستند ملغي — للعرض فقط.') : noEdit ? h('div.note', 'عرض فقط — ليس لديك صلاحية التعديل على هذا المستند.') : null,
         doc && !readonly ? h('div.note', 'تعديل المستند يعكس أثره القديم ويرحّل الجديد تلقائياً (المخزون والتكلفة والقيود).') : null,
         E.intro ? h('div.note', E.intro) : null,
         card(null, headerHost), E.lines ? card(E.lines.title || 'البنود', linesHost) : null, E.extra ? card(E.extraTitle || null, extraHost) : null,

@@ -457,3 +457,6 @@ CREATE TABLE IF NOT EXISTS warehouse_categories (
 
 -- المورد في طلب الشراء (اختياري)
 ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFERENCES suppliers(id);
+
+-- صلاحيات تفصيلية لكل مستخدم (JSON) — NULL = قديم: يتحوّل من الموديولات
+ALTER TABLE users ADD COLUMN IF NOT EXISTS perms TEXT;

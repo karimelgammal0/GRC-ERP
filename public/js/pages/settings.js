@@ -1,14 +1,16 @@
-import { h, GET, POST, PUT, DEL, L, META, loadLookups, loadMeta, fmt, fq, table, formGrid, fieldInput, pageHead, card, modal, toast, guard, confirmBox, badge, nameOf, byId, codeName, labelOf, filterBar } from '../core.js';
+import { h, GET, POST, PUT, DEL, L, META, loadLookups, loadMeta, fmt, fq, table, formGrid, fieldInput, pageHead, card, modal, toast, guard, confirmBox, badge, nameOf, byId, codeName, labelOf, filterBar, can } from '../core.js';
 
 const ACCOUNT_FILTER = (x) => x.postable === 1 && x.active !== 0;
 const fieldDefs = (M) => M.fields.map((f) => ({
   ...f, filter: f.ref === 'accounts' ? ACCOUNT_FILTER : f.filter, combo: f.t === 'fk' && f.ref !== 'accounts' && (L[f.ref] || []).length > 14,
 }));
 
+const MASTER_PAGE = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', employees: 'employees' };
 /** شاشة تكويد عامة مبنية من مواصفات السيرفر */
 export function masterPage(name, opts = {}) {
   return async (root) => {
     const M = META.masters[name]; const title = opts.title || M.title;
+    const P = opts.perm || `settings.${MASTER_PAGE[name]}`; const canC = can(P + '.create'), canE = can(P + '.edit'), canD = can(P + '.delete');
     let showInactive = false; let filterVal = {};
     const tableHost = h('div');
     const colDefs = () => [
@@ -28,7 +30,7 @@ export function masterPage(name, opts = {}) {
       let rows = L[name] || [];
       if (!showInactive) rows = rows.filter((r) => r.active);
       if (opts.filterBy && filterVal[opts.filterBy]) rows = rows.filter((r) => r[opts.filterBy] === Number(filterVal[opts.filterBy]));
-      tableHost.replaceChildren(table({ cols: colDefs(), rows, onRow: (r) => edit(r), name: title, empty: 'لا توجد بيانات — اضغط «جديد» لإضافة أول سجل' }));
+      tableHost.replaceChildren(table({ cols: colDefs(), rows, onRow: canE ? (r) => edit(r) : null, name: title, empty: canC ? 'لا توجد بيانات — اضغط «جديد» لإضافة أول سجل' : 'لا توجد بيانات' }));
     };
     const edit = (rec) => {
       let lastAuto = null;   // آخر اسم اتعبّى تلقائياً من حقل مرتبط (علشان منكتبش فوق اسم كتبه المستخدم بإيده)
@@ -43,39 +45,36 @@ export function masterPage(name, opts = {}) {
         title: rec ? `تعديل — ${rec.name}` : `إضافة — ${title}`, body, buttons: [
           { label: 'حفظ', cls: 'primary', onClick: async () => { const v = fg.values(); if (rec) v.active = fg.active.get(); if (!rec && !v.code) delete v.code;
             if (rec) await PUT(`/m/${name}/${rec.id}`, v); else await POST(`/m/${name}`, v); toast('تم الحفظ'); await load(); } },
-          rec ? { label: 'حذف', cls: 'danger', close: false, onClick: async (close) => { if (!(await confirmBox(`حذف «${rec.name}»؟ لو الكود مستخدم في حركات هيتعطّل بدل الحذف.`, 'حذف', true))) return false;
+          rec && canD ? { label: 'حذف', cls: 'danger', close: false, onClick: async (close) => { if (!(await confirmBox(`حذف «${rec.name}»؟ لو الكود مستخدم في حركات هيتعطّل بدل الحذف.`, 'حذف', true))) return false;
             const r = await DEL(`/m/${name}/${rec.id}`); toast(r.message || 'تم الحذف'); close(); await load(); return false; } } : null].filter(Boolean),
       });
     };
     const bar = h('div.filters', { style: { alignItems: 'center' } },
       opts.filterBy ? (() => { const sel = fieldInput({ t: 'fk', ref: opts.filterRef, combo: true, onChange: (v) => { filterVal[opts.filterBy] = v; load(); } }, null); sel.style.minWidth = '280px'; return h('label.fld', h('span', opts.filterLabel), sel); })() : null,
       h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('input', { type: 'checkbox', onchange: (e) => { showInactive = e.target.checked; load(); } }), 'إظهار المعطّل'));
-    root.replaceChildren(pageHead(title, h('button.btn.primary', { onclick: () => edit(null) }, '＋ جديد')), opts.note ? h('div.note', opts.note) : null, bar, tableHost);
+    root.replaceChildren(pageHead(title, canC ? h('button.btn.primary', { onclick: () => edit(null) }, '＋ جديد') : null), opts.note ? h('div.note', opts.note) : null, bar, tableHost);
     await load();
   };
 }
 
 // ------------------------------------------------------------
 export async function generalPage(root) {
-  const S = META.settings; const isNeg = S.allow_negative_stock === '1';
-  const accFields = Object.entries(META.acc_keys).map(([k, l]) => ({ k, l, t: 'fk', ref: 'accounts', filter: ACCOUNT_FILTER, combo: true, req: 1 }));
-  const g1 = formGrid([{ k: 'company_name', l: 'اسم الشركة', t: 'text', wide: true }, { k: 'currency', l: 'العملة', t: 'text' },
-    { k: 'allow_negative_stock', l: 'السماح بالصرف على المكشوف (رصيد سالب)', t: 'select', options: [['0', 'لا — منع (موصى به)'], ['1', 'نعم']] }], S, 2);
-  const g2 = formGrid(accFields, Object.fromEntries(Object.keys(META.acc_keys).map((k) => [k, Number(S[k])])), 2);
-  const save = guard(async () => {
-    const v = { ...g1.values(), ...g2.values() }; await PUT('/settings', v); await loadMeta(); toast('تم حفظ الإعدادات');
-  });
-  root.replaceChildren(pageHead('الإعدادات العامة وربط الحسابات', h('button.btn.primary', { onclick: save }, 'حفظ')),
-    card('بيانات الشركة', g1.el),
-    card('ربط الحسابات (تُستخدم في القيود التلقائية)', h('div.note', 'كل مستند بيولّد قيده تلقائياً على الحسابات دي. حسابات «إنتاج تحت التشغيل» لكل مرحلة بتتحدد من شاشة المراحل، وحسابات الخزن من شاشة الخزن والبنوك.'), g2.el));
+  const S = META.settings; const canE = can('settings.general.edit');
+  const g1 = formGrid([{ k: 'company_name', l: 'اسم الشركة', t: 'text', wide: true, readonly: !canE }, { k: 'currency', l: 'العملة', t: 'text', readonly: !canE },
+    { k: 'allow_negative_stock', l: 'السماح بالصرف على المكشوف (رصيد سالب)', t: 'select', options: [['0', 'لا — منع (موصى به)'], ['1', 'نعم']], readonly: !canE }], S, 2);
+  const save = guard(async () => { await PUT('/settings', g1.values()); await loadMeta(); toast('تم حفظ الإعدادات'); });
+  root.replaceChildren(pageHead('الإعدادات العامة', canE ? h('button.btn.primary', { onclick: save }, 'حفظ') : null),
+    h('div.note', 'ربط الحسابات (للقيود التلقائية) اتنقل لموديول الحسابات ← ربط الحسابات.'),
+    card('بيانات الشركة', g1.el));
 }
 
 export async function sequencesPage(root) {
   const rows = await GET('/sequences'); const tb = h('tbody');
   rows.forEach((r) => {
-    const inp = { p: h('input', { type: 'text', value: r.prefix, style: { width: '110px' } }), pad: h('input', { type: 'number', value: r.padding, style: { width: '70px' } }), n: h('input', { type: 'number', value: r.next_no, style: { width: '110px' } }) };
+    const ro = !can('settings.sequences.edit');
+    const inp = { p: h('input', { type: 'text', value: r.prefix, disabled: ro, style: { width: '110px' } }), pad: h('input', { type: 'number', value: r.padding, disabled: ro, style: { width: '70px' } }), n: h('input', { type: 'number', value: r.next_no, disabled: ro, style: { width: '110px' } }) };
     tb.append(h('tr', h('td', r.label), h('td', inp.p), h('td', inp.pad), h('td', inp.n), h('td.num', `${inp.p.value}${String(inp.n.value).padStart(Number(inp.pad.value), '0')}`),
-      h('td', h('button.btn.sm', { onclick: guard(async () => { await PUT(`/sequences/${r.key}`, { prefix: inp.p.value, padding: Number(inp.pad.value), next_no: Number(inp.n.value) }); toast('تم'); }) }, 'حفظ'))));
+      h('td', ro ? null : h('button.btn.sm', { onclick: guard(async () => { await PUT(`/sequences/${r.key}`, { prefix: inp.p.value, padding: Number(inp.pad.value), next_no: Number(inp.n.value) }); toast('تم'); }) }, 'حفظ'))));
   });
   root.replaceChildren(pageHead('الترقيم والتكويد التلقائي'), h('div.note', 'كل كود أو رقم مستند بيتولّد تلقائياً من هنا (بادئة + رقم تسلسلي). تقدر تغيّر البادئة أو الرقم التالي، ولو كتبت كود يدوي في أي شاشة تكويد هيتحقق من عدم التكرار.'),
     h('div.tbl-wrap', h('table.tbl', h('thead', h('tr', ['النوع', 'البادئة', 'عدد الخانات', 'الرقم التالي', 'مثال', ''].map((x) => h('th', x)))), tb)));
@@ -98,7 +97,7 @@ export async function openingPage(root) {
   });
   const saveOnly = async () => { await PUT('/opening', collect()); for (const k of Object.keys(edits)) edits[k] = {}; data = await GET('/opening'); };
   const draw = () => {
-    const dis = data.locked;
+    const dis = data.locked || !can('settings.opening.edit');
     let content;
     if (tab === 'stock') {
       const rows = data.stock.filter((r) => (!q || `${r.code} ${r.name}`.toLowerCase().includes(q)) && (!onlyNonZero || r.qty > 0));
@@ -138,26 +137,59 @@ export async function openingPage(root) {
   const top = () => head.replaceChildren(
     h('div.note', 'عدّل الكمية أو القيمة الافتتاحية لأي صنف (أو رصيد مورد/خزينة/عهدة)، ثم «حفظ وتطبيق» لتوليد حركات المخزون والقيد المحاسبي. تقدر تعيد التطبيق أي عدد مرات لحد ما تقفل الأرصدة. الأصناف المظلّلة قيمتها محتاجة مراجعتك (عمود القيمة في شيت الإكسل بيبوظ بعد أي لحظة الرصيد فيها بيوصل صفر).'),
     h('div.filters', { style: { alignItems: 'center' } }, h('label.fld', h('span', 'تاريخ الأرصدة الافتتاحية'), dateInp), status(), h('span.grow'),
-      data.locked ? h('button.btn', { onclick: unlock }, 'فك القفل (مدير)') : [h('button.btn', { onclick: guard(async () => { await saveOnly(); toast('تم الحفظ'); draw(); }) }, 'حفظ فقط'), h('button.btn.primary', { onclick: apply }, 'حفظ وتطبيق'), h('button.btn.warnb', { onclick: lock }, 'قفل نهائي')]));
+      data.locked ? (can('settings.opening.unlock') ? h('button.btn', { onclick: unlock }, 'فك القفل') : null) : [
+        can('settings.opening.edit') ? h('button.btn', { onclick: guard(async () => { await saveOnly(); toast('تم الحفظ'); draw(); }) }, 'حفظ فقط') : null,
+        can('settings.opening.edit') ? h('button.btn.primary', { onclick: apply }, 'حفظ وتطبيق') : null,
+        can('settings.opening.lock') ? h('button.btn.warnb', { onclick: lock }, 'قفل نهائي') : null]));
   if (data.locked) dateInp.setAttribute('disabled', '');
   root.replaceChildren(pageHead('الأرصدة الافتتاحية'), head, host); top(); draw();
 }
 
 // ------------------------------------------------------------
+/** محرر الصلاحيات: موديول ← صفحة ← إجراءات. تفعيل إجراء بيفعّل صفحته، وإلغاء الصفحة بيلغي إجراءاتها */
+function permEditor(initial) {
+  const sel = new Set(initial || []); const boxes = new Map();
+  const box = (k) => { const c = h('input', { type: 'checkbox', checked: sel.has(k) }); boxes.set(k, c); return c; };
+  const put = (k, on) => { on ? sel.add(k) : sel.delete(k); const c = boxes.get(k); if (c) c.checked = on; };
+  const keysOf = (m) => m.pages.flatMap((p) => [`${m.id}.${p.id}`, ...p.actions.map(([a]) => `${m.id}.${p.id}.${a}`)]);
+  const counts = new Map();
+  const upd = () => counts.forEach((el, id) => { const m = META.catalog.find((x) => x.id === id); const ks = keysOf(m); el.textContent = `${ks.filter((k) => sel.has(k)).length} / ${ks.length}`; });
+  const el = h('div.perm-editor', META.catalog.map((m) => {
+    const cnt = h('small.muted'); counts.set(m.id, cnt);
+    const mb = h('input', { type: 'checkbox', title: 'تحديد / إلغاء كل صلاحيات الموديول', onchange: () => { keysOf(m).forEach((k) => put(k, mb.checked)); upd(); } });
+    return h('details.perm-mod', { open: m.pages.some((p) => sel.has(`${m.id}.${p.id}`)) }, h('summary', mb, h('b', ' ' + m.title), ' ', cnt),
+      h('table.perm', h('tbody', m.pages.map((p) => {
+        const pk = `${m.id}.${p.id}`; const pb = box(pk);
+        pb.onchange = () => { put(pk, pb.checked); if (!pb.checked) p.actions.forEach(([a]) => put(`${pk}.${a}`, false)); upd(); };
+        return h('tr', h('td.pg', h('label', pb, ' ' + p.title)), h('td', p.actions.map(([a, l]) => {
+          const ak = `${pk}.${a}`; const ab = box(ak);
+          ab.onchange = () => { put(ak, ab.checked); if (ab.checked) put(pk, true); upd(); };
+          return h('label.act', ab, ' ' + l);
+        })));
+      }))));
+  }));
+  upd();
+  const all = (on) => { META.catalog.forEach((m) => keysOf(m).forEach((k) => put(k, on))); upd(); };
+  return { el, get: () => [...sel], all, bar: h('div.actions', h('button.btn.sm', { type: 'button', onclick: () => all(true) }, 'تحديد الكل'), h('button.btn.sm', { type: 'button', onclick: () => all(false) }, 'إلغاء الكل')) };
+}
+
 export async function usersPage(root) {
-  const users = await GET('/users'); const modsAll = META.modules.filter(([k]) => k !== 'dashboard');
+  const users = await GET('/users'); const modName = (id) => META.catalog.find((m) => m.id === id)?.title || id;
   const open = (u) => {
     const fg = formGrid([{ k: 'username', l: 'اسم المستخدم', t: 'text', readonly: !!u, req: 1 }, { k: 'name', l: 'الاسم', t: 'text', req: 1 }, { k: 'password', l: u ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور', t: 'password' },
-      { k: 'role', l: 'الدور', t: 'select', options: [['user', 'مستخدم (حسب الموديولات)'], ['admin', 'مدير (كل الصلاحيات)']] }], u || {}, 2);
-    const checks = modsAll.map(([k, l]) => { const c = h('input', { type: 'checkbox', checked: u?.modules?.includes(k) }); return { k, c, el: h('label', { style: { display: 'flex', gap: '6px', margin: '3px 0' } }, c, l) }; });
-    modal({ title: u ? `تعديل ${u.name}` : 'مستخدم جديد', body: h('div', fg.el, h('h4', { style: { margin: '14px 0 4px' } }, 'الموديولات والصلاحيات المسموحة'), h('div', checks.map((x) => x.el))), buttons: [{ label: 'حفظ', cls: 'primary', onClick: async () => {
-      const v = fg.values(); v.modules = checks.filter((x) => x.c.checked).map((x) => x.k); if (!v.password) delete v.password;
+      { k: 'role', l: 'الدور', t: 'select', options: [['user', 'مستخدم (حسب الصلاحيات)'], ['admin', 'مدير (كل الصلاحيات)']], onChange: (v) => { pe.el.style.display = pe.bar.style.display = v === 'admin' ? 'none' : ''; } }], u || {}, 2);
+    const pe = permEditor(u?.perms);
+    modal({ title: u ? `تعديل ${u.name}` : 'مستخدم جديد', wide: true, body: h('div', fg.el, h('h4', { style: { margin: '14px 0 4px' } }, 'الصلاحيات (صفحة ← زرار)'),
+      u?.legacy && u.role !== 'admin' ? h('div.note', 'المستخدم ده على النظام القديم (موديولات)، وصلاحياته الحالية اتحوّلت تلقائياً للقائمة دي. اضغط حفظ لتثبيتها وتعديلها.') : null,
+      h('div.note', 'تفعيل الصفحة = يشوفها. كل زرار (إنشاء / تعديل / إلغاء / حذف …) له صلاحية منفصلة. المدير ليه كل الصلاحيات دايماً.'), pe.bar, pe.el), buttons: [{ label: 'حفظ', cls: 'primary', onClick: async () => {
+      const v = fg.values(); v.perms = pe.get(); if (!v.password) delete v.password;
       if (u) await PUT(`/users/${u.id}`, v); else await POST('/users', v); toast('تم'); usersPage(root); } },
     u ? { label: u.active ? 'تعطيل' : 'تفعيل', close: true, onClick: async () => { await PUT(`/users/${u.id}`, { active: !u.active }); usersPage(root); } } : null].filter(Boolean) });
+    if (u?.role === 'admin') pe.el.style.display = pe.bar.style.display = 'none';
   };
   root.replaceChildren(pageHead('المستخدمون والصلاحيات', h('button.btn.primary', { onclick: () => open(null) }, '＋ مستخدم')),
     table({ cols: [{ k: 'username', l: 'المستخدم' }, { k: 'name', l: 'الاسم' }, { k: 'role', l: 'الدور', text: (r) => (r.role === 'admin' ? 'مدير' : 'مستخدم') },
-      { k: 'modules', l: 'الموديولات', text: (r) => (r.role === 'admin' ? 'الكل' : r.modules.map((m) => META.modules.find(([k]) => k === m)?.[1]).join('، ')) }, { k: 'active', l: 'الحالة', render: (r) => (r.active ? badge('نشط', 'ok') : badge('معطّل', 'bad')) }], rows: users, onRow: open }));
+      { k: 'perms', l: 'الصلاحيات', text: (r) => (r.role === 'admin' ? 'الكل' : `${r.perms.length} صلاحية — ${[...new Set(r.perms.map((k) => k.split('.')[0]))].map(modName).join('، ') || 'بدون'}`) }, { k: 'active', l: 'الحالة', render: (r) => (r.active ? badge('نشط', 'ok') : badge('معطّل', 'bad')) }], rows: users, onRow: open }));
 }
 
 export async function auditPage(root) {

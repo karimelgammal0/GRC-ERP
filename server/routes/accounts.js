@@ -4,9 +4,24 @@ import { audit, assertOpenPeriod } from '../lib/core.js';
 import { postJournal } from '../lib/gl.js';
 import { chartRows, applyChart } from '../lib/coa.js';
 import { MODULES, loadTemplates } from '../lib/templates.js';
+import { can, canModule } from '../lib/perms.js';
+
+const ACC_ACTION = { POST: 'create', PUT: 'edit', DELETE: 'delete' };
 
 export async function accountsRouter() {
   const r = Router();
+  // صلاحيات الحسابات: القراءة لأي صلاحية على موديول الحسابات، والكتابة حسب الصفحة والإجراء
+  r.use((req, res, next) => {
+    const [, seg, sub] = req.path.split('/');
+    const page = { accounts: 'chart', periods: 'periods', journals: 'journals', templates: 'templates' }[seg];
+    const deny = () => res.status(403).json({ error: 'ليس لديك صلاحية لهذا الإجراء' });
+    if (!page) return deny();
+    if (req.method === 'GET') return canModule(req.user, 'accounts') ? next() : deny();
+    let action = ACC_ACTION[req.method];
+    if (seg === 'accounts' && sub === 'import') action = 'import';
+    if (seg === 'periods') action = sub === 'generate' ? 'generate' : 'toggle';
+    return can(req.user, `accounts.${page}.${action}`) ? next() : deny();
+  });
   // ----- دليل الحسابات -----
   // استيراد دليل الحسابات من CSV (نفس شكل التصدير): تحديث/إضافة بالكود — مفيش حذف
   r.post('/accounts/import', async (req, res) => {

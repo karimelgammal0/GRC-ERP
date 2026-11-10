@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { all, get, run, val, tx, insertRow, updateRow, AppError } from '../db.js';
 import { nextNo, audit } from '../lib/core.js';
+import { can } from '../lib/perms.js';
+
+// صفحة الصلاحيات لكل كود (العاملين ليهم صفحتين: الموارد البشرية والإعدادات)
+const PAGE_OF = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', employees: 'employees' };
+const masterKeys = (name, action) => [`settings.${PAGE_OF[name]}.${action}`, ...(name === 'employees' ? [`hr.employees.${action}`] : [])];
 
 const T = (k, l, t = 'text', extra = {}) => ({ k, l, t, ...extra });
 const CLS = [['direct', 'مباشرة (مرحلة تصنيع)'], ['indirect', 'تكلفة غير مباشرة'], ['admin', 'مصروفات إدارية']];
@@ -159,11 +164,10 @@ export async function masterRouter() {
   const r = Router();
   // القراءة للكل (الشاشات محتاجة القوائم)؛ الكتابة لصلاحية الإعدادات (والعاملين تتاح للموارد البشرية)
   r.use((req, res, next) => {
-    if (req.method === 'GET' || req.user.role === 'admin') return next();
-    const mods = JSON.parse(req.user.modules || '[]');
-    const mod = req.path.startsWith('/employees') ? 'hr' : 'settings';
-    if (mods.includes(mod) || (mod === 'hr' && mods.includes('settings'))) return next();
-    res.status(403).json({ error: 'ليس لديك صلاحية على التكويد' });
+    if (req.method === 'GET') return next();
+    const name = req.path.split('/')[1]; const action = { POST: 'create', PUT: 'edit', DELETE: 'delete' }[req.method];
+    if (PAGE_OF[name] && action && can(req.user, masterKeys(name, action))) return next();
+    res.status(403).json({ error: 'ليس لديك صلاحية على هذا التكويد' });
   });
   r.get('/:name', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);

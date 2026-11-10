@@ -3,13 +3,22 @@ import { all, get, run, val, AppError, r2 } from '../db.js';
 import { DOCS, saveDoc, voidDoc, getDoc, invoiceOpenAmount, VOUCHER_KINDS } from '../lib/docs.js';
 import { stockOf } from '../lib/stock.js';
 import { nextNo, audit } from '../lib/core.js';
+import { can, need } from '../lib/perms.js';
 import { insertRow } from '../db.js';
 
 const MODULE_OF = {
   purchase_request: 'purchases', purchase_order: 'purchases', goods_receipt: 'purchases', purchase_invoice: 'purchases', purchase_return: 'purchases',
   stock_issue: 'inventory', stock_adjustment: 'inventory', labor_sheet: 'hr', payroll: 'hr', voucher: 'finance',
 };
-export const canUse = (user, mod) => user.role === 'admin' || (JSON.parse(user.modules || '[]')).includes(mod);
+export { canModule as canUse } from '../lib/perms.js';
+const VOUCHER_PAGE = { supplier_payment: 'supplier-payments', expense: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'transfers', receipt: 'other', payment_other: 'other' };
+const TYPE_PAGE = { purchase_request: 'purchases.requests', purchase_order: 'purchases.orders', goods_receipt: 'purchases.receipts', purchase_invoice: 'purchases.invoices', purchase_return: 'purchases.returns', stock_adjustment: 'inventory.adjustments', labor_sheet: 'hr.labor', payroll: 'hr.payroll' };
+const ISSUE_PAGE = { production: 'inventory.issues', overhead: 'inventory.issues', site: 'inventory.site-transfers', return: 'inventory.returns' };
+/** مفتاح صفحة المستند (حسب نوعه وكوده لو متعدد الصفحات) */
+const pageKey = (type, kind) => (type === 'stock_issue' ? ISSUE_PAGE[kind] : type === 'voucher' ? (VOUCHER_PAGE[kind] ? `finance.${VOUCHER_PAGE[kind]}` : null) : TYPE_PAGE[type]);
+const typePages = (type) => (type === 'stock_issue' ? [...new Set(Object.values(ISSUE_PAGE))] : type === 'voucher' ? [...new Set(Object.values(VOUCHER_PAGE))].map((x) => `finance.${x}`) : [TYPE_PAGE[type]]);
+const MULTI = new Set(['stock_issue', 'voucher']);
+const kindOf = async (type, id) => (MULTI.has(type) ? await val(`SELECT kind FROM ${DOCS[type].table} WHERE id=?`, id) : null);
 
 function where(q, base = []) {
   const w = [...base]; const p = [];
@@ -56,20 +65,33 @@ const LISTS = {
 
 export async function docRouter() {
   const r = Router();
-  const guard = (req, type) => {
-    if (!DOCS[type]) throw new AppError('نوع المستند غير معروف', 404);
-    if (!canUse(req.user, MODULE_OF[type])) throw new AppError('ليس لديك صلاحية على هذا الموديول', 403);
+  const known = (type) => { if (!DOCS[type]) throw new AppError('نوع المستند غير معروف', 404); };
+  // action: null = عرض الصفحة، أو create / edit / void / close
+  const allow = (req, type, kind, action) => {
+    const pk = pageKey(type, kind); if (!pk) throw new AppError('نوع المستند غير معروف', 400);
+    need(req.user, action ? `${pk}.${action}` : pk, 'ليس لديك صلاحية على هذا المستند أو الإجراء');
   };
-  r.get('/:type', async (req, res) => { guard(req, req.params.type); res.json(await LISTS[req.params.type](req.query)); });
-  r.get('/:type/:id', async (req, res) => {
-    guard(req, req.params.type);
-    const d = await getDoc(req.params.type, Number(req.params.id)); if (!d) throw new AppError('المستند غير موجود', 404); res.json(d);
+  r.get('/:type', async (req, res) => {
+    known(req.params.type); const type = req.params.type;
+    if (!can(req.user, typePages(type))) throw new AppError('ليس لديك صلاحية على هذه الصفحة', 403);
+    const rows = await LISTS[type](req.query);
+    res.json(MULTI.has(type) ? rows.filter((x) => can(req.user, pageKey(type, x.kind))) : rows);
   });
-  await r.post('/:type', async (req, res) => { guard(req, req.params.type); res.json(await saveDoc(req.params.type, req.body, null, req.user)); });
-  r.put('/:type/:id', async (req, res) => { guard(req, req.params.type); res.json(await saveDoc(req.params.type, req.body, Number(req.params.id), req.user)); });
-  await r.post('/:type/:id/void', async (req, res) => { guard(req, req.params.type); res.json(await voidDoc(req.params.type, Number(req.params.id), req.user)); });
+  r.get('/:type/:id', async (req, res) => {
+    known(req.params.type);
+    const d = await getDoc(req.params.type, Number(req.params.id)); if (!d) throw new AppError('المستند غير موجود', 404);
+    allow(req, req.params.type, d.kind, null); res.json(d);
+  });
+  await r.post('/:type', async (req, res) => { known(req.params.type); allow(req, req.params.type, req.body.kind, 'create'); res.json(await saveDoc(req.params.type, req.body, null, req.user)); });
+  r.put('/:type/:id', async (req, res) => {
+    known(req.params.type); const id = Number(req.params.id); const kind = await kindOf(req.params.type, id);
+    allow(req, req.params.type, kind, 'edit');
+    if (MULTI.has(req.params.type) && req.body.kind && req.body.kind !== kind) allow(req, req.params.type, req.body.kind, 'edit');
+    res.json(await saveDoc(req.params.type, req.body, id, req.user));
+  });
+  await r.post('/:type/:id/void', async (req, res) => { known(req.params.type); const id = Number(req.params.id); allow(req, req.params.type, await kindOf(req.params.type, id), 'void'); res.json(await voidDoc(req.params.type, id, req.user)); });
   await r.post('/:type/:id/close', async (req, res) => {
-    guard(req, req.params.type);
+    known(req.params.type); allow(req, req.params.type, null, 'close');
     const t = { purchase_order: 'purchase_orders', purchase_request: 'purchase_requests' }[req.params.type];
     if (!t) throw new AppError('غير مدعوم');
     await run(`UPDATE ${t} SET status='closed' WHERE id=? AND status<>'void'`, Number(req.params.id)); res.json({ ok: true });
@@ -105,7 +127,7 @@ export function helperRouter() {
   }));
   // إضافة بند مشروع سريعة من شاشة الصرف — لصاحب صلاحية «إضافة بنود» (أو الإعدادات / المدير)
   r.post('/quick-item', async (req, res) => {
-    if (!canUse(req.user, 'perm_add_items') && !canUse(req.user, 'settings')) throw new AppError('ليس لديك صلاحية إضافة بنود المشروعات', 403);
+    need(req.user, ['inventory.issues.add_item', 'settings.project-items.create'], 'ليس لديك صلاحية إضافة بنود المشروعات');
     const b = req.body || {}; const name = String(b.name || '').trim();
     if (!name) throw new AppError('اسم البند مطلوب');
     const prj = await get('SELECT id, active FROM projects WHERE id=?', Number(b.project_id));

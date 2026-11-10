@@ -6,11 +6,11 @@ const srcFields = (ctx, need = true) => [
   { k: 'treasury_id', l: 'الدفع من خزينة/بنك', t: 'fk', ref: 'treasuries', help: 'خزينة أو عهدة — واحد فقط', onChange: (v, c) => { if (v) c.setHeader('custodian_id', null); } },
   { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } }];
 
-function voucherScreen({ title, noun, kinds, newLabel, note }) {
+function voucherScreen({ title, noun, kinds, newLabel, note, perm }) {
   const multi = kinds.length > 1; const kindOpts = () => kinds.map((k) => [k, META.voucher_kinds[k]]);
   const amountCol = { k: 'amount', l: 'المبلغ', num: true, fmt: (v) => fmt(v) };
   return docScreen({
-    type: 'voucher', title, noun, newLabel, note, fixed: multi ? {} : { kind: kinds[0] },
+    type: 'voucher', perm, title, noun, newLabel, note, fixed: multi ? {} : { kind: kinds[0] },
     get filters() { return [...(multi ? [{ k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...kindOpts()] }] : []), { k: 'treasury_id', l: 'الخزينة', t: 'fk', ref: 'treasuries' }]; },
     listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, ...(multi ? [{ k: 'kind', l: 'النوع', text: (r) => META.voucher_kinds[r.kind] }] : []),
       { k: 'party', l: 'الطرف / البيان', text: (r) => [r.supplier_name, r.category_name, r.custodian_name, r.account_name, r.to_treasury_name && `← ${r.to_treasury_name}`, r.description].filter(Boolean).join(' — ') },
@@ -83,12 +83,12 @@ function extraPanel(ctx) {
   return null;
 }
 
-export const supplierPaymentsPage = voucherScreen({ title: 'سداد الموردين', noun: 'سند سداد', kinds: ['supplier_payment'], newLabel: 'سداد مورد', note: 'اختر المورد ووزّع المبلغ على فواتيره المفتوحة؛ الفواتير بتتقفل تلقائياً عند السداد الكامل.' });
-export const expensesVoucherPage = voucherScreen({ title: 'سندات المصروفات', noun: 'سند مصروف', kinds: ['expense'], newLabel: 'مصروف جديد', note: 'المصروف المباشر (مرتبط بمرحلة تصنيع) بيدخل تكلفة المشروع/المرحلة، والغير مباشر والإداري بيروح لحساب فئته. ممكن يتدفع من خزينة أو من عهدة.' });
-export const wagePaymentsPage = voucherScreen({ title: 'صرف الأجور والمرتبات', noun: 'سند صرف أجور', kinds: ['wage_payment'], newLabel: 'صرف أجور', note: 'اصرف مستحقات كشوف اليوميات والمرتبات الشهرية من خزينة أو عهدة.' });
-export const custodyVouchersPage = voucherScreen({ title: 'العهد', noun: 'سند عهدة', kinds: ['custody_issue', 'custody_return'], newLabel: 'سند عهدة', note: 'صرف عهدة لموظف، أو رد باقي العهدة للخزينة. مصروفات العهدة بتتسجل من «سندات المصروفات» أو فواتير الشراء النقدية بالدفع من العهدة.' });
-export const transfersPage = voucherScreen({ title: 'تحويلات بين الخزن', noun: 'سند تحويل', kinds: ['transfer'], newLabel: 'تحويل جديد' });
-export const otherVouchersPage = voucherScreen({ title: 'سندات قبض وصرف أخرى', noun: 'سند', kinds: ['receipt', 'payment_other'], newLabel: 'سند جديد', note: 'للإيرادات والمصروفات اللي ليها حساب محدد من دليل الحسابات.' });
+export const supplierPaymentsPage = voucherScreen({ perm: 'finance.supplier-payments', title: 'سداد الموردين', noun: 'سند سداد', kinds: ['supplier_payment'], newLabel: 'سداد مورد', note: 'اختر المورد ووزّع المبلغ على فواتيره المفتوحة؛ الفواتير بتتقفل تلقائياً عند السداد الكامل.' });
+export const expensesVoucherPage = voucherScreen({ perm: 'finance.expenses', title: 'سندات المصروفات', noun: 'سند مصروف', kinds: ['expense'], newLabel: 'مصروف جديد', note: 'المصروف المباشر (مرتبط بمرحلة تصنيع) بيدخل تكلفة المشروع/المرحلة، والغير مباشر والإداري بيروح لحساب فئته. ممكن يتدفع من خزينة أو من عهدة.' });
+export const wagePaymentsPage = voucherScreen({ perm: 'finance.wages', title: 'صرف الأجور والمرتبات', noun: 'سند صرف أجور', kinds: ['wage_payment'], newLabel: 'صرف أجور', note: 'اصرف مستحقات كشوف اليوميات والمرتبات الشهرية من خزينة أو عهدة.' });
+export const custodyVouchersPage = voucherScreen({ perm: 'finance.custody', title: 'العهد', noun: 'سند عهدة', kinds: ['custody_issue', 'custody_return'], newLabel: 'سند عهدة', note: 'صرف عهدة لموظف، أو رد باقي العهدة للخزينة. مصروفات العهدة بتتسجل من «سندات المصروفات» أو فواتير الشراء النقدية بالدفع من العهدة.' });
+export const transfersPage = voucherScreen({ perm: 'finance.transfers', title: 'تحويلات بين الخزن', noun: 'سند تحويل', kinds: ['transfer'], newLabel: 'تحويل جديد' });
+export const otherVouchersPage = voucherScreen({ perm: 'finance.other', title: 'سندات قبض وصرف أخرى', noun: 'سند', kinds: ['receipt', 'payment_other'], newLabel: 'سند جديد', note: 'للإيرادات والمصروفات اللي ليها حساب محدد من دليل الحسابات.' });
 
 // ---------------- أرصدة الخزن والعهد + كشوف الحساب ----------------
 export async function treasuriesPage(root) {

@@ -72,6 +72,9 @@ export const confirmBox = (msg, okLabel = 'تأكيد', danger = false) => new P
 export const L = {}; export const META = {};
 export async function loadLookups() { Object.assign(L, await GET('/lookups')); }
 export async function loadMeta() { Object.assign(META, await GET('/meta')); }
+/** صلاحية المستخدم الحالي: can('inventory.issues') = يشوف الصفحة، can('inventory.issues.create') = زرار الإنشاء. المدير يقدر على كل شيء */
+export const can = (key) => { const m = META.me; if (!m) return false; if (m.role === 'admin') return true; return (m._set ||= new Set(m.perms || [])).has(key); };
+export const canAny = (keys) => keys.some(can);
 export const byId = (list, id) => (L[list] || []).find((x) => x.id === Number(id));
 export const nameOf = (list, id) => { const x = byId(list, id); return x ? x.name : ''; };
 export const codeName = (x) => (x ? `${x.code} — ${x.name}` : '');

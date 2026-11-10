@@ -5,7 +5,7 @@ const empCol = { k: 'employee_id', l: 'العامل', t: 'fk', ref: 'employees',
 const classOf = (id) => byId('employees', id)?.cost_class;
 
 // ---------------- كشف يومية العمالة ----------------
-export const laborSheetsPage = docScreen({
+export const laborSheetsPage = docScreen({ perm: 'hr.labor',
   type: 'labor_sheet', title: 'يوميات العمالة', noun: 'كشف يومية', newLabel: 'كشف يومية جديد',
   note: 'سجّل العمالة اليومية: كل عامل بعدد أيامه وأجره، ومحمّل على مشروع/بند/مرحلة. العمالة المباشرة بتتحمّل على مرحلة التصنيع، وغير المباشرة والإدارية على حساباتها بدون مشروع.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'n_lines', l: 'عدد العاملين', num: true }, { k: 'total', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) },
@@ -31,7 +31,7 @@ function allocLabel(l) {
   if (!a?.length) return h('span', { style: { color: 'var(--ink2)' } }, `100% — ${nameOf('stages', byId('employees', l.employee_id)?.default_stage_id)}`);
   return h('span', a.map((x) => `${x.percent}% ${nameOf('stages', x.stage_id)}${x.project_id ? ' / ' + nameOf('projects', x.project_id) : ''}`).join('، '));
 }
-export const payrollPage = docScreen({
+export const payrollPage = docScreen({ perm: 'hr.payroll',
   type: 'payroll', title: 'الرواتب الشهرية', noun: 'مسير رواتب', newLabel: 'مسير شهري جديد',
   note: 'المرتب الشهري للعامل المباشر بيتوزّع على المشروعات والمراحل بنسب (زر «توزيع») — والغير مباشر والإداري بيروحوا لحساباتهم.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'month', l: 'الشهر' }, { k: 'date', l: 'التاريخ' }, { k: 'n_lines', l: 'العاملين', num: true }, { k: 'gross', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }, { k: 'deductions', l: 'الاستقطاعات', num: true, fmt: (v) => fmt(v) }, { k: 'net', l: 'الصافي', num: true, fmt: (v) => fmt(v) }, { k: 'paid_amount', l: 'المصروف', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],

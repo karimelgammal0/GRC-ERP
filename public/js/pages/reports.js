@@ -1,4 +1,4 @@
-import { h, GET, L, META, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, modal, nameOf, labelOf, CLASS_OPTS } from '../core.js';
+import { h, GET, L, META, can, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, modal, nameOf, labelOf, CLASS_OPTS } from '../core.js';
 
 const CT = [['', 'الكل'], ['material', 'خامات'], ['labor', 'عمالة'], ['expense', 'مصروفات']];
 const COSTF = [{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'cost_type', l: 'نوع التكلفة', t: 'select', options: CT }];
@@ -17,7 +17,7 @@ export async function hub(root) {
     ['قائمة الدخل المبسطة', 'الإيرادات والمصروفات', '#/reports/income'],
     ['أرصدة المخزون', 'كميات وقيم الخامات بالمتوسط المرجح', '#/inventory/balances'], ['أرصدة الموردين', 'المستحق مع أعمار الديون', '#/purchases/supplier-balances'], ['الخزن والعهد', 'أرصدة الخزن والبنوك والعهد', '#/finance/treasuries'],
   ];
-  root.replaceChildren(pageHead('التقارير'), h('div.cards-hub', items.map(([t, d, href]) => h('a.hub-card', { href }, h('b', t), h('span', d)))));
+  root.replaceChildren(pageHead('التقارير'), h('div.cards-hub', items.filter(([, , href]) => { const [, m, pg] = href.slice(1).split('/'); return can(`${m}.${pg}`); }).map(([t, d, href]) => h('a.hub-card', { href }, h('b', t), h('span', d)))));
 }
 
 function openDrill(filters, title) {

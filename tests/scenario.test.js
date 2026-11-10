@@ -264,6 +264,42 @@ const e2 = await send('PUT', `/api/m/employees/${e1.j.id}`, { daily_rate: '' });
 const m1 = await send('POST', '/api/m/materials', { name: 'خامة بدون حد', unit_id: await val('SELECT id FROM units LIMIT 1'), min_qty: '' }); ok(m1.status === 200 && m1.j.min_qty === 0, 'خامة بدون حد طلب');
 const s1 = await send('POST', '/api/m/suppliers', { name: 'مورد بدون ائتمان', credit_days: '' }); ok(s1.status === 200 && s1.j.credit_days === 0, 'مورد بدون مدة ائتمان');
 const sq = await api('/api/sequences'); ok(sq.length > 20 && sq[0].key === 'unit', 'شاشة الترقيم');
+
+section('16) الصلاحيات التفصيلية');
+const { userPerms: UP } = await import('../server/lib/perms.js');
+const adm = await ckOf('admin');
+const mk = async (uname, perms) => { await run(`INSERT INTO users(username,name,pass_hash,role,modules,perms) VALUES(?,?,(SELECT pass_hash FROM users WHERE username='admin'),'user','[]',?)`, uname, uname, perms ? JSON.stringify(perms) : null); return await ckOf(uname); };
+const ckView = await mk('p_view', ['inventory.issues']);                       // عرض أذون الصرف فقط
+const ckCreate = await mk('p_create', ['inventory.issues', 'inventory.issues.create']);
+const ckVoid = await mk('p_void', ['inventory.issues', 'inventory.issues.void', 'inventory.issues.edit']);
+const issueBody = { date: '2026-11-09', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: await val('SELECT material_id FROM material_stock WHERE qty>5 LIMIT 1'), qty: 1 }] };
+ok((await send('POST', '/api/doc/stock_issue', issueBody, ckView)).status === 403, 'عرض فقط: الإنشاء مرفوض');
+const made = await send('POST', '/api/doc/stock_issue', issueBody, ckCreate); ok(made.status === 200, 'بصلاحية الإنشاء: مقبول');
+ok((await send('POST', `/api/doc/stock_issue/${made.j.id}/void`, {}, ckCreate)).status === 403, 'إنشاء بدون إلغاء: الإلغاء مرفوض');
+ok((await send('PUT', `/api/doc/stock_issue/${made.j.id}`, { ...issueBody, lines: issueBody.lines }, ckCreate)).status === 403, 'إنشاء بدون تعديل: التعديل مرفوض');
+const listV = await fetch(base + '/api/doc/stock_issue?only=issues', { headers: { cookie: ckView } }); ok(listV.status === 200, 'عرض القائمة بصلاحية الصفحة');
+ok((await fetch(base + '/api/doc/purchase_order', { headers: { cookie: ckView } })).status === 403, 'صفحة غير مصرّح بها: القائمة مرفوضة');
+ok((await fetch(base + '/api/doc/stock_issue', { headers: { cookie: await ckOf('p_view') } })).status === 200, 'قائمة الأذون تتفلتر حسب النوع');
+ok((await send('POST', `/api/doc/stock_issue/${made.j.id}/void`, {}, ckVoid)).status === 200, 'بصلاحية الإلغاء: مقبول');
+ok((await send('POST', '/api/doc/stock_issue', { ...issueBody, kind: 'site', project_id: prj }, ckCreate)).status === 403, 'صلاحية صفحة الصرف لا تشمل التحويل للمواقع');
+ok((await send('POST', '/api/m/units', { name: 'وحدة ممنوعة' }, ckCreate)).status === 403, 'التكويد بدون صلاحية مرفوض');
+const ckSet = await mk('p_set', ['settings.units', 'settings.units.create']);
+ok((await send('POST', '/api/m/units', { name: 'وحدة مسموحة' }, ckSet)).status === 200, 'التكويد بصلاحية الإضافة');
+ok((await send('PUT', '/api/settings', { acc_inventory_raw: 1 }, ckSet)).status === 403, 'ربط الحسابات بدون صلاحية مرفوض');
+const ckLink = await mk('p_link', ['accounts.account-links', 'accounts.account-links.edit']);
+ok((await send('PUT', '/api/settings', { company_name: 'x' }, ckLink)).status === 403, 'الإعدادات العامة بدون صلاحية مرفوضة');
+ok((await fetch(base + '/api/reports/trial-balance', { headers: { cookie: ckView } })).status === 403, 'تقرير بدون صلاحية مرفوض');
+ok((await fetch(base + '/api/acc/accounts', { headers: { cookie: ckView } })).status === 403, 'الحسابات بدون صلاحية مرفوضة');
+ok((await send('POST', '/api/acc/periods/generate', { year: 2031 }, ckView)).status === 403, 'إنشاء فترات بدون صلاحية');
+const ckRep = await mk('p_rep', ['reports.trial-balance']);
+ok((await fetch(base + '/api/reports/trial-balance', { headers: { cookie: ckRep } })).status === 200, 'تقرير بصلاحيته');
+const ckLeg = await ckOf('u_inv'); // مستخدم قديم (modules فقط) = كل صلاحيات موديول المخازن
+ok((await fetch(base + '/api/doc/stock_adjustment', { headers: { cookie: ckLeg } })).status === 200, 'المستخدم القديم محتفظ بصلاحية موديوله');
+ok(UP({ role: 'user', modules: '["inventory"]', perms: null }).has('inventory.balances') && !UP({ role: 'user', modules: '["inventory"]', perms: null }).has('settings.units.create'), 'تحويل الموديولات القديمة');
+const meV = await (await fetch(base + '/api/me', { headers: { cookie: ckView } })).json(); ok(meV.perms.length === 1 && meV.modules[0] === 'inventory', '/me بيرجّع الصلاحيات');
+const usr = await send('PUT', '/api/users/' + (await val("SELECT id FROM users WHERE username='p_view'")), { perms: ['reports.hub', 'reports.hub.zzz', 'inventory.issues.create'] }, adm);
+ok(usr.status === 200 && JSON.parse(await val("SELECT perms FROM users WHERE username='p_view'")).sort().join() === 'inventory.issues,inventory.issues.create,reports.hub', 'حفظ صلاحيات مستخدم (تنظيف + فرض مفتاح الصفحة)');
+ok((await send('PUT', '/api/users/1', { perms: [] }, ckCreate)).status === 403, 'إدارة المستخدمين للمدير فقط');
 server.close();
 
 console.log(`\n${fail ? '✗' : '✓'} ${pass} اختبار نجح، ${fail} فشل`);

@@ -1,4 +1,4 @@
-import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, modal } from '../core.js';
+import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, modal, can } from '../core.js';
 import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) || {}).id;
@@ -12,7 +12,7 @@ const dateStatusCols = [{ k: 'date', l: 'التاريخ' }];
 const sup = (r) => r.supplier_name;
 
 // ---------------- طلبات الشراء ----------------
-export const requestsPage = docScreen({
+export const requestsPage = docScreen({ perm: 'purchases.requests',
   type: 'purchase_request', title: 'طلبات الشراء', noun: 'طلب شراء', newLabel: 'طلب شراء جديد', defaultFrom: monthStart, defaultTo: today, statuses: [['open', 'مفتوح'], ['ordered', 'تم الأمر']],
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'requested_by', l: 'مقدم الطلب' }, { k: 'supplier_name', l: 'المورد' }, { k: 'project_name', l: 'المشروع' }, { k: 'n_lines', l: 'البنود', num: true }, { k: 'needed_date', l: 'مطلوب في' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -24,7 +24,7 @@ export const requestsPage = docScreen({
 });
 
 // ---------------- أوامر الشراء ----------------
-export const ordersPage = docScreen({
+export const ordersPage = docScreen({ perm: 'purchases.orders',
   type: 'purchase_order', title: 'أوامر الشراء', noun: 'أمر شراء', newLabel: 'أمر شراء جديد', statuses: [['open', 'مفتوح'], ['partial', 'استلام جزئي'], ['received', 'تم الاستلام'], ['closed', 'مغلق']],
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'payment_type', l: 'الدفع', text: (r) => labelOf(PAY, r.payment_type).split(' (')[0] }, { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'expected_date', l: 'التسليم المتوقع' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -41,12 +41,12 @@ export const ordersPage = docScreen({
     totals: (ctx) => [['إجمالي الأمر', fmt(total(ctx.lines, (l) => (Number(l.qty) || 0) * (Number(l.unit_price) || 0)))]],
     onOpen: async (ctx) => { const r = await GET('/helpers/open-requests'); ctx.reqOpts = r.map((x) => [String(x.id), `${x.no} — ${x.date}`]); if (ctx.doc?.request_id && !r.find((x) => x.id === ctx.doc.request_id)) ctx.reqOpts.push([String(ctx.doc.request_id), `#${ctx.doc.request_id}`]); ctx.rebuildHeader(); },
     prepare: (p) => { p.request_id = p.request_id ? Number(p.request_id) : null; },
-    buttons: (ctx) => (ctx.doc && ['open', 'partial', 'received'].includes(ctx.doc.status) ? [h('button.btn', { onclick: guard(async () => { await POST(`/doc/purchase_order/${ctx.doc.id}/close`); toast('تم إغلاق الأمر'); location.reload(); }) }, 'إغلاق الأمر')] : []),
+    buttons: (ctx) => (ctx.doc && can('purchases.orders.close') && ['open', 'partial', 'received'].includes(ctx.doc.status) ? [h('button.btn', { onclick: guard(async () => { await POST(`/doc/purchase_order/${ctx.doc.id}/close`); toast('تم إغلاق الأمر'); location.reload(); }) }, 'إغلاق الأمر')] : []),
   },
 });
 
 // ---------------- إذن الاستلام ----------------
-export const receiptsPage = docScreen({
+export const receiptsPage = docScreen({ perm: 'purchases.receipts',
   type: 'goods_receipt', title: 'إذون الاستلام', noun: 'إذن استلام', newLabel: 'إذن استلام جديد',
   note: 'الاستلام بيدخّل الخامة للمخزن فوراً بسعر أمر الشراء ويسجّل «استلامات غير مفوترة» لحد ما تيجي فاتورة المورد وتتطابق معاه.',
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
@@ -82,7 +82,7 @@ const invCalc = (ctx) => {
   const d = Number(ctx.header.discount) || 0, f = Number(ctx.header.freight) || 0, vat = (sub - d) * (Number(ctx.header.vat_percent) || 0) / 100;
   return { sub, d, f, vat, tot: sub - d + f + vat };
 };
-export const invoicesPage = docScreen({
+export const invoicesPage = docScreen({ perm: 'purchases.invoices',
   type: 'purchase_invoice', title: 'فواتير الشراء', noun: 'فاتورة شراء', newLabel: 'فاتورة شراء جديدة',
   note: 'فاتورة آجلة (على حساب المورد) أو نقدية (من خزينة أو عهدة). تقدر تطابقها مع إذن استلام سابق، والخصم ومصاريف النقل بتتوزّع على تكلفة الخامات تلقائياً.',
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
@@ -118,7 +118,7 @@ export const invoicesPage = docScreen({
 });
 
 // ---------------- مرتجعات المشتريات ----------------
-export const preturnsPage = docScreen({
+export const preturnsPage = docScreen({ perm: 'purchases.returns',
   type: 'purchase_return', title: 'مرتجعات المشتريات', noun: 'مرتجع مشتريات', newLabel: 'مرتجع مشتريات جديد',
   note: 'المرتجع بيخرج من المخزن بالسعر اللي تحدده (سعر الفاتورة الأصلية عادةً) وبيخصم من حساب المورد.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],

@@ -1,4 +1,4 @@
-import { h, GET, POST, PUT, DEL, L, fmt, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, toast, guard, modal, confirmBox, formGrid, fieldInput, loadLookups } from '../core.js';
+import { h, GET, POST, PUT, DEL, L, fmt, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, toast, guard, modal, confirmBox, formGrid, fieldInput, loadLookups, loadMeta, can, META } from '../core.js';
 
 const TYPES = [['asset', 'أصول'], ['liability', 'خصوم'], ['equity', 'حقوق ملكية'], ['revenue', 'إيرادات'], ['expense', 'مصروفات']];
 const tl = (t) => (TYPES.find(([k]) => k === t) || [])[1] || t;
@@ -8,7 +8,7 @@ export async function chartPage(root) {
     const rows = await GET('/acc/accounts'); const kids = {}; rows.forEach((a) => (kids[a.parent_id || 0] ||= []).push(a));
     const out = [];
     const walk = (pid, d) => (kids[pid] || []).forEach((a) => { out.push({ ...a, depth: d }); walk(a.id, d + 1); }); walk(0, 0);
-    const t = table({ name: 'دليل الحسابات', rows: out, compact: true, onRow: (r) => edit(r),
+    const t = table({ name: 'دليل الحسابات', rows: out, compact: true, onRow: can('accounts.chart.edit') ? (r) => edit(r) : null,
       cols: [{ k: 'code', l: 'الكود', render: (r) => h('span', { style: { paddingRight: r.depth * 18 + 'px', fontWeight: r.postable ? 400 : 700 } }, r.code) },
         { k: 'name', l: 'اسم الحساب', render: (r) => h('span', { style: { fontWeight: r.postable ? 400 : 700 } }, r.name) }, { k: 'type', l: 'النوع', text: (r) => tl(r.type) }, { k: 'postable', l: 'يقبل حركة', text: (r) => (r.postable ? 'نعم' : 'رئيسي') }, { k: 'active', l: 'الحالة', text: (r) => (r.active ? '' : 'موقوف') }] });
     host.replaceChildren(t);
@@ -21,7 +21,7 @@ export async function chartPage(root) {
       { k: 'type', l: 'النوع', t: 'select', options: TYPES }, { k: 'postable', l: 'يقبل حركات (حساب فرعي)', t: 'bool' }, ...(isNew ? [] : [{ k: 'active', l: 'نشط', t: 'bool' }])], { ...v, active: v.active ?? 1 }, 2);
     modal({ title: isNew ? 'حساب جديد' : `تعديل ${v.name}`, body: f.el, buttons: [
       { label: 'حفظ', cls: 'primary', onClick: async () => { const x = f.values(); x.parent_id = x.parent_id ? Number(x.parent_id) : null; isNew ? await POST('/acc/accounts', x) : await PUT('/acc/accounts/' + v.id, x); await loadLookups(); toast('تم الحفظ'); draw(); } },
-      ...(isNew ? [] : [{ label: 'حذف', cls: 'danger', onClick: async () => { if (!(await confirmBox('حذف الحساب؟', 'حذف', true))) throw new Error('تم الإلغاء'); await DEL('/acc/accounts/' + v.id); await loadLookups(); toast('تم الحذف'); draw(); } }])] });
+      ...(isNew || !can('accounts.chart.delete') ? [] : [{ label: 'حذف', cls: 'danger', onClick: async () => { if (!(await confirmBox('حذف الحساب؟', 'حذف', true))) throw new Error('تم الإلغاء'); await DEL('/acc/accounts/' + v.id); await loadLookups(); toast('تم الحذف'); draw(); } }])] });
   };
   const host = h('div');
   const file = h('input', { type: 'file', accept: '.csv', style: { display: 'none' }, onchange: guard(async () => {
@@ -29,7 +29,7 @@ export async function chartPage(root) {
     if (!(await confirmBox('هيتحدّث الدليل بالكود: الأكواد الموجودة تتعدل (الاسم/النوع/التبعية) والجديدة تتضاف، ومفيش حساب بيتحذف. نكمل؟', 'استيراد', false))) return;
     const r = await POST('/acc/accounts/import', { csv }); await loadLookups(); toast(`تم الاستيراد: أُضيف ${r.added} — تحدّث ${r.updated}`); draw();
   }) });
-  root.replaceChildren(pageHead('دليل الحسابات', file, h('button.btn', { onclick: () => file.click() }, '⤒ استيراد CSV'), h('button.btn.primary', { onclick: () => edit(null) }, '＋ حساب جديد')), h('div.note', 'اضغط على أي حساب لتعديله. الحسابات الرئيسية للتجميع فقط، والحركات تتسجل على الفرعية.'), host);
+  root.replaceChildren(pageHead('دليل الحسابات', file, can('accounts.chart.import') ? h('button.btn', { onclick: () => file.click() }, '⤒ استيراد CSV') : null, can('accounts.chart.create') ? h('button.btn.primary', { onclick: () => edit(null) }, '＋ حساب جديد') : null), h('div.note', 'اضغط على أي حساب لتعديله. الحسابات الرئيسية للتجميع فقط، والحركات تتسجل على الفرعية.'), host);
   await draw();
 }
 
@@ -38,9 +38,9 @@ export async function periodsPage(root) {
   const draw = async () => {
     const rows = await GET('/acc/periods');
     host.replaceChildren(table({ name: 'الفترات', search: false, rows, cols: [{ k: 'name', l: 'الفترة', render: (r) => h('b', r.name) }, { k: 'start_date', l: 'من' }, { k: 'end_date', l: 'إلى' }, { k: 'status', l: 'الحالة', render: (r) => badge(r.status === 'open' ? 'مفتوحة' : 'مقفولة', r.status === 'open' ? 'ok' : 'bad') },
-      { k: 'x', l: '', render: (r) => h('button.btn.sm', { onclick: guard(async () => { await POST(`/acc/periods/${r.id}/status`, { status: r.status === 'open' ? 'closed' : 'open' }); draw(); }) }, r.status === 'open' ? 'قفل' : 'فتح') }] }));
+      { k: 'x', l: '', render: (r) => !can('accounts.periods.toggle') ? '' : h('button.btn.sm', { onclick: guard(async () => { await POST(`/acc/periods/${r.id}/status`, { status: r.status === 'open' ? 'closed' : 'open' }); draw(); }) }, r.status === 'open' ? 'قفل' : 'فتح') }] }));
   };
-  root.replaceChildren(pageHead('الفترات المالية', h('span', 'سنة: '), yr, h('button.btn', { onclick: guard(async () => { const r = await POST('/acc/periods/generate', { year: Number(yr.value) }); toast(`تم إنشاء ${r.created} فترة`); draw(); }) }, 'إنشاء فترات السنة')),
+  root.replaceChildren(pageHead('الفترات المالية', ...(can('accounts.periods.generate') ? [h('span', 'سنة: '), yr] : []), can('accounts.periods.generate') ? h('button.btn', { onclick: guard(async () => { const r = await POST('/acc/periods/generate', { year: Number(yr.value) }); toast(`تم إنشاء ${r.created} فترة`); draw(); }) }, 'إنشاء فترات السنة') : null),
     h('div.note', 'الفترة المقفولة ما بيتسجلش فيها أي مستند أو قيد (ولا يتعدل أو يتلغي مستند تاريخه فيها).'), host);
   await draw();
 }
@@ -53,7 +53,7 @@ export async function journalsPage(root) {
   const view = guard(async (id) => {
     const e = await GET('/acc/journals/' + id);
     const body = h('div', h('p', `${e.date} — ${e.description || ''}`), table({ search: false, compact: true, name: e.no, rows: e.lines, cols: [{ k: 'account_code', l: 'الحساب', text: (r) => `${r.account_code} ${r.account_name}` }, { k: 'description', l: 'بيان' }, { k: 'debit', l: 'مدين', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'credit', l: 'دائن', num: true, fmt: (n) => (n ? fmt(n) : '') }] }));
-    modal({ title: `قيد ${e.no} ${e.type === 'manual' ? '(يدوي)' : '(تلقائي)'}`, wide: true, body, buttons: e.type === 'manual' ? [{ label: 'تعديل', onClick: () => { setTimeout(() => entry(e), 50); } }, { label: 'حذف', cls: 'danger', onClick: async () => { await DEL('/acc/journals/' + e.id); toast('تم الحذف'); fb.run(); } }] : [] });
+    modal({ title: `قيد ${e.no} ${e.type === 'manual' ? '(يدوي)' : '(تلقائي)'}`, wide: true, body, buttons: e.type === 'manual' ? [can('accounts.journals.edit') ? { label: 'تعديل', onClick: () => { setTimeout(() => entry(e), 50); } } : null, can('accounts.journals.delete') ? { label: 'حذف', cls: 'danger', onClick: async () => { await DEL('/acc/journals/' + e.id); toast('تم الحذف'); fb.run(); } } : null].filter(Boolean) : [] });
   });
   const entry = (e) => {
     const st = { date: e?.date || today(), description: e?.description || '', lines: e?.lines?.map((l) => ({ account_id: l.account_id, debit: l.debit || '', credit: l.credit || '', description: l.description })) || [{}, {}] };
@@ -82,7 +82,7 @@ export async function journalsPage(root) {
     rows(); draw();
     modal({ title: e ? `تعديل قيد ${e.no}` : 'قيد يومية يدوي', wide: true, body: h('div', e ? null : tplBar, hf.el, box, tot), buttons: [{ label: 'حفظ القيد', cls: 'primary', onClick: async () => { const v = hf.values(); const p = { ...v, lines: st.lines.map((l) => ({ ...l, account_id: l.account_id ? Number(l.account_id) : null, debit: Number(l.debit) || 0, credit: Number(l.credit) || 0 })) }; e ? await PUT('/acc/journals/' + e.id, p) : await POST('/acc/journals', p); toast('تم الحفظ'); fb.run(); } }] });
   };
-  root.replaceChildren(pageHead('قيود اليومية', h('button.btn.primary', { onclick: () => entry(null) }, '＋ قيد يدوي')), fb, host); fb.run();
+  root.replaceChildren(pageHead('قيود اليومية', can('accounts.journals.create') ? h('button.btn.primary', { onclick: () => entry(null) }, '＋ قيد يدوي') : null), fb, host); fb.run();
 }
 
 
@@ -104,8 +104,8 @@ export async function templatesPage(root) {
   const show = (t, data) => {
     const body = h('div', t.description ? h('div.note', t.description) : null, h('table.lines', h('thead', h('tr', ['الجانب', 'الحساب', 'ملاحظة'].map((x) => h('th', x)))),
       h('tbody', t.lines.map((l) => h('tr', h('td', sideLbl[l.side]), h('td', l.account_code ? `${l.account_code} — ${l.account_name}` : h('i', l.role_name || '—')), h('td', l.dynamic ? 'يتحدد من المستند' : (l.role_key && !l.account_id ? 'من إعدادات ربط الحسابات' : (l.label || ''))))))));
-    modal({ title: `${t.name} (${t.module_name})`, wide: true, body, buttons: t.system ? [] : [{ label: 'تعديل', onClick: () => setTimeout(() => edit(t, data), 50) },
-      { label: 'حذف', cls: 'danger', onClick: async () => { await DEL('/acc/templates/' + t.id); toast('تم الحذف'); draw(); } }] });
+    modal({ title: `${t.name} (${t.module_name})`, wide: true, body, buttons: t.system ? [] : [can('accounts.templates.edit') ? { label: 'تعديل', onClick: () => setTimeout(() => edit(t, data), 50) } : null,
+      can('accounts.templates.delete') ? { label: 'حذف', cls: 'danger', onClick: async () => { await DEL('/acc/templates/' + t.id); toast('تم الحذف'); draw(); } } : null].filter(Boolean) });
   };
   const edit = (t, data) => {
     const st = { name: t?.name || '', module: t?.module || '', description: t?.description || '', lines: t ? t.lines.map((l) => ({ side: l.side, account_id: l.account_id, label: l.label })) : [{ side: 'debit' }, { side: 'credit' }] };
@@ -121,7 +121,17 @@ export async function templatesPage(root) {
       const v = hf.values(); const p = { ...v, lines: st.lines.map((l) => ({ ...l, account_id: l.account_id ? Number(l.account_id) : null })) };
       if (t) await PUT('/acc/templates/' + t.id, p); else await POST('/acc/templates', p); toast('تم الحفظ'); draw(); } }] });
   };
-  root.replaceChildren(pageHead('نماذج القيود', mod, h('button.btn.primary', { onclick: guard(async () => edit(null, await GET('/acc/templates'))) }, '＋ نموذج جديد')),
+  root.replaceChildren(pageHead('نماذج القيود', mod, can('accounts.templates.create') ? h('button.btn.primary', { onclick: guard(async () => edit(null, await GET('/acc/templates'))) }, '＋ نموذج جديد') : null),
     h('div.note', 'القيود اللي البرنامج بيولّدها (نظام) + نماذج بتضيفها بنفسك، مربوطة بموديول وبحسابات دليل الحسابات. تقدر تستخدم أي نموذج من «قيد يدوي ← تحميل من نموذج».'), host);
   await draw();
+}
+
+// ---------------- ربط الحسابات (اتنقل من الإعدادات) ----------------
+export async function accountLinksPage(root) {
+  const canE = can('accounts.account-links.edit');
+  const accFields = Object.entries(META.acc_keys).map(([k, l]) => ({ k, l, t: 'fk', ref: 'accounts', filter: (x) => x.postable === 1 && x.active !== 0, combo: true, req: 1, readonly: !canE }));
+  const g = formGrid(accFields, Object.fromEntries(Object.keys(META.acc_keys).map((k) => [k, Number(META.settings[k])])), 2);
+  const save = guard(async () => { await PUT('/settings', g.values()); await loadMeta(); toast('تم حفظ ربط الحسابات'); });
+  root.replaceChildren(pageHead('ربط الحسابات', canE ? h('button.btn.primary', { onclick: save }, 'حفظ') : null),
+    card('ربط الحسابات (تُستخدم في القيود التلقائية)', h('div.note', 'كل مستند بيولّد قيده تلقائياً على الحسابات دي. حسابات «إنتاج تحت التشغيل» لكل مرحلة بتتحدد من الإعدادات ← مراحل التصنيع، وحسابات الخزن من الإعدادات ← الخزن والبنوك.'), g.el));
 }

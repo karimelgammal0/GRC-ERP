@@ -6,11 +6,11 @@ import { applyOpening, lockOpening, unlockOpening, openingLocked } from '../lib/
 import { MASTERS, withLinks } from './masters.js';
 import { hashPassword, checkPassword } from '../lib/seed.js';
 import { COST_CLASS, VOUCHER_KINDS } from '../lib/docs.js';
+import { CATALOG, userPerms, can, need, cleanPerms, modulesOf } from '../lib/perms.js';
 
 export const MODULES = [
   ['dashboard', 'لوحة التحكم'], ['settings', 'الإعدادات'], ['inventory', 'مخازن المواد الخام'], ['purchases', 'المشتريات'],
   ['hr', 'الموارد البشرية'], ['finance', 'الإدارة المالية'], ['accounts', 'الحسابات'], ['reports', 'التقارير'],
-  ['perm_add_items', 'صلاحية: إضافة بنود المشروعات من شاشة الصرف'],
 ];
 const adminOnly = (req) => { if (req.user.role !== 'admin') throw new AppError('للمدير فقط', 403); };
 
@@ -31,7 +31,7 @@ export async function authRoutes() {
 export async function systemRouter() {
   const r = Router();
   await r.post('/logout', async (req, res) => { await run('DELETE FROM sessions WHERE token=?', req.token); res.setHeader('Set-Cookie', 'sid=; Path=/; Max-Age=0'); res.json({ ok: true }); });
-  r.get('/me', (req, res) => { const { pass_hash, ...u } = req.user; res.json({ ...u, modules: JSON.parse(u.modules || '[]') }); });
+  r.get('/me', (req, res) => { const { pass_hash, ...u } = req.user; const perms = [...userPerms(req.user)]; res.json({ ...u, perms, modules: [...new Set(perms.map((k) => k.split('.')[0]))] }); });
   await r.post('/change-password', async (req, res) => {
     const { old_password, new_password } = req.body;
     if (!checkPassword(String(old_password || ''), req.user.pass_hash)) throw new AppError('كلمة المرور الحالية غير صحيحة');
@@ -41,7 +41,7 @@ export async function systemRouter() {
 
   // تعريفات تستعملها الواجهة لبناء الشاشات
   r.get('/meta', async (req, res) => res.json({
-    masters: MASTERS, modules: MODULES, cost_class: COST_CLASS, voucher_kinds: VOUCHER_KINDS, acc_keys: ACC_KEYS,
+    masters: MASTERS, modules: MODULES, catalog: CATALOG, cost_class: COST_CLASS, voucher_kinds: VOUCHER_KINDS, acc_keys: ACC_KEYS,
     settings: await allSettings(), opening_locked: await openingLocked(),
   }));
   r.get('/lookups', async (req, res) => {
@@ -57,8 +57,13 @@ export async function systemRouter() {
 
   // ----- إعدادات عامة وربط الحسابات والترقيم -----
   r.put('/settings', async (req, res) => {
-    adminOnly(req);
     const ok = ['company_name', 'currency', 'opening_date', 'allow_negative_stock', ...Object.keys(ACC_KEYS)];
+    for (const k of Object.keys(req.body)) {
+      if (!ok.includes(k)) continue;
+      if (k.startsWith('acc_')) need(req.user, 'accounts.account-links.edit', 'ليس لديك صلاحية تعديل ربط الحسابات');
+      else if (k === 'opening_date') need(req.user, 'settings.opening.edit', 'ليس لديك صلاحية تعديل الأرصدة الافتتاحية');
+      else need(req.user, 'settings.general.edit', 'ليس لديك صلاحية تعديل الإعدادات العامة');
+    }
     for (const [k, v] of Object.entries(req.body)) {
       if (!ok.includes(k)) continue;
       if (k === 'opening_date' && await openingLocked()) throw new AppError('الأرصدة الافتتاحية مقفلة');
@@ -69,7 +74,7 @@ export async function systemRouter() {
   });
   r.get('/sequences', async (req, res) => { const ord = DEFAULT_SEQUENCES.map((x) => x[0]); const rows = await all('SELECT * FROM sequences'); res.json(rows.sort((a, b) => (ord.indexOf(a.key) + 1 || 999) - (ord.indexOf(b.key) + 1 || 999) || a.key.localeCompare(b.key))); });
   r.put('/sequences/:key', async (req, res) => {
-    adminOnly(req);
+    need(req.user, 'settings.sequences.edit');
     const b = req.body; const cur = await get('SELECT * FROM sequences WHERE key=?', req.params.key); if (!cur) throw new AppError('غير موجود', 404);
     await run('UPDATE sequences SET prefix=?, padding=?, next_no=? WHERE key=?', String(b.prefix ?? cur.prefix), Math.min(10, Math.max(1, Number(b.padding ?? cur.padding))), Math.max(1, Number(b.next_no ?? cur.next_no)), req.params.key);
     res.json(await get('SELECT * FROM sequences WHERE key=?', req.params.key));
@@ -86,7 +91,7 @@ export async function systemRouter() {
     custodians: await all('SELECT id, code, name, opening_balance FROM custodians WHERE active=1 ORDER BY code'),
   }));
   r.put('/opening', async (req, res) => {
-    adminOnly(req);
+    need(req.user, 'settings.opening.edit');
     if (await openingLocked()) throw new AppError('الأرصدة الافتتاحية مقفلة');
     await tx(async () => {
       const b = req.body;
@@ -104,26 +109,27 @@ export async function systemRouter() {
     });
     res.json({ ok: true });
   });
-  await r.post('/opening/apply', async (req, res) => { adminOnly(req); res.json(await applyOpening(req.user)); });
-  await r.post('/opening/lock', async (req, res) => { adminOnly(req); await lockOpening(req.user); res.json({ ok: true }); });
-  await r.post('/opening/unlock', async (req, res) => { adminOnly(req); await unlockOpening(req.user); res.json({ ok: true }); });
+  await r.post('/opening/apply', async (req, res) => { need(req.user, 'settings.opening.edit'); res.json(await applyOpening(req.user)); });
+  await r.post('/opening/lock', async (req, res) => { need(req.user, 'settings.opening.lock'); await lockOpening(req.user); res.json({ ok: true }); });
+  await r.post('/opening/unlock', async (req, res) => { need(req.user, 'settings.opening.unlock'); await unlockOpening(req.user); res.json({ ok: true }); });
 
   // ----- المستخدمون -----
-  r.get('/users', async (req, res) => { adminOnly(req); res.json((await all('SELECT id,username,name,role,modules,active FROM users ORDER BY id')).map((u) => ({ ...u, modules: JSON.parse(u.modules) }))); });
+  r.get('/users', async (req, res) => { adminOnly(req); res.json((await all('SELECT id,username,name,role,modules,perms,active FROM users ORDER BY id')).map((u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, active: u.active, modules: JSON.parse(u.modules), legacy: !u.perms, perms: [...userPerms(u)] }))); });
   await r.post('/users', async (req, res) => {
     adminOnly(req); const b = req.body;
     if (!b.username || !b.name || String(b.password || '').length < 6) throw new AppError('الاسم واسم المستخدم وكلمة مرور (6 أحرف+) مطلوبين');
     if (await get('SELECT 1 FROM users WHERE username=?', b.username)) throw new AppError('اسم المستخدم مستخدم');
-    const id = await insertRow('users', { username: b.username.trim(), name: b.name, pass_hash: hashPassword(b.password), role: b.role === 'admin' ? 'admin' : 'user', modules: JSON.stringify(b.modules || []), must_change: 1 }, ['username', 'name', 'pass_hash', 'role', 'modules', 'must_change']);
+    const id = await insertRow('users', { username: b.username.trim(), name: b.name, pass_hash: hashPassword(b.password), role: b.role === 'admin' ? 'admin' : 'user', modules: JSON.stringify(modulesOf(cleanPerms(b.perms))), perms: JSON.stringify(cleanPerms(b.perms)), must_change: 1 }, ['username', 'name', 'pass_hash', 'role', 'modules', 'perms', 'must_change']);
     res.json({ id });
   });
   r.put('/users/:id', async (req, res) => {
     adminOnly(req); const b = req.body; const id = Number(req.params.id);
-    const o = { name: b.name, role: b.role, active: b.active === undefined ? undefined : (b.active ? 1 : 0), modules: b.modules ? JSON.stringify(b.modules) : undefined };
+    const o = { name: b.name, role: b.role, active: b.active === undefined ? undefined : (b.active ? 1 : 0), modules: undefined, perms: undefined };
+    if (Array.isArray(b.perms)) { const cp = cleanPerms(b.perms); o.perms = JSON.stringify(cp); o.modules = JSON.stringify(modulesOf(cp)); }
     if (id === req.user.id && (o.active === 0 || (o.role && o.role !== 'admin'))) throw new AppError('لا يمكنك تعطيل نفسك أو سحب صلاحيات المدير منك');
     if (b.password) { if (String(b.password).length < 6) throw new AppError('كلمة المرور قصيرة'); o.pass_hash = hashPassword(b.password); o.must_change = 1; }
-    await updateRow('users', id, o, ['name', 'role', 'active', 'modules', 'pass_hash', 'must_change']); res.json({ ok: true });
+    await updateRow('users', id, o, ['name', 'role', 'active', 'modules', 'perms', 'pass_hash', 'must_change']); res.json({ ok: true });
   });
-  r.get('/audit', async (req, res) => { adminOnly(req); res.json(await all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 500')); });
+  r.get('/audit', async (req, res) => { need(req.user, 'settings.audit'); res.json(await all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 500')); });
   return r;
 }

@@ -1,4 +1,4 @@
-import { h, GET, POST, L, META, loadLookups, modal, formGrid, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard } from '../core.js';
+import { h, GET, POST, L, META, can, loadLookups, modal, formGrid, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard } from '../core.js';
 import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 export const KINDS = [['production', 'صرف إنتاج (مشروع + بند + مرحلة)'], ['site', 'تحويل لموقع'], ['overhead', 'تشغيل غير مباشر (بدون مشروع)']];
@@ -10,7 +10,7 @@ const mapStock = async (ctx) => {
 };
 // الخامات المتاحة في مخزن: لو المخزن مربوط بفئات خامات تظهر خاماتها بس، ولو مش مربوط بأي فئة تظهر كل الخامات
 const whAllows = (wid) => { const cats = byId('warehouses', wid)?.category_ids || []; return cats.length ? (m) => cats.includes(m.category_id) : () => true; };
-const canAddItems = () => { const me = META.me || {}; return me.role === 'admin' || (me.modules || []).some((m) => m === 'perm_add_items' || m === 'settings'); };
+const canAddItems = () => can('inventory.issues.add_item') || can('settings.project-items.create');
 const addItemDialog = (ctx) => {
   const p = ctx.header.project_id; if (!p) { toast('اختر المشروع الأول', 'err'); return; }
   const fg = formGrid([{ k: 'name', l: 'اسم البند', t: 'text', req: 1 }, { k: 'qty', l: 'الكمية (اختياري)', t: 'number' }, { k: 'unit_id', l: 'الوحدة (اختياري)', t: 'fk', ref: 'units' }], {}, 1);
@@ -41,7 +41,7 @@ const whF = (ctx) => ({ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'war
 const receivedF = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true };
 
 // ---------------- إذن صرف (إنتاج / تشغيل غير مباشر) ----------------
-export const issuesPage = docScreen({
+export const issuesPage = docScreen({ perm: 'inventory.issues',
   type: 'stock_issue', title: 'أذون الصرف', noun: 'إذن صرف', newLabel: 'إذن صرف جديد', fixed: { only: 'issues' }, defaultFrom: monthStart, defaultTo: today,
   note: 'كل صرف من المخزن بيتحدد له: المشروع + البند + المرحلة — ومنها بتتجمّع تكلفة كل مشروع وكل مرحلة تلقائياً بالمتوسط المرجح. (تحويل الخامات لمواقع المشاريع له شاشة منفصلة.)',
   filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...ISSUE_KINDS] }],
@@ -66,7 +66,7 @@ export const issuesPage = docScreen({
 });
 
 // ---------------- تحويل خامات لموقع (منفصل عن صرف الإنتاج) ----------------
-export const siteTransfersPage = docScreen({
+export const siteTransfersPage = docScreen({ perm: 'inventory.site-transfers',
   type: 'stock_issue', title: 'التحويل للمواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' }, defaultFrom: monthStart, defaultTo: today,
   note: 'تحويل خامات من المخزن لمشروع. لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
   filters: (() => { let fp = null; return [
@@ -92,7 +92,7 @@ export const siteTransfersPage = docScreen({
 });
 
 // ---------------- مرتجع صرف ----------------
-export const returnsPage = docScreen({
+export const returnsPage = docScreen({ perm: 'inventory.returns',
   type: 'stock_issue', title: 'مرتجعات للمخزن', noun: 'مرتجع صرف', newLabel: 'مرتجع جديد', fixed: { only: 'returns' }, canCreate: true,
   note: 'المرتجع بيرجع للمخزن بنفس تكلفة الصرف الأصلي (مش بمتوسط يوم الرجوع)، وبيخصم من تكلفة المشروع/البند/المرحلة.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' },
@@ -118,7 +118,7 @@ export const returnsPage = docScreen({
 });
 
 // ---------------- جرد وتسوية ----------------
-export const adjustmentsPage = docScreen({
+export const adjustmentsPage = docScreen({ perm: 'inventory.adjustments',
   type: 'stock_adjustment', title: 'الجرد والتسوية', noun: 'جرد', newLabel: 'جرد جديد',
   note: 'أدخل الكمية الفعلية المجرودة؛ النظام يحسب الفرق عن رصيد الدفتر ويسوّيه (العجز بالمتوسط المرجح، والزيادة بمتوسط التكلفة الحالي) ويرحّل القيد.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'net_value', l: 'صافي الفرق (قيمة)', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
