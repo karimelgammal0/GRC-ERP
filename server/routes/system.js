@@ -130,6 +130,6 @@ export async function systemRouter() {
     if (b.password) { if (String(b.password).length < 6) throw new AppError('كلمة المرور قصيرة'); o.pass_hash = hashPassword(b.password); o.must_change = 1; }
     await updateRow('users', id, o, ['name', 'role', 'active', 'modules', 'perms', 'pass_hash', 'must_change']); res.json({ ok: true });
   });
-  r.get('/audit', async (req, res) => { need(req.user, 'settings.audit'); res.json(await all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 500')); });
+  r.get('/audit', async (req, res) => { adminOnly(req); res.json(await all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 500')); });
   return r;
 }

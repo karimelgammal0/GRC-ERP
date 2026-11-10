@@ -32,7 +32,7 @@ export const CATALOG = [
     P('general', 'عام (بيانات الشركة)', [['edit', 'تعديل']]), P('opening', 'الأرصدة الافتتاحية', [['edit', 'حفظ وتطبيق'], ['lock', 'قفل نهائي'], ['unlock', 'فك القفل']]),
     P('materials', 'الخامات', CRUD), P('categories', 'فئات الخامات', CRUD), P('units', 'وحدات القياس', CRUD), P('warehouses', 'المخازن', CRUD), P('clients', 'العملاء', CRUD), P('projects', 'المشروعات', CRUD),
     P('project-items', 'بنود المشروعات', CRUD), P('stages', 'مراحل التصنيع', CRUD), P('sites', 'المواقع', CRUD), P('suppliers', 'الموردين', CRUD), P('treasuries', 'الخزن والبنوك', CRUD),
-    P('custodians', 'العهد', CRUD), P('expense-cats', 'فئات المصروفات', CRUD), P('employees', 'العاملين', CRUD), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']]), P('audit', 'سجل العمليات')] },
+    P('custodians', 'العهد', CRUD), P('expense-cats', 'فئات المصروفات', CRUD), P('employees', 'العاملين', CRUD), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']])] },
 ];
 
 export const PAGE_KEYS = CATALOG.flatMap((m) => m.pages.map((p) => `${m.id}.${p.id}`));
@@ -40,7 +40,7 @@ export const ALL_KEYS = CATALOG.flatMap((m) => m.pages.flatMap((p) => [`${m.id}.
 const ALL_SET = new Set(ALL_KEYS);
 
 // كانت للمدير فقط في النظام القديم — مبتتمنحش تلقائياً للمستخدم القديم
-const LEGACY_EXCLUDE = new Set(['settings.general.edit', 'settings.opening.edit', 'settings.opening.lock', 'settings.opening.unlock', 'settings.sequences.edit', 'accounts.chart.import', 'accounts.account-links.edit', 'settings.audit', 'inventory.issues.add_item']);
+const LEGACY_EXCLUDE = new Set(['settings.general.edit', 'settings.opening.edit', 'settings.opening.lock', 'settings.opening.unlock', 'settings.sequences.edit', 'accounts.chart.import', 'accounts.account-links.edit', 'inventory.issues.add_item']);
 
 export function userPerms(u) {
   if (!u) return new Set();
