@@ -32,7 +32,7 @@ export const CATALOG = [
     P('general', 'عام (بيانات الشركة)', [['edit', 'تعديل']]), P('opening', 'الأرصدة الافتتاحية', [['edit', 'حفظ وتطبيق'], ['lock', 'قفل نهائي'], ['unlock', 'فك القفل']]),
     P('materials', 'الخامات', CRUD), P('categories', 'فئات الخامات', CRUD), P('units', 'وحدات القياس', CRUD), P('warehouses', 'المخازن', CRUD), P('clients', 'العملاء', CRUD), P('projects', 'المشروعات', CRUD),
     P('project-items', 'بنود المشروعات', CRUD), P('stages', 'مراحل التصنيع', CRUD), P('sites', 'المواقع', CRUD), P('suppliers', 'الموردين', CRUD), P('treasuries', 'الخزن والبنوك', CRUD),
-    P('custodians', 'العهد', CRUD), P('expense-cats', 'فئات المصروفات', CRUD), P('employees', 'العاملين', CRUD), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']])] },
+    P('custodians', 'العهد', CRUD), P('expense-cats', 'المصروفات', CRUD), P('employees', 'العاملين', CRUD), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']])] },
 ];
 
 export const PAGE_KEYS = CATALOG.flatMap((m) => m.pages.map((p) => `${m.id}.${p.id}`));

@@ -68,7 +68,7 @@ export const MASTERS = {
     cols: ['code', 'name', 'phone', 'tax_no'], used: [['projects', 'client_id']],
   },
   expense_categories: {
-    title: 'فئات المصروفات', table: 'expense_categories', seq: 'expense_category',
+    title: 'المصروفات', table: 'expense_categories', seq: 'expense_category',
     fields: [T('name', 'الاسم', 'text', { req: 1 }), T('cost_class', 'التصنيف', 'select', { options: CLS }), T('account_id', 'حساب المصروف (غير المباشر والإداري)', 'fk', { ref: 'accounts' })],
     cols: ['code', 'name', 'cost_class', 'account_id'], used: [['vouchers', 'category_id'], ['cost_lines', 'category_id']],
   },
