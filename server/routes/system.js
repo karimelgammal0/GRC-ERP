@@ -100,7 +100,7 @@ export async function systemRouter() {
         if (qty < 0 || value < 0) throw new AppError('الكمية والقيمة الافتتاحية لا يمكن أن تكون سالبة');
         if (qty === 0 && value > 0) throw new AppError('قيمة بدون كمية — صحّح الصف');
         await run(`INSERT INTO opening_stock(material_id,qty,value,source,note) VALUES(?,?,?,?,?)
-             ON CONFLICT(material_id) DO UPDATE SET qty=excluded.qty, value=excluded.value, source=CASE WHEN excluded.source IS NOT NULL THEN excluded.source ELSE source END`,
+             ON CONFLICT(material_id) DO UPDATE SET qty=excluded.qty, value=excluded.value, source=COALESCE(excluded.source, opening_stock.source), note=COALESCE(excluded.note, opening_stock.note)`,
           s.material_id, qty, r2(value), s.source ?? 'معدّل يدوياً', s.note ?? null);
       }
       for (const [key, table] of [['suppliers', 'suppliers'], ['treasuries', 'treasuries'], ['custodians', 'custodians']])
