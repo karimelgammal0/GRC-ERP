@@ -1,0 +1,712 @@
+{
+ "version": "2026-11-12",
+ "items": [
+  {
+   "code": "RM-0001",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0002",
+   "qty": 254,
+   "value": 76308.76,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0003",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0004",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0005",
+   "qty": 507.46,
+   "value": 213133.2,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0006",
+   "qty": 63,
+   "value": 4186.35,
+   "source": "آخر مشتريات",
+   "note": "قيمة الشيت غير سليمة (#DIV/0!) فاتحسبت من آخر المشتريات"
+  },
+  {
+   "code": "RM-0007",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0008",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0009",
+   "qty": 5,
+   "value": 828.4,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0010",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0011",
+   "qty": 7.05,
+   "value": 2584.34,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0012",
+   "qty": 808.7,
+   "value": 101092.41,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0013",
+   "qty": 180,
+   "value": 8795.45,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0014",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0015",
+   "qty": 10.28,
+   "value": 2704.53,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0016",
+   "qty": 2431.67,
+   "value": 471628.83,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0017",
+   "qty": 1,
+   "value": 1770,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0018",
+   "qty": 220,
+   "value": 40526.32,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0019",
+   "qty": 168,
+   "value": 12526.32,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0020",
+   "qty": 231.455,
+   "value": 28510.22,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0021",
+   "qty": 15,
+   "value": 5589.63,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0022",
+   "qty": 4,
+   "value": 276,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0023",
+   "qty": 136,
+   "value": 25346.08,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0024",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0025",
+   "qty": 69,
+   "value": 8297.04,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0026",
+   "qty": 22,
+   "value": 2388.95,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0027",
+   "qty": 25.84,
+   "value": 5168,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0028",
+   "qty": 35.5,
+   "value": 11981.25,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0029",
+   "qty": 24,
+   "value": 6315.6,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0030",
+   "qty": 29,
+   "value": 8337.5,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0031",
+   "qty": 47,
+   "value": 1818.0,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0032",
+   "qty": 37,
+   "value": 3022.26,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0033",
+   "qty": 2,
+   "value": 160,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0034",
+   "qty": 1,
+   "value": 65,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0035",
+   "qty": 50,
+   "value": 7500,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0036",
+   "qty": 59,
+   "value": 14697.47,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0037",
+   "qty": 6,
+   "value": 5964.91,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0038",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0039",
+   "qty": 23,
+   "value": 208.11,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0040",
+   "qty": 24,
+   "value": 218.05,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0041",
+   "qty": 10,
+   "value": 1904.55,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0042",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0043",
+   "qty": 88,
+   "value": 1100.0,
+   "source": "آخر مشتريات",
+   "note": "آخر وارد (2026-11-04) بدون سعر في الشيت فالقيمة اتحسبت بآخر سعر شراء (12.5) — راجعها"
+  },
+  {
+   "code": "RM-0044",
+   "qty": 87,
+   "value": 1827,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0045",
+   "qty": 209,
+   "value": 3608.76,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0046",
+   "qty": 240,
+   "value": 12192.38,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0047",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0048",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0049",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0050",
+   "qty": 15,
+   "value": 1022.17,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0051",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0052",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0053",
+   "qty": 110,
+   "value": 220.0,
+   "source": "آخر مشتريات",
+   "note": "آخر وارد (2026-11-04) بدون سعر في الشيت فالقيمة اتحسبت بآخر سعر شراء (2.0) — راجعها"
+  },
+  {
+   "code": "RM-0054",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0055",
+   "qty": 47,
+   "value": 2326.69,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0056",
+   "qty": 111,
+   "value": 9475.99,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0057",
+   "qty": 9,
+   "value": 270,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0058",
+   "qty": 22.05,
+   "value": 5802.63,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0059",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0060",
+   "qty": 185,
+   "value": 1206.91,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0061",
+   "qty": 246,
+   "value": 2050.0,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0062",
+   "qty": 28,
+   "value": 1010,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0063",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0064",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0065",
+   "qty": 51,
+   "value": 714,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0066",
+   "qty": 8.45,
+   "value": 4296.1,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0067",
+   "qty": 17.546,
+   "value": 1283.61,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0068",
+   "qty": 24.36,
+   "value": 1615.55,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0069",
+   "qty": 14.115,
+   "value": 676.63,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0070",
+   "qty": 61.55,
+   "value": 4258.6,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0071",
+   "qty": 57.85,
+   "value": 3328.09,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0072",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0073",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0074",
+   "qty": 0.5027,
+   "value": 10053.23,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0075",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0076",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0077",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0078",
+   "qty": 39,
+   "value": 74100.62,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0079",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0080",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0081",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0082",
+   "qty": 6,
+   "value": 13200,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0083",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0084",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0085",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0086",
+   "qty": 10,
+   "value": 10300,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0087",
+   "qty": 3,
+   "value": 2700,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0088",
+   "qty": 2,
+   "value": 2400,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0089",
+   "qty": 1,
+   "value": 300,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0090",
+   "qty": 1,
+   "value": 420,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0091",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0092",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0093",
+   "qty": 30.5,
+   "value": 7963.86,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0094",
+   "qty": 2.5,
+   "value": 1535,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0095",
+   "qty": 91,
+   "value": 4550,
+   "source": "الشيت",
+   "note": ""
+  },
+  {
+   "code": "RM-0096",
+   "qty": 2125,
+   "value": 0,
+   "source": "بدون سعر",
+   "note": "بدون سعر — راجع القيمة"
+  },
+  {
+   "code": "RM-0097",
+   "qty": 479,
+   "value": 0,
+   "source": "بدون سعر",
+   "note": "بدون سعر — راجع القيمة"
+  },
+  {
+   "code": "RM-0098",
+   "qty": 94,
+   "value": 0,
+   "source": "بدون سعر",
+   "note": "بدون سعر — راجع القيمة"
+  },
+  {
+   "code": "RM-0099",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0100",
+   "qty": 0,
+   "value": 0,
+   "source": "رصيد صفر",
+   "note": ""
+  },
+  {
+   "code": "RM-0101",
+   "qty": 12,
+   "value": 480,
+   "source": "الشيت",
+   "note": ""
+  }
+ ]
+}

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { get, AppError, initSchema, MODE } from './db.js';
 import { isEmpty, seedAll, ensureBaseData } from './lib/seed.js';
+import { loadOpeningStockSeed } from './lib/opening-seed.js';
 import { authRoutes, systemRouter } from './routes/system.js';
 import { masterRouter } from './routes/masters.js';
 import { docRouter, helperRouter } from './routes/docs.js';
@@ -18,6 +19,7 @@ await initSchema();
 }
 await ensureBaseData();
 if (await isEmpty()) { await seedAll(); console.log('تمت تهيئة قاعدة البيانات بالبيانات الأساسية. المستخدم: admin / admin123'); }
+await loadOpeningStockSeed();
 
 export const app = express();
 app.use(express.json({ limit: '5mb' }));
