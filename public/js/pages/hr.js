@@ -24,7 +24,7 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
   },
 });
 
-// ---------------- مسير الرواتب الشهرية ----------------
+// ---------------- كشف الرواتب الشهرية ----------------
 function allocLabel(l) {
   if (classOf(l.employee_id) !== 'direct') return h('span.tag', 'لا يحتاج');
   const a = l.allocations;
@@ -32,7 +32,7 @@ function allocLabel(l) {
   return h('span', a.map((x) => `${x.percent}% ${nameOf('stages', x.stage_id)}${x.project_id ? ' / ' + nameOf('projects', x.project_id) : ''}`).join('، '));
 }
 export const payrollPage = docScreen({ perm: 'hr.payroll',
-  type: 'payroll', title: 'الرواتب الشهرية', noun: 'كشف رواتب', newLabel: 'مسير شهري جديد',
+  type: 'payroll', title: 'الرواتب الشهرية', noun: 'كشف رواتب', newLabel: 'كشف شهري جديد',
   note: 'المرتب الشهري للعامل المباشر بيتوزّع على المشروعات والمراحل بنسب (زر «توزيع») — والغير مباشر والإداري بيروحوا لحساباتهم.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'month', l: 'الشهر' }, { k: 'date', l: 'التاريخ' }, { k: 'n_lines', l: 'العاملين', num: true }, { k: 'gross', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }, { k: 'deductions', l: 'الاستقطاعات', num: true, fmt: (v) => fmt(v) }, { k: 'net', l: 'الصافي', num: true, fmt: (v) => fmt(v) }, { k: 'paid_amount', l: 'المصروف', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {

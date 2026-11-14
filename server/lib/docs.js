@@ -553,7 +553,7 @@ DOCS.labor_sheet = {
 };
 
 // ============================================================
-//  مسير الرواتب الشهرية (مع توزيع التكلفة على المشروعات/المراحل)
+//  كشف الرواتب الشهرية (مع توزيع التكلفة على المشروعات/المراحل)
 // ============================================================
 DOCS.payroll = {
   table: 'payroll_runs', lines: 'payroll_lines', fk: 'run_id', seq: 'payroll',
@@ -568,9 +568,9 @@ DOCS.payroll = {
     for (const l of lines) {
       const e = await get('SELECT * FROM employees WHERE id=?', l.employee_id);
       if (!e) throw new AppError('عامل غير موجود');
-      if (seen.has(Number(l.employee_id))) throw new AppError(`العامل «${e.name}» مكرر في المسير`); seen.add(Number(l.employee_id));
+      if (seen.has(Number(l.employee_id))) throw new AppError(`العامل «${e.name}» مكرر في الكشف`); seen.add(Number(l.employee_id));
       const dup = await get(`SELECT r.no FROM payroll_lines pl JOIN payroll_runs r ON r.id=pl.run_id WHERE r.month=? AND pl.employee_id=? AND r.status='posted' AND r.id<>?`, p.month, l.employee_id, id || 0);
-      if (dup) throw new AppError(`العامل «${e.name}» له راتب عن نفس الشهر في المسير ${dup.no}`);
+      if (dup) throw new AppError(`العامل «${e.name}» له راتب عن نفس الشهر في الكشف ${dup.no}`);
       l.base = r2(num(l.base, e.monthly_salary)); l.additions = r2(l.additions); l.deductions = r2(l.deductions);
       if (l.base < 0 || l.additions < 0 || l.deductions < 0) throw new AppError('القيم لا يمكن أن تكون سالبة');
       l.net = r2(l.base + l.additions - l.deductions);
@@ -605,10 +605,10 @@ DOCS.payroll = {
     };
     if (ded) out.push(cr(await acc('acc_deductions_payable'), r2(ded)));
     await run('UPDATE payroll_runs SET gross=?, deductions=?, net=? WHERE id=?', r2(gross), r2(ded), r2(net), doc.id);
-    await postJournal({ date: doc.date, source_type: 'payroll', source_id: doc.id, description: `مسير رواتب ${doc.month} — ${doc.no}`, lines: out });
+    await postJournal({ date: doc.date, source_type: 'payroll', source_id: doc.id, description: `كشف رواتب ${doc.month} — ${doc.no}`, lines: out });
   },
   async unpost(cur) {
-    if (cur.paid_amount > 0.004) throw new AppError('المسير عليه صرف مرتبات — ألغِ سند الصرف أولاً');
+    if (cur.paid_amount > 0.004) throw new AppError('الكشف عليه صرف مرتبات — ألغِ سند الصرف أولاً');
     await deleteJournals('payroll', cur.id);
     await run(`DELETE FROM cost_lines WHERE source_type='payroll' AND source_id=?`, cur.id);
   },

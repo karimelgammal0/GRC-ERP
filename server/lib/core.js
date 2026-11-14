@@ -65,7 +65,7 @@ export const DEFAULT_SEQUENCES = [
   ['purchase_request', 'طلبات الشراء', 'PR-', 5], ['purchase_order', 'أوامر الشراء', 'PO-', 5], ['goods_receipt', 'إذون الاستلام', 'GRN-', 5],
   ['purchase_invoice', 'فواتير الشراء', 'PINV-', 5], ['purchase_return', 'مرتجعات المشتريات', 'PRT-', 5],
   ['stock_issue', 'إذون الصرف', 'ISS-', 5], ['stock_return', 'مرتجعات الصرف', 'RTN-', 5], ['stock_adjustment', 'جرد وتسوية', 'ADJ-', 5],
-  ['labor_sheet', 'كشوف اليوميات', 'LAB-', 5], ['payroll', 'مسيرات الرواتب', 'PAYR-', 5], ['journal', 'قيود اليومية', 'JE-', 6],
+  ['labor_sheet', 'كشوف اليوميات', 'LAB-', 5], ['payroll', 'كشوف الرواتب', 'PAYR-', 5], ['journal', 'قيود اليومية', 'JE-', 6],
   ['v_supplier_payment', 'سداد موردين', 'SP-', 5], ['v_expense', 'سندات مصروفات', 'EXP-', 5], ['v_wage_payment', 'صرف أجور', 'WP-', 5],
   ['v_custody_issue', 'صرف عهدة', 'CI-', 5], ['v_custody_return', 'رد عهدة', 'CR-', 5], ['v_transfer', 'تحويل بين الخزن', 'TRF-', 5],
   ['v_receipt', 'سندات قبض', 'RCV-', 5], ['v_payment_other', 'سندات صرف أخرى', 'PYO-', 5],

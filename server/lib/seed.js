@@ -37,6 +37,9 @@ export async function ensureBaseData() {
   }
   for (const [key, label, prefix, padding] of DEFAULT_SEQUENCES)
     await run('INSERT INTO sequences(key,label,prefix,padding) VALUES(?,?,?,?) ON CONFLICT DO NOTHING', key, label, prefix, padding);
+  // ترحيل التسمية: «مسير» ← «كشف» (اسم الترقيم، ووصف قيود الرواتب القديمة)
+  await run(`UPDATE sequences SET label='كشوف الرواتب' WHERE key='payroll' AND label LIKE '%مسير%'`);
+  await run(`UPDATE journal_entries SET description=REPLACE(description,'مسير رواتب','كشف رواتب') WHERE source_type='payroll' AND description LIKE '%مسير رواتب%'`);
   await seedTemplates();
   // ترحيل أسماء العملاء القديمة (نص في المشروع) إلى جدول العملاء وربطها
   const names = await all(`SELECT DISTINCT TRIM(client) n FROM projects WHERE client IS NOT NULL AND TRIM(client)<>'' AND client_id IS NULL`);
