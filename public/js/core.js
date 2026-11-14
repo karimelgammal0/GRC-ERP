@@ -137,7 +137,7 @@ export function fieldInput(f, value) {
   } else if (f.t === 'textarea') {
     el = h('textarea', { rows: 2 }, value ?? ''); el.get = () => el.value; el.set = (v) => { el.value = v ?? ''; };
   } else if (f.t === 'number') {
-    el = h('input', { type: 'number', step: f.step || 'any', min: f.min, value: value ?? '', onchange: () => f.onChange?.(el.get()) });
+    el = h('input', { type: 'number', step: f.step || 'any', min: f.min, value: (f.blankZero && Number(value) === 0) ? '' : (value ?? ''), onchange: () => f.onChange?.(el.get()) });
     el.get = () => (el.value === '' ? null : Number(el.value)); el.set = (v) => { el.value = v ?? ''; };
   } else if (f.t === 'date') {
     el = h('input', { type: 'date', value: value || '', onchange: () => f.onChange?.(el.value) }); el.get = () => el.value || null; el.set = (v) => { el.value = v || ''; };

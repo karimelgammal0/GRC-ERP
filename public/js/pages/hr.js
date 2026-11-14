@@ -45,9 +45,9 @@ export const payrollPage = docScreen({ perm: 'hr.payroll',
     lines: { blank: () => ({ additions_days: 0, deductions_days: 0, other_additions: 0, other_deductions: 0 }), cols: [
       { ...empCol, filter: (x) => x.emp_type === 'monthly', onChange: (v, l, ctx) => { const e = byId('employees', v); if (e) { l.base = e.monthly_salary; l.allocations = []; ctx.setLines(ctx.lines); } } },
       { k: 'base', l: 'المرتب الأساسي', t: 'number', w: '120px', readonly: true },
-      { k: 'additions_days', l: 'أيام الإضافات', t: 'number', w: '90px' }, { l: 'قيمة الإضافات', calc: (l) => pAdd(l), fmt: (v) => fmt(v), w: '100px' },
-      { k: 'deductions_days', l: 'أيام الاستقطاعات', t: 'number', w: '90px' }, { l: 'قيمة الاستقطاعات', calc: (l) => pDed(l), fmt: (v) => fmt(v), w: '100px' },
-      { k: 'other_additions', l: 'إضافات أخرى', t: 'number', w: '100px' }, { k: 'other_deductions', l: 'خصومات أخرى', t: 'number', w: '100px' },
+      { k: 'additions_days', blankZero: true, l: 'أيام الإضافات', t: 'number', w: '90px' }, { l: 'قيمة الإضافات', calc: (l) => pAdd(l), fmt: (v) => fmt(v), w: '100px' },
+      { k: 'deductions_days', blankZero: true, l: 'أيام الاستقطاعات', t: 'number', w: '90px' }, { l: 'قيمة الاستقطاعات', calc: (l) => pDed(l), fmt: (v) => fmt(v), w: '100px' },
+      { k: 'other_additions', blankZero: true, l: 'إضافات أخرى', t: 'number', w: '100px' }, { k: 'other_deductions', blankZero: true, l: 'خصومات أخرى', t: 'number', w: '100px' },
       { l: 'الصافي', calc: (l) => pNet(l), fmt: (v) => fmt(v), w: '110px' },
       { l: 'توزيع التكلفة', render: (l, ctx, ro) => {
         const box = h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }); const lab = h('span', allocLabel(l)); box.append(lab);
