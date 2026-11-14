@@ -6,6 +6,22 @@ const srcFields = (ctx, need = true) => [
   { k: 'treasury_id', l: 'الدفع من خزينة/بنك', t: 'fk', ref: 'treasuries', help: 'خزينة أو عهدة — واحد فقط', onChange: (v, c) => { if (v) c.setHeader('custodian_id', null); } },
   { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } }];
 
+// سداد المورد: «الدفع من» خزينة أو بنك — خزينة: يفتح الخزينة/العهدة، بنك: يتقفلوا ويظهر اختيار البنك
+const isBank = (id) => byId('treasuries', id)?.type === 'bank';
+function ensurePayMethod(ctx) {
+  const h0 = ctx.header; if (h0.pay_method) return;
+  if (ctx.doc) { if (isBank(h0.treasury_id)) { h0.pay_method = 'bank'; h0.bank_id = h0.treasury_id; h0.treasury_id = null; } else h0.pay_method = 'cash'; }
+  else { h0.pay_method = 'cash'; h0.treasury_id = (L.treasuries.find((x) => x.type !== 'bank' && x.active !== 0) || {}).id || null; }
+}
+const payFields = (ctx) => {
+  ensurePayMethod(ctx); const bank = ctx.header.pay_method === 'bank';
+  return [
+    { k: 'pay_method', l: 'الدفع من', t: 'select', req: 1, options: [['cash', 'خزينة'], ['bank', 'بنك']], onChange: (v, c) => { c.setHeader('treasury_id', null); c.setHeader('custodian_id', null); c.setHeader('bank_id', null); } },
+    { k: 'treasury_id', l: 'الخزينة', t: 'fk', ref: 'treasuries', filter: (x) => x.type !== 'bank', readonly: bank, onChange: (v, c) => { if (v) c.setHeader('custodian_id', null); } },
+    { k: 'custodian_id', l: 'أو عهدة', t: 'fk', ref: 'custodians', readonly: bank, onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } },
+    { k: 'bank_id', l: 'البنك', t: 'fk', ref: 'treasuries', filter: (x) => x.type === 'bank', readonly: !bank, req: bank ? 1 : 0 }];
+};
+
 function voucherScreen({ title, noun, kinds, newLabel, note, perm }) {
   const multi = kinds.length > 1; const kindOpts = () => kinds.map((k) => [k, META.voucher_kinds[k]]);
   const amountCol = { k: 'amount', l: 'المبلغ', num: true, fmt: (v) => fmt(v) };
@@ -17,11 +33,11 @@ function voucherScreen({ title, noun, kinds, newLabel, note, perm }) {
       { k: 'src', l: 'من/إلى', text: (r) => [r.treasury_name, r.custodian_name && `عهدة ${r.custodian_name}`].filter(Boolean).join(' / ') }, amountCol, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
     listFoot: (c, rows) => (c.k === 'amount' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.amount)) : c.k === 'no' ? 'الإجمالي' : ''),
     editor: {
-      cols: 3, rebuildOn: ['kind'], defaults: () => ({ kind: kinds[0], amount: null, treasury_id: (L.treasuries[0] || {}).id }),
+      cols: 3, rebuildOn: ['kind', 'pay_method'], defaults: () => ({ kind: kinds[0], amount: null, treasury_id: (L.treasuries[0] || {}).id }),
       header: (ctx) => {
         const k = ctx.header.kind; const f = [dateF];
         if (multi) f.push({ k: 'kind', l: 'نوع السند', t: 'select', options: kindOpts(), lockOnEdit: true, req: 1 });
-        if (k === 'supplier_payment') f.push({ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true, req: 1, lockOnEdit: true, onChange: () => loadInvoices(ctx) }, ...srcFields(ctx));
+        if (k === 'supplier_payment') f.push({ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true, req: 1, lockOnEdit: true, onChange: () => loadInvoices(ctx) }, ...payFields(ctx));
         if (k === 'expense') f.push({ k: 'category_id', l: 'فئة المصروف', t: 'fk', ref: 'expense_categories', req: 1 }, ...srcFields(ctx),
           { k: 'project_id', l: 'المشروع (إجباري للمصروف المباشر)', t: 'fk', ref: 'projects', combo: true, onChange: (v, c) => { const it = byId('project_items', c.header.item_id); if (it && it.project_id !== v) c.setHeader('item_id', null); } },
           { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, filter: (x) => !ctx.header.project_id || x.project_id === ctx.header.project_id }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' });
@@ -43,6 +59,7 @@ function voucherScreen({ title, noun, kinds, newLabel, note, perm }) {
         await loadInvoices(ctx); await loadWages(ctx);
       },
       prepare: (p, ctx) => {
+        if (p.kind === 'supplier_payment' && p.pay_method === 'bank') { p.treasury_id = p.bank_id || null; p.custodian_id = null; }
         p.allocations = Object.entries(ctx.alloc || {}).filter(([, a]) => a > 0).map(([invoice_id, amount]) => ({ invoice_id: Number(invoice_id), amount }));
         p.wage_links = Object.entries(ctx.wl || {}).filter(([, a]) => a > 0).map(([k, amount]) => (k[0] === 's' ? { sheet_id: Number(k.slice(1)), amount } : { run_id: Number(k.slice(1)), amount }));
       },
