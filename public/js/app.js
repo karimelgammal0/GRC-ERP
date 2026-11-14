@@ -18,7 +18,7 @@ const NAV = [
   { id: 'purchases', ico: '⛟', title: 'المشتريات', items: [
     ['requests', 'طلبات الشراء', pur.requestsPage], ['orders', 'أوامر الشراء', pur.ordersPage], ['receipts', 'إذونات الاستلام', pur.receiptsPage], ['invoices', 'فواتير الشراء', pur.invoicesPage],
     ['returns', 'مرتجعات الشراء', pur.preturnsPage], ['supplier-statement', 'كشف حساب مورد', pur.supplierStatementPage], ['supplier-balances', 'أرصدة الموردين', pur.supplierBalancesPage]] },
-  { id: 'hr', ico: '☺', title: 'الموارد البشرية', items: [['employees', 'العاملين', M('employees', { perm: 'hr.employees' })], ['labor', 'يوميات العمالة', hr.laborSheetsPage], ['payroll', 'الرواتب الشهرية', hr.payrollPage]] },
+  { id: 'hr', ico: '☺', title: 'الموارد البشرية', items: [['labor', 'يوميات العمالة', hr.laborSheetsPage], ['payroll', 'الرواتب الشهرية', hr.payrollPage]] },
   { id: 'finance', ico: '$', title: 'الإدارة المالية', items: [
     ['treasuries', 'الخزن والعهد (الأرصدة)', fin.treasuriesPage], ['supplier-payments', 'سداد الموردين', fin.supplierPaymentsPage], ['expenses', 'سندات المصروفات', fin.expensesVoucherPage], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
     ['custody', 'سندات العهد', fin.custodyVouchersPage], ['transfers', 'تحويلات بين الخزن', fin.transfersPage], ['other', 'سندات قبض/صرف أخرى', fin.otherVouchersPage],

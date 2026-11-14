@@ -18,7 +18,7 @@ export const CATALOG = [
   { id: 'purchases', title: 'المشتريات', pages: [
     P('requests', 'طلبات الشراء', [...DOC, ['close', 'إغلاق']]), P('orders', 'أوامر الشراء', [...DOC, ['close', 'إغلاق الأمر']]), P('receipts', 'إذونات الاستلام', DOC), P('invoices', 'فواتير الشراء', DOC),
     P('returns', 'مرتجعات الشراء', DOC), P('supplier-statement', 'كشف حساب مورد'), P('supplier-balances', 'أرصدة الموردين')] },
-  { id: 'hr', title: 'الموارد البشرية', pages: [P('employees', 'العاملين', CRUD), P('labor', 'يوميات العمالة', DOC), P('payroll', 'الرواتب الشهرية', DOC)] },
+  { id: 'hr', title: 'الموارد البشرية', pages: [P('labor', 'يوميات العمالة', DOC), P('payroll', 'الرواتب الشهرية', DOC)] },
   { id: 'finance', title: 'الإدارة المالية', pages: [
     P('treasuries', 'الخزن والعهد (الأرصدة)'), P('supplier-payments', 'سداد الموردين', DOC), P('expenses', 'سندات المصروفات', DOC), P('wages', 'صرف الأجور', DOC), P('custody', 'سندات العهد', DOC),
     P('transfers', 'تحويلات بين الخزن', DOC), P('other', 'سندات قبض/صرف أخرى', DOC), P('treasury-statement', 'كشف خزينة'), P('custody-statement', 'كشف عهدة')] },
