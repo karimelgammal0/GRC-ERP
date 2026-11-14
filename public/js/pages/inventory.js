@@ -155,7 +155,7 @@ export async function balancesPage(root, params) {
   };
   const fb = filterBar([{ k: 'category_id', l: 'الفئة', t: 'fk', ref: 'material_categories' }, { k: 'as_of', l: 'الأرصدة في تاريخ (اختياري)', t: 'date' },
     { k: 'hide_zero', l: 'عرض', t: 'select', options: [['1', 'الأصناف ذات الرصيد فقط'], ['0', 'كل الأصناف']] }], run, { hide_zero: '1' });
-  root.replaceChildren(pageHead('أرصدة مخزن الخامات', h('a.btn', { href: '#/inventory/stock-card' }, 'كارت صنف')), fb, kp, host); fb.run();
+  root.replaceChildren(pageHead('أرصدة مخزن الخامات'), fb, kp, host); fb.run();
 }
 
 // ---------------- كارت الصنف (بنفس شكل شيت الإكسل) ----------------
