@@ -147,7 +147,7 @@ export async function balancesPage(root, params) {
     const r = await GET('/reports/stock-balances', { ...v, hide_zero: v.hide_zero === '1' ? '1' : '' });
     const nLow = r.rows.filter((x) => x.low).length;
     kp.replaceChildren(kpi('إجمالي قيمة المخزون', fmt(r.total_value), 'بالمتوسط المرجح'), kpi('عدد الأصناف', String(r.rows.length), v.hide_zero === '1' ? 'ذات رصيد' : 'كلها'), kpi('أصناف تحت حد الطلب', String(nLow), nLow ? 'محتاجة شراء' : 'تمام', nLow ? 'warn' : ''));
-    host.replaceChildren(table({ name: 'أرصدة-المخزن', center: true, rowClass: (x) => (x.low ? 'low' : x.qty < 0 ? 'neg' : ''), onRow: (x) => { location.hash = `#/inventory/card?material_id=${x.id}`; },
+    host.replaceChildren(table({ name: 'أرصدة-المخزن', center: true, rowClass: (x) => (x.low ? 'low' : x.qty < 0 ? 'neg' : ''), onRow: (x) => { location.hash = `#/inventory/stock-card?material_id=${x.id}`; },
       cols: [{ k: 'code', l: 'الكود' }, { k: 'name', l: 'الخامة', render: (x) => h('b', x.name) }, { k: 'category', l: 'الفئة' }, { k: 'unit', l: 'الوحدة' },
         { k: 'qty', l: 'الكمية', num: true, fmt: fq }, { k: 'avg_cost', l: 'متوسط التكلفة', num: true, fmt: (n) => fmt(n, 4) }, { k: 'value', l: 'القيمة', num: true, fmt: (n) => fmt(n) },
         { k: 'min_qty', l: 'حد الطلب', num: true, fmt: (n) => (n ? fq(n) : '') }, { l: '', render: (x) => (x.low ? badge('تحت الحد', 'warn') : '') }],
@@ -155,7 +155,7 @@ export async function balancesPage(root, params) {
   };
   const fb = filterBar([{ k: 'category_id', l: 'الفئة', t: 'fk', ref: 'material_categories' }, { k: 'as_of', l: 'الأرصدة في تاريخ (اختياري)', t: 'date' },
     { k: 'hide_zero', l: 'عرض', t: 'select', options: [['1', 'الأصناف ذات الرصيد فقط'], ['0', 'كل الأصناف']] }], run, { hide_zero: '1' });
-  root.replaceChildren(pageHead('أرصدة مخزن الخامات', h('a.btn', { href: '#/inventory/card' }, 'كارت صنف')), fb, kp, host); fb.run();
+  root.replaceChildren(pageHead('أرصدة مخزن الخامات', h('a.btn', { href: '#/inventory/stock-card' }, 'كارت صنف')), fb, kp, host); fb.run();
 }
 
 // ---------------- كارت الصنف (بنفس شكل شيت الإكسل) ----------------
@@ -169,7 +169,7 @@ export async function stockCardPage(root, params) {
     if (v.from || true) rows.push({ _open: true, date: v.from || '', party: 'رصيد أول المدة', bq: r.opening.qty, bp: r.opening.avg, bv: r.opening.value });
     for (const m of r.moves) rows.push({ date: m.date, party: m.party || '', notes: [DOC_LABEL[m.doc_type], m.notes].filter(Boolean).join(' — '), iq: m.direction === 'in' ? m.qty : null, ip: m.direction === 'in' ? m.unit_cost : null, iv: m.direction === 'in' ? m.value : null,
       oq: m.direction === 'out' ? m.qty : null, op: m.direction === 'out' ? m.unit_cost : null, ov: m.direction === 'out' ? m.value : null, bq: m.bal_qty, bp: m.avg_cost, bv: m.bal_value });
-    const N = (k, f = fmt) => ({ num: true, fmt: f });
+    const N = (k, f = (n) => fmt(n)) => ({ num: true, fmt: f });
     host.replaceChildren(h('div.kpis', kpi('الخامة', r.material.name, `${r.material.code} — الوحدة: ${unit}`), kpi('الرصيد الحالي', fq(r.closing.qty), unit), kpi('متوسط التكلفة', fmt(r.closing.avg, 4)), kpi('قيمة الرصيد', fmt(r.closing.value))),
       table({ name: `كارت-${r.material.code}`, compact: true, rows, maxRows: 2000, rowClass: (x) => (x._open ? 'low' : ''),
         cols: [{ k: 'date', l: 'التاريخ' }, { k: 'party', l: 'الجهة' }, { k: 'notes', l: 'البيان' },
