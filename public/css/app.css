@@ -74,6 +74,7 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .tbl.compact td, .tbl.compact th { padding: 5px 9px; font-size: 13.5px; }
 .tbl tr.click { cursor: pointer; } .tbl tr.click:hover td { background: #f3f9f8; }
 .tbl td.num, .tbl th.num { text-align: left; direction: ltr; font-variant-numeric: tabular-nums; }
+.tbl.ctr th, .tbl.ctr td, .tbl.ctr td.num, .tbl.ctr th.num { text-align: center; } /* محاذاة المنتصف تحت العنوان */
 .tbl td.empty { text-align: center; color: var(--ink2); padding: 28px; }
 .tbl tfoot td { font-weight: 700; background: #f6f4ee; border-top: 2px solid var(--line); }
 .tbl tr.low td { background: var(--warn-l); } .tbl tr.void td { color: #9aa; text-decoration: line-through; }

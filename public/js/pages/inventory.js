@@ -147,7 +147,7 @@ export async function balancesPage(root, params) {
     const r = await GET('/reports/stock-balances', { ...v, hide_zero: v.hide_zero === '1' ? '1' : '' });
     const nLow = r.rows.filter((x) => x.low).length;
     kp.replaceChildren(kpi('إجمالي قيمة المخزون', fmt(r.total_value), 'بالمتوسط المرجح'), kpi('عدد الأصناف', String(r.rows.length), v.hide_zero === '1' ? 'ذات رصيد' : 'كلها'), kpi('أصناف تحت حد الطلب', String(nLow), nLow ? 'محتاجة شراء' : 'تمام', nLow ? 'warn' : ''));
-    host.replaceChildren(table({ name: 'أرصدة-المخزن', rowClass: (x) => (x.low ? 'low' : x.qty < 0 ? 'neg' : ''), onRow: (x) => { location.hash = `#/inventory/card?material_id=${x.id}`; },
+    host.replaceChildren(table({ name: 'أرصدة-المخزن', center: true, rowClass: (x) => (x.low ? 'low' : x.qty < 0 ? 'neg' : ''), onRow: (x) => { location.hash = `#/inventory/card?material_id=${x.id}`; },
       cols: [{ k: 'code', l: 'الكود' }, { k: 'name', l: 'الخامة', render: (x) => h('b', x.name) }, { k: 'category', l: 'الفئة' }, { k: 'unit', l: 'الوحدة' },
         { k: 'qty', l: 'الكمية', num: true, fmt: fq }, { k: 'avg_cost', l: 'متوسط التكلفة', num: true, fmt: (n) => fmt(n, 4) }, { k: 'value', l: 'القيمة', num: true, fmt: (n) => fmt(n) },
         { k: 'min_qty', l: 'حد الطلب', num: true, fmt: (n) => (n ? fq(n) : '') }, { l: '', render: (x) => (x.low ? badge('تحت الحد', 'warn') : '') }],

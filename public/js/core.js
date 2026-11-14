@@ -162,14 +162,14 @@ export function formGrid(fields, values = {}, cols = 2) {
 }
 
 // ---------- الجداول ----------
-export function table({ cols, rows, onRow, empty = 'لا توجد بيانات', foot, rowClass, search = true, name = 'export', compact = false, maxRows = 500 }) {
+export function table({ cols, rows, onRow, empty = 'لا توجد بيانات', foot, rowClass, search = true, name = 'export', compact = false, maxRows = 500, center = false }) {
   const wrap = h('div.tbl-wrap');
   let q = '';
   const text = (r, c) => (c.text ? c.text(r) : c.fmt ? c.fmt(r[c.k], r) : r[c.k]);
   const draw = () => {
     const shown = rows.filter((r) => !q || cols.some((c) => String(text(r, c) ?? '').toLowerCase().includes(q)));
     const limited = shown.slice(0, maxRows);
-    const tb = h('table.tbl' + (compact ? '.compact' : ''), h('thead', h('tr', cols.map((c) => h('th' + (c.num ? '.num' : ''), { style: c.w ? { width: c.w } : null }, c.l)))),
+    const tb = h('table.tbl' + (compact ? '.compact' : '') + (center ? '.ctr' : ''), h('thead', h('tr', cols.map((c) => h('th' + (c.num ? '.num' : ''), { style: c.w ? { width: c.w } : null }, c.l)))),
       h('tbody', limited.length ? limited.map((r) => h('tr' + (onRow ? '.click' : '') + (rowClass ? '.' + (rowClass(r) || '') : ''), { onclick: onRow ? () => onRow(r) : null },
         cols.map((c) => { const v = c.render ? c.render(r) : text(r, c); return h('td' + (c.num ? '.num' : '') + (c.cls ? '.' + c.cls : ''), v === null || v === undefined ? '' : v); })))
         : h('tr', h('td.empty', { colspan: cols.length }, empty))),
