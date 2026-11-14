@@ -77,6 +77,7 @@ async function route() {
   open.add(mod); S.draw();
   if (!g || !it?.[2] || !pageOk(g, page)) { S.view.replaceChildren(h('div.empty-state', 'الصفحة غير متاحة')); return; }
   S.view.replaceChildren(h('div.empty-state', 'جاري التحميل…'));
+  try { await loadLookups(); } catch { /* نكمل بالقوائم الحالية */ } // تحديث أسماء المشروعات والبنود وغيرها عند كل فتح شاشة
   try { await it[2](S.view, params); } catch (e) { S.view.replaceChildren(h('div.note.bad', 'خطأ: ' + e.message)); }
   window.scrollTo(0, 0);
 }
