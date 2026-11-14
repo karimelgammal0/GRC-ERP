@@ -7,6 +7,7 @@ export const $ = (sel, el = document) => el.querySelector(sel);
 // replaceChildren الأصلية بتحوّل null إلى نص "null" — نتجاهل القيم الفارغة
 { const orig = Element.prototype.replaceChildren; Element.prototype.replaceChildren = function (...a) { return orig.apply(this, a.flat().filter((x) => x !== null && x !== undefined && x !== false)); }; }
 export function h(tag, props, ...kids) {
+  if (typeof tag === 'string') tag = tag.replace(/[.#]+(?=[.#]|$)/g, ''); // يتجاهل نقطة فاضية في آخر الاسم (كلاس فاضي)
   const m = /^([a-z0-9]+)((?:[.#][\w-]+)*)$/i.exec(tag);
   const el = document.createElement(m ? m[1] : tag);
   if (m && m[2]) for (const p of m[2].match(/[.#][\w-]+/g)) p[0] === '.' ? el.classList.add(p.slice(1)) : (el.id = p.slice(1));
@@ -170,7 +171,7 @@ export function table({ cols, rows, onRow, empty = 'لا توجد بيانات',
     const shown = rows.filter((r) => !q || cols.some((c) => String(text(r, c) ?? '').toLowerCase().includes(q)));
     const limited = shown.slice(0, maxRows);
     const tb = h('table.tbl' + (compact ? '.compact' : '') + (center ? '.ctr' : ''), h('thead', h('tr', cols.map((c) => h('th' + (c.num ? '.num' : ''), { style: c.w ? { width: c.w } : null }, c.l)))),
-      h('tbody', limited.length ? limited.map((r) => h('tr' + (onRow ? '.click' : '') + (rowClass ? '.' + (rowClass(r) || '') : ''), { onclick: onRow ? () => onRow(r) : null },
+      h('tbody', limited.length ? limited.map((r) => h('tr' + (onRow ? '.click' : '') + (rowClass && rowClass(r) ? '.' + rowClass(r) : ''), { onclick: onRow ? () => onRow(r) : null },
         cols.map((c) => { const v = c.render ? c.render(r) : text(r, c); return h('td' + (c.num ? '.num' : '') + (c.cls ? '.' + c.cls : ''), v === null || v === undefined ? '' : v); })))
         : h('tr', h('td.empty', { colspan: cols.length }, empty))),
       foot && shown.length ? h('tfoot', h('tr', cols.map((c, i) => h('td' + (c.num ? '.num' : ''), foot(c, shown, i)))) ) : null);
