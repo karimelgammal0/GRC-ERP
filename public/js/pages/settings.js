@@ -39,7 +39,17 @@ export function masterPage(name, opts = {}) {
         const cur = fg.values()[f.fills];
         if (!cur || cur === lastAuto) { fg.set(f.fills, src.name); lastAuto = src.name; }
       } } : f));
-      const fg = formGrid([{ k: 'code', l: 'الكود', t: 'text', ph: rec ? '' : 'تلقائي — اتركه فارغاً' }, ...defs], rec || (opts.defaults || {}), 2);
+      // العاملين: يومية ← قفل المرتب الشهري، شهرية ← قفل أجر اليوم
+      const lockWage = (type, reset) => {
+        if (name !== 'employees' || !fg) return;
+        for (const [k, locked] of [['daily_rate', type === 'monthly'], ['monthly_salary', type === 'daily']]) {
+          const inp = fg.inputs[k]; if (!inp) continue;
+          inp.disabled = locked; if (locked && reset) inp.set(0);
+        }
+      };
+      const defs2 = name === 'employees' ? defs.map((f) => (f.k === 'emp_type' ? { ...f, onChange: (v) => lockWage(v, true) } : f)) : defs;
+      const fg = formGrid([{ k: 'code', l: 'الكود', t: 'text', ph: rec ? '' : 'تلقائي — اتركه فارغاً' }, ...defs2], rec || (opts.defaults || {}), 2);
+      if (name === 'employees') lockWage(fg.values().emp_type, false);
       const body = h('div', fg.el, rec ? h('label.fld', { style: { marginTop: '10px', flexDirection: 'row', alignItems: 'center', gap: '8px' } }, (() => { const c = fieldInput({ t: 'bool' }, rec.active); fg.active = c; return c; })(), h('span', 'نشط')) : null);
       modal({
         title: rec ? `تعديل — ${rec.name}` : `إضافة — ${title}`, body, buttons: [
