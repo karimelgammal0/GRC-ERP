@@ -174,7 +174,7 @@ near(sheet.total, 200 + 110 + 150, 'إجمالي اليومية');
 near(await cl(`cost_type='labor' AND stage_id=${stage.cast}`), 310, 'عمالة مرحلة الصب'); near(await glBal('5100'), 150, 'أجور غير مباشرة');
 near(await glBal('2130'), -460, 'أجور مستحقة');
 const pr1 = await saveDoc('payroll', { month: '2026-11', date: '2026-11-30', lines: [
-  { employee_id: await E('EMP-T3'), base: 6000, additions: 500, deductions: 100, allocations: [{ project_id: prj, item_id: item1, stage_id: stage.mold, percent: 60 }, { project_id: prj, item_id: item2, stage_id: stage.cast, percent: 40 }] },
+  { employee_id: await E('EMP-T3'), base: 6000, additions_days: 2.5, deductions_days: 0.5, allocations: [{ project_id: prj, item_id: item1, stage_id: stage.mold, percent: 60 }, { project_id: prj, item_id: item2, stage_id: stage.cast, percent: 40 }] },
   { employee_id: await E('EMP-T4'), base: 5000 }] }, null, U);
 near(pr1.gross, 11500, 'إجمالي المرتبات'); near(pr1.net, 11400, 'الصافي');
 near(await cl(`cost_type='labor' AND item_id=${item1} AND stage_id=${stage.mold}`), 3900, 'توزيع 60% من 6500'); near(await glBal('6100'), 5000, 'مرتبات إدارية');

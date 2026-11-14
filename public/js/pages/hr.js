@@ -31,25 +31,33 @@ function allocLabel(l) {
   if (!a?.length) return h('span', { style: { color: 'var(--ink2)' } }, `100% — ${nameOf('stages', byId('employees', l.employee_id)?.default_stage_id)}`);
   return h('span', a.map((x) => `${x.percent}% ${nameOf('stages', x.stage_id)}${x.project_id ? ' / ' + nameOf('projects', x.project_id) : ''}`).join('، '));
 }
+// حساب الكشف: أجر اليوم = المرتب ÷ 30، وقيمة الإضافات/الاستقطاعات = أجر اليوم × الأيام
+const rd2 = (x) => Math.round(x * 100) / 100;
+const pAdd = (l) => rd2(((Number(l.base) || 0) / 30) * (Number(l.additions_days) || 0));
+const pDed = (l) => rd2(((Number(l.base) || 0) / 30) * (Number(l.deductions_days) || 0));
+const pNet = (l) => rd2((Number(l.base) || 0) + pAdd(l) - pDed(l) + (Number(l.other_additions) || 0) - (Number(l.other_deductions) || 0));
 export const payrollPage = docScreen({ perm: 'hr.payroll',
   type: 'payroll', title: 'الرواتب الشهرية', noun: 'كشف رواتب', newLabel: 'كشف شهري جديد',
   note: 'المرتب الشهري للعامل المباشر بيتوزّع على المشروعات والمراحل بنسب (زر «توزيع») — والغير مباشر والإداري بيروحوا لحساباتهم.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'month', l: 'الشهر' }, { k: 'date', l: 'التاريخ' }, { k: 'n_lines', l: 'العاملين', num: true }, { k: 'gross', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }, { k: 'deductions', l: 'الاستقطاعات', num: true, fmt: (v) => fmt(v) }, { k: 'net', l: 'الصافي', num: true, fmt: (v) => fmt(v) }, { k: 'paid_amount', l: 'المصروف', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
     cols: 3, defaults: () => ({ month: today().slice(0, 7), date: today() }), header: [{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, dateF, { ...notesF, wide: false }],
-    lines: { blank: () => ({ additions: 0, deductions: 0 }), cols: [
+    lines: { blank: () => ({ additions_days: 0, deductions_days: 0, other_additions: 0, other_deductions: 0 }), cols: [
       { ...empCol, filter: (x) => x.emp_type === 'monthly', onChange: (v, l, ctx) => { const e = byId('employees', v); if (e) { l.base = e.monthly_salary; l.allocations = []; ctx.setLines(ctx.lines); } } },
-      { k: 'base', l: 'المرتب الأساسي', t: 'number', w: '120px' }, { k: 'additions', l: 'إضافات', t: 'number', w: '100px' }, { k: 'deductions', l: 'استقطاعات', t: 'number', w: '100px' },
-      { l: 'الصافي', calc: (l) => (Number(l.base) || 0) + (Number(l.additions) || 0) - (Number(l.deductions) || 0), fmt: (v) => fmt(v), w: '110px' },
+      { k: 'base', l: 'المرتب الأساسي', t: 'number', w: '120px', readonly: true },
+      { k: 'additions_days', l: 'أيام الإضافات', t: 'number', w: '90px' }, { l: 'قيمة الإضافات', calc: (l) => pAdd(l), fmt: (v) => fmt(v), w: '100px' },
+      { k: 'deductions_days', l: 'أيام الاستقطاعات', t: 'number', w: '90px' }, { l: 'قيمة الاستقطاعات', calc: (l) => pDed(l), fmt: (v) => fmt(v), w: '100px' },
+      { k: 'other_additions', l: 'إضافات أخرى', t: 'number', w: '100px' }, { k: 'other_deductions', l: 'خصومات أخرى', t: 'number', w: '100px' },
+      { l: 'الصافي', calc: (l) => pNet(l), fmt: (v) => fmt(v), w: '110px' },
       { l: 'توزيع التكلفة', render: (l, ctx, ro) => {
         const box = h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }); const lab = h('span', allocLabel(l)); box.append(lab);
         if (!ro && classOf(l.employee_id) === 'direct') box.append(h('button.btn.sm', { onclick: () => allocModal(l, () => { lab.replaceChildren(allocLabel(l)); }) }, 'توزيع'));
         return box; } }] },
     tools: [{ label: 'تحميل كل الشهريين', run: (ctx) => {
       const rows = L.employees.filter((e) => e.active && e.emp_type === 'monthly'); if (!rows.length) throw new Error('لا يوجد عاملين شهريين — أضفهم من الإعدادات ← العاملين');
-      ctx.setLines(rows.map((e) => ({ employee_id: e.id, base: e.monthly_salary, additions: 0, deductions: 0, allocations: [] })));
+      ctx.setLines(rows.map((e) => ({ employee_id: e.id, base: e.monthly_salary, additions_days: 0, deductions_days: 0, other_additions: 0, other_deductions: 0, allocations: [] })));
     } }],
-    totals: (ctx) => [['الإجمالي', fmt(total(ctx.lines, (l) => (Number(l.base) || 0) + (Number(l.additions) || 0)))], ['الاستقطاعات', fmt(total(ctx.lines, (l) => l.deductions))], ['صافي المستحق', fmt(total(ctx.lines, (l) => (Number(l.base) || 0) + (Number(l.additions) || 0) - (Number(l.deductions) || 0))), 'ok']],
+    totals: (ctx) => [['الإجمالي', fmt(total(ctx.lines, (l) => (Number(l.base) || 0) + pAdd(l) + (Number(l.other_additions) || 0)))], ['الاستقطاعات', fmt(total(ctx.lines, (l) => pDed(l) + (Number(l.other_deductions) || 0)))], ['صافي المستحق', fmt(total(ctx.lines, (l) => pNet(l))), 'ok']],
   },
 });
 function allocModal(l, done) {

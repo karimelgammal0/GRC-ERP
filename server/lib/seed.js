@@ -40,6 +40,9 @@ export async function ensureBaseData() {
   // ترحيل التسمية: «مسير» ← «كشف» (اسم الترقيم، ووصف قيود الرواتب القديمة)
   await run(`UPDATE sequences SET label='كشوف الرواتب' WHERE key='payroll' AND label LIKE '%مسير%'`);
   await run(`UPDATE journal_entries SET description=REPLACE(description,'مسير رواتب','كشف رواتب') WHERE source_type='payroll' AND description LIKE '%مسير رواتب%'`);
+  // ترحيل كشوف الرواتب القديمة: مبالغ الإضافات/الاستقطاعات القديمة بتتحول لـ«إضافات أخرى/خصومات أخرى» (من غير ما الصافي يتغير)
+  await run(`UPDATE payroll_lines SET other_additions=other_additions+additions, additions=0 WHERE additions<>0 AND additions_days=0`);
+  await run(`UPDATE payroll_lines SET other_deductions=other_deductions+deductions, deductions=0 WHERE deductions<>0 AND deductions_days=0`);
   await seedTemplates();
   // ترحيل أسماء العملاء القديمة (نص في المشروع) إلى جدول العملاء وربطها
   const names = await all(`SELECT DISTINCT TRIM(client) n FROM projects WHERE client IS NOT NULL AND TRIM(client)<>'' AND client_id IS NULL`);

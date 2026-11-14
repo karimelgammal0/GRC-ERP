@@ -557,7 +557,7 @@ DOCS.labor_sheet = {
 // ============================================================
 DOCS.payroll = {
   table: 'payroll_runs', lines: 'payroll_lines', fk: 'run_id', seq: 'payroll',
-  cols: ['month', 'date', 'notes'], lineCols: ['employee_id', 'base', 'additions', 'deductions', 'net', 'cost_class', 'notes'],
+  cols: ['month', 'date', 'notes'], lineCols: ['employee_id', 'base', 'additions_days', 'additions', 'deductions_days', 'deductions', 'other_additions', 'other_deductions', 'net', 'cost_class', 'notes'],
   blank: (l) => !l.employee_id,
   async enrich(h) {
     for (const l of h.lines) l.allocations = await all('SELECT * FROM payroll_allocations WHERE line_id=?', l.id);
@@ -571,9 +571,13 @@ DOCS.payroll = {
       if (seen.has(Number(l.employee_id))) throw new AppError(`العامل «${e.name}» مكرر في الكشف`); seen.add(Number(l.employee_id));
       const dup = await get(`SELECT r.no FROM payroll_lines pl JOIN payroll_runs r ON r.id=pl.run_id WHERE r.month=? AND pl.employee_id=? AND r.status='posted' AND r.id<>?`, p.month, l.employee_id, id || 0);
       if (dup) throw new AppError(`العامل «${e.name}» له راتب عن نفس الشهر في الكشف ${dup.no}`);
-      l.base = r2(num(l.base, e.monthly_salary)); l.additions = r2(l.additions); l.deductions = r2(l.deductions);
-      if (l.base < 0 || l.additions < 0 || l.deductions < 0) throw new AppError('القيم لا يمكن أن تكون سالبة');
-      l.net = r2(l.base + l.additions - l.deductions);
+      l.base = r2(num(l.base, e.monthly_salary));
+      l.additions_days = num(l.additions_days); l.deductions_days = num(l.deductions_days);
+      l.other_additions = r2(l.other_additions); l.other_deductions = r2(l.other_deductions);
+      if (l.base < 0 || l.additions_days < 0 || l.deductions_days < 0 || l.other_additions < 0 || l.other_deductions < 0) throw new AppError('القيم لا يمكن أن تكون سالبة');
+      // أجر اليوم = المرتب الشهري ÷ 30، وقيمة الإضافات/الاستقطاعات = أجر اليوم × عدد الأيام
+      const day = l.base / 30; l.additions = r2(day * l.additions_days); l.deductions = r2(day * l.deductions_days);
+      l.net = r2(l.base + l.additions - l.deductions + l.other_additions - l.other_deductions);
       if (l.net < 0) throw new AppError(`صافي راتب «${e.name}» سالب`);
       l.cost_class = e.cost_class;
       if (e.cost_class === 'direct') {
@@ -588,8 +592,8 @@ DOCS.payroll = {
   async post(doc, user, p) {
     const out = []; let gross = 0, ded = 0, net = 0;
     for (const [i, l] of doc.lines.entries()) {
-      const cost = r2(l.base + l.additions);
-      gross += cost; ded += l.deductions; net += l.net;
+      const cost = r2(l.base + l.additions + l.other_additions), lineDed = r2(l.deductions + l.other_deductions);
+      gross += cost; ded += lineDed; net += l.net;
       const allocs = l.cost_class === 'direct' ? (p.lines[i].allocations || []) : [{ project_id: null, item_id: null, stage_id: null, percent: 100 }];
       let used = 0;
       for (const [k, a] of allocs.entries()) {

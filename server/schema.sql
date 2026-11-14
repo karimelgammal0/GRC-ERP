@@ -460,3 +460,9 @@ ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFER
 
 -- صلاحيات تفصيلية لكل مستخدم (JSON) — NULL = قديم: يتحوّل من الموديولات
 ALTER TABLE users ADD COLUMN IF NOT EXISTS perms TEXT;
+
+-- كشف الرواتب: أيام الإضافات/الاستقطاعات (القيمة = المرتب/30 × الأيام) + إضافات وخصومات أخرى بمبالغ
+ALTER TABLE payroll_lines ADD COLUMN IF NOT EXISTS additions_days NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN IF NOT EXISTS deductions_days NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN IF NOT EXISTS other_additions NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN IF NOT EXISTS other_deductions NUMERIC NOT NULL DEFAULT 0;
