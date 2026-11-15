@@ -20,7 +20,7 @@ export function checkPassword(pw, hash) {
 }
 
 const MAPPING = {
-  acc_inventory_raw: '1221', acc_ap: '2110', acc_grni: '2140', acc_vat_in: '1231', acc_wages_payable: '2130', acc_deductions_payable: '2150',
+  acc_inventory_raw: '1221', acc_ap: '2110', acc_grni: '2140', acc_vat_in: '1231', acc_wages_payable: '2130', acc_deductions_payable: '2150', acc_employee_advances: '1232',
   acc_custody: '1213', acc_opening_equity: '3400', acc_site_transfer: '5200', acc_overhead_materials: '5300',
   acc_indirect_labor: '5100', acc_admin_labor: '6100',
 };
@@ -34,6 +34,10 @@ export async function ensureBaseData() {
       if (await inUse(a.id)) await run('UPDATE accounts SET active=0 WHERE id=?', a.id);
       else await run('DELETE FROM accounts WHERE id=?', a.id);
     }
+  }
+  // ربط تلقائي لحساب سلف العاملين (1232) في القواعد القديمة لو لسه مش مربوط
+  if (!Number(await getSetting('acc_employee_advances'))) {
+    const a = await get(`SELECT id FROM accounts WHERE code='1232'`); if (a) await setSetting('acc_employee_advances', a.id);
   }
   for (const [key, label, prefix, padding] of DEFAULT_SEQUENCES)
     await run('INSERT INTO sequences(key,label,prefix,padding) VALUES(?,?,?,?) ON CONFLICT DO NOTHING', key, label, prefix, padding);

@@ -471,3 +471,9 @@ ALTER TABLE payroll_lines ADD COLUMN IF NOT EXISTS other_deductions NUMERIC NOT 
 ALTER TABLE labor_sheet_lines ADD COLUMN IF NOT EXISTS ot_days NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE labor_sheet_lines ADD COLUMN IF NOT EXISTS other_additions NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE labor_sheet_lines ADD COLUMN IF NOT EXISTS other_deductions NUMERIC NOT NULL DEFAULT 0;
+
+-- كشف اليومية: مدة الأجور (من/إلى + اسم المدة YYYY/NN) + سلفة المدة
+ALTER TABLE labor_sheets ADD COLUMN IF NOT EXISTS period_from TEXT;
+ALTER TABLE labor_sheets ADD COLUMN IF NOT EXISTS period_to TEXT;
+ALTER TABLE labor_sheets ADD COLUMN IF NOT EXISTS period_name TEXT;
+ALTER TABLE labor_sheet_lines ADD COLUMN IF NOT EXISTS advance NUMERIC NOT NULL DEFAULT 0;

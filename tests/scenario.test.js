@@ -165,16 +165,17 @@ near(r2((await all(`SELECT jl.debit, jl.credit FROM journal_lines jl WHERE jl.ac
 section('10) العمالة والمرتبات والمصروفات والعهد');
 const eDaily = saveDoc && await get(`SELECT 1`) && (async () => { await run(`INSERT INTO employees(code,name,emp_type,daily_rate,cost_class,default_stage_id) VALUES('EMP-T1','عامل صب','daily',200,'direct',?),('EMP-T2','سائق','daily',150,'indirect',NULL),('EMP-T3','مهندس','monthly',0,'direct',?),('EMP-T4','محاسب','monthly',0,'admin',NULL)`, stage.cast, stage.mold); await run(`UPDATE employees SET monthly_salary=6000 WHERE code='EMP-T3'`); await run(`UPDATE employees SET monthly_salary=5000 WHERE code='EMP-T4'`); return true; })();
 const E = async (c) => await val('SELECT id FROM employees WHERE code=?', c);
-await throws(async () => await saveDoc('labor_sheet', { date: '2026-11-10', lines: [{ employee_id: await E('EMP-T1'), days: 1 }] }, null, U), /مرحلة/, 'عمالة مباشرة بدون مرحلة');
-const sheet = await saveDoc('labor_sheet', { date: '2026-11-10', lines: [
+await throws(async () => await saveDoc('labor_sheet', { date: '2026-11-10', period_from: '2026-11-10', period_to: '2026-11-10', lines: [{ employee_id: await E('EMP-T1'), days: 1 }] }, null, U), /مرحلة/, 'عمالة مباشرة بدون مرحلة');
+const sheet = await saveDoc('labor_sheet', { date: '2026-11-10', period_from: '2026-11-10', period_to: '2026-11-10', lines: [
   { employee_id: await E('EMP-T1'), days: 1, project_id: prj, item_id: item1, stage_id: stage.cast },
   { employee_id: await E('EMP-T1'), days: 0.5, rate: 220, project_id: prj, item_id: item2, stage_id: stage.cast },
   { employee_id: await E('EMP-T2'), days: 1 }] }, null, U);
 near(sheet.total, 200 + 110 + 150, 'إجمالي اليومية');
 near(await cl(`cost_type='labor' AND stage_id=${stage.cast}`), 310, 'عمالة مرحلة الصب'); near(await glBal('5100'), 150, 'أجور غير مباشرة');
 near(await glBal('2130'), -460, 'أجور مستحقة');
-const sheet2 = await saveDoc('labor_sheet', { date: '2026-11-20', lines: [{ employee_id: await E('EMP-T2'), days: 2, ot_days: 1, rate: 100, other_additions: 50, other_deductions: 20 }] }, null, U);
-near(sheet2.total, 330, 'صافي المنصرف = أساسي + سهرات + إضافات − خصومات');
+const sheet2 = await saveDoc('labor_sheet', { date: '2026-11-20', period_from: '2026-11-07', period_to: '2026-11-20', lines: [{ employee_id: await E('EMP-T2'), days: 2, ot_days: 1, rate: 100, other_additions: 50, other_deductions: 20, advance: 30 }] }, null, U);
+near(sheet2.total, 300, 'صافي المنصرف = أساسي + سهرات + إضافات − خصومات − سلفة');
+if (!/^2026\/\d\d$/.test(sheet2.period_name)) throw new Error('صيغة اسم المدة غلط: ' + sheet2.period_name);
 const pr1 = await saveDoc('payroll', { month: '2026-11', date: '2026-11-30', lines: [
   { employee_id: await E('EMP-T3'), base: 6000, additions_days: 2.5, deductions_days: 0.5, allocations: [{ project_id: prj, item_id: item1, stage_id: stage.mold, percent: 60 }, { project_id: prj, item_id: item2, stage_id: stage.cast, percent: 40 }] },
   { employee_id: await E('EMP-T4'), base: 5000 }] }, null, U);

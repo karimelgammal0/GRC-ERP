@@ -517,19 +517,30 @@ async function checkDims(project_id, item_id, stage_id, needStage) {
 }
 DOCS.labor_sheet = {
   table: 'labor_sheets', lines: 'labor_sheet_lines', fk: 'sheet_id', seq: 'labor_sheet',
-  cols: ['date', 'notes'], lineCols: ['employee_id', 'days', 'ot_days', 'rate', 'other_additions', 'other_deductions', 'amount', 'cost_class', 'project_id', 'item_id', 'stage_id', 'notes'],
+  cols: ['date', 'notes', 'period_from', 'period_to', 'period_name'], lineCols: ['employee_id', 'days', 'ot_days', 'rate', 'other_additions', 'other_deductions', 'advance', 'amount', 'cost_class', 'project_id', 'item_id', 'stage_id', 'notes'],
   blank: (l) => !l.employee_id,
-  async validate(p, lines) {
+  async validate(p, lines, id) {
+    // مدة الأجور: من/إلى (مطلوبين في الكشف الجديد) + اسم المدة تلقائي YYYY/NN بترقيم متسلسل لكل سنة
+    const re = /^\d{4}-\d{2}-\d{2}$/; p.period_from = p.period_from || null; p.period_to = p.period_to || null;
+    if (!id && (!p.period_from || !p.period_to)) throw new AppError('حدد مدة الأجور: من تاريخ وإلى تاريخ');
+    if ((p.period_from && !re.test(p.period_from)) || (p.period_to && !re.test(p.period_to))) throw new AppError('تاريخ المدة غير صحيح');
+    if (p.period_from && p.period_to && p.period_from > p.period_to) throw new AppError('تاريخ بداية المدة لازم يكون قبل تاريخ النهاية');
+    if (!p.period_name && p.period_from) {
+      const yr = p.period_from.slice(0, 4);
+      const mx = (await all(`SELECT period_name FROM labor_sheets WHERE period_name LIKE ?`, `${yr}/%`)).reduce((m, r) => Math.max(m, parseInt(String(r.period_name).split('/')[1], 10) || 0), 0);
+      p.period_name = `${yr}/${String(mx + 1).padStart(2, '0')}`;
+    }
     for (const l of lines) {
       const e = await get('SELECT * FROM employees WHERE id=?', l.employee_id);
       if (!e) throw new AppError('عامل غير موجود');
+      l.advance = r2(l.advance); if (l.advance < 0) throw new AppError('سلفة المدة لا يمكن أن تكون سالبة');
       l.days = num(l.days); l.ot_days = num(l.ot_days); l.other_additions = r2(l.other_additions); l.other_deductions = r2(l.other_deductions);
       if (l.days < 0 || l.ot_days < 0 || l.other_additions < 0 || l.other_deductions < 0) throw new AppError('القيم لا يمكن أن تكون سالبة');
       if (!(l.days + l.ot_days > 0)) throw new AppError(`أيام الأساسي أو السهرات للعامل «${e.name}» لازم تكون أكبر من صفر`);
       l.cost_class = e.cost_class;
       if (l.rate === undefined || l.rate === null || l.rate === '') l.rate = e.daily_rate;
-      // قيمة الأساسي = أيام الأساسي × اليومية، قيمة السهرات = أيام السهرات × اليومية، والصافي = الأساسي + السهرات + إضافات أخرى − خصومات أخرى
-      l.rate = num(l.rate); l.amount = r2(l.days * l.rate + l.ot_days * l.rate + l.other_additions - l.other_deductions);
+      // قيمة الأساسي = أيام الأساسي × اليومية، قيمة السهرات = أيام السهرات × اليومية، والصافي = الأساسي + السهرات + إضافات أخرى − خصومات أخرى − سلفة المدة
+      l.rate = num(l.rate); l.amount = r2(l.days * l.rate + l.ot_days * l.rate + l.other_additions - l.other_deductions - l.advance);
       if (l.amount < 0) throw new AppError(`صافي المنصرف للعامل «${e.name}» سالب`);
       if (e.cost_class !== 'direct') { l.stage_id = l.stage_id || null; }
       await checkDims(l.project_id, l.item_id, l.stage_id, e.cost_class === 'direct');
@@ -544,6 +555,7 @@ DOCS.labor_sheet = {
       const dims = { project_id: l.project_id, item_id: l.item_id, stage_id: l.stage_id };
       out.push(dc(await laborAccount(l.cost_class, l.stage_id), cost, { ...dims, employee_id: l.employee_id }));
       out.push(cr(await acc('acc_wages_payable'), l.amount, { employee_id: l.employee_id }));
+      if (l.advance) out.push(cr(await acc('acc_employee_advances'), l.advance, { employee_id: l.employee_id }));
       await insertRow('cost_lines', { date: doc.date, source_type: 'labor', source_id: doc.id, source_line_id: l.id, cost_type: 'labor', cost_class: l.cost_class, ...dims,
         employee_id: l.employee_id, qty: r2(l.days + l.ot_days), amount: cost, description: doc.no },
       ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'project_id', 'item_id', 'stage_id', 'employee_id', 'qty', 'amount', 'description']);
