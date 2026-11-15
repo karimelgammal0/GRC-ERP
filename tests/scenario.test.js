@@ -176,6 +176,12 @@ near(await glBal('2130'), -460, 'أجور مستحقة');
 const sheet2 = await saveDoc('labor_sheet', { date: '2026-11-20', period_from: '2026-11-07', period_to: '2026-11-20', lines: [{ employee_id: await E('EMP-T2'), days: 2, ot_days: 1, rate: 100, other_additions: 50, other_deductions: 20, advance: 30 }] }, null, U);
 near(sheet2.total, 300, 'صافي المنصرف = أساسي + سهرات + إضافات − خصومات − سلفة');
 if (!/^2026\/\d\d$/.test(sheet2.period_name)) throw new Error('صيغة اسم المدة غلط: ' + sheet2.period_name);
+const adv = await saveDoc('labor_advance', { date: '2026-11-12', treasury_id: treasury, lines: [{ employee_id: await E('EMP-T2'), amount: 40 }] }, null, U);
+near(adv.total, 40, 'إجمالي سلف العمال');
+await throws(async () => await saveDoc('labor_advance', { date: '2026-11-12', lines: [{ employee_id: await E('EMP-T2'), amount: 40 }] }, null, U), /مصدر الدفع/, 'سلفة بدون مصدر');
+await throws(async () => await saveDoc('labor_advance', { date: '2026-11-12', treasury_id: treasury, lines: [{ employee_id: await E('EMP-T3'), amount: 40 }] }, null, U), /مش عامل يومية/, 'سلفة لشهري');
+near(await val(`SELECT SUM(l.amount) FROM labor_advance_lines l JOIN labor_advances a ON a.id=l.advance_id WHERE a.status='posted' AND a.date BETWEEN '2026-11-07' AND '2026-11-20'`), 40, 'سلف المدة');
+await voidDoc('labor_advance', adv.id, U);
 const pr1 = await saveDoc('payroll', { month: '2026-11', date: '2026-11-30', lines: [
   { employee_id: await E('EMP-T3'), base: 6000, additions_days: 2.5, deductions_days: 0.5, allocations: [{ project_id: prj, item_id: item1, stage_id: stage.mold, percent: 60 }, { project_id: prj, item_id: item2, stage_id: stage.cast, percent: 40 }] },
   { employee_id: await E('EMP-T4'), base: 5000 }] }, null, U);

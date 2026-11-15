@@ -10,6 +10,13 @@ const lbBasic = (l) => Math.round(((Number(l.days) || 0) * (Number(l.rate) || 0)
 const lbOt = (l) => Math.round(((Number(l.ot_days) || 0) * (Number(l.rate) || 0)) * 100) / 100;
 const lbNet = (l) => Math.round((lbBasic(l) + lbOt(l) + (Number(l.other_additions) || 0) - (Number(l.other_deductions) || 0) - (Number(l.advance) || 0)) * 100) / 100;
 
+// سلف عمال يومية → عمود «سلفة المدة»: مجموع سلف العامل المصروفة داخل مدة الكشف
+async function pullAdvances(ctx, overwrite = true) {
+  const { period_from: f, period_to: t } = ctx.header; if (!f || !t || f > t) return;
+  let r; try { r = await GET(`/helpers/labor-advances?from=${f}&to=${t}`); } catch { return; }
+  ctx.advMap = Object.fromEntries(r.rows.map((x) => [x.employee_id, x.amount]));
+  if (overwrite) { ctx.lines.forEach((l) => { if (l.employee_id) l.advance = ctx.advMap[l.employee_id] || 0; }); ctx.setLines(ctx.lines); }
+}
 export const laborSheetsPage = docScreen({ perm: 'hr.labor',
   type: 'labor_sheet', title: 'يوميات العمالة', noun: 'كشف يومية', newLabel: 'كشف يومية جديد',
   note: 'سجّل العمالة اليومية: كل عامل بعدد أيامه وأجره، ومحمّل على مشروع/بند/مرحلة. العمالة المباشرة بتتحمّل على مرحلة التصنيع، وغير المباشرة والإدارية على حساباتها بدون مشروع.',
@@ -17,9 +24,14 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
     { k: 'paid_amount', l: 'المصروف', num: true, fmt: (v) => fmt(v) }, { k: 'rem', l: 'المتبقي', num: true, text: (r) => (r.status === 'void' ? '' : fmt(r.total - r.paid_amount)) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   listFoot: (c, rows) => (c.k === 'total' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.total)) : c.k === 'no' ? 'الإجمالي' : ''),
   editor: {
+    onOpen: async (ctx) => {
+      if (ctx.doc) return;
+      try { const r = await GET('/helpers/labor-advances'); if (r.next_from) ctx.setHeader('period_from', r.next_from); } catch {}
+    },
+    onHeader: (k, v, ctx) => { if (k === 'period_from' || k === 'period_to') pullAdvances(ctx); },
     cols: 3, header: [dateF, { k: 'period_from', l: 'مدة الأجور: من تاريخ', t: 'date', req: 1 }, { k: 'period_to', l: 'إلى تاريخ', t: 'date', req: 1 }, { k: 'period_name', l: 'اسم المدة', t: 'text', readonly: true, ph: 'يتولّد تلقائياً عند الحفظ (YYYY/01)' }, { ...notesF, wide: false }],
     lines: { addLabel: '＋ جديد', blank: () => ({ days: 1 }), cols: [
-      { ...empCol, filter: (x) => x.emp_type === 'daily', onChange: (v, l, ctx) => { const e = byId('employees', v); if (!e) return; l.rate = e.daily_rate; l.stage_id = e.cost_class === 'direct' ? e.default_stage_id : null; ctx.setLines(ctx.lines); } },
+      { ...empCol, filter: (x) => x.emp_type === 'daily', onChange: (v, l, ctx) => { const e = byId('employees', v); if (!e) return; l.rate = e.daily_rate; l.stage_id = e.cost_class === 'direct' ? e.default_stage_id : null; if (ctx.advMap) l.advance = ctx.advMap[v] || 0; else pullAdvances(ctx); ctx.setLines(ctx.lines); } },
       { k: 'days', l: 'أيام أساسي', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'ot_days', l: 'أيام سهرات', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'rate', l: 'أجر اليوم', t: 'number', w: '90px' },
       { l: 'قيمة الأساسي', calc: (l) => lbBasic(l), fmt: (v) => fmt(v), w: '90px' }, { l: 'قيمة السهرات', calc: (l) => lbOt(l), fmt: (v) => fmt(v), w: '90px' },
       { k: 'other_additions', l: 'إضافات أخرى', t: 'number', w: '90px', blankZero: true }, { k: 'other_deductions', l: 'خصومات أخرى', t: 'number', w: '90px', blankZero: true }, { k: 'advance', l: 'سلفة المدة', t: 'number', w: '90px', blankZero: true },
@@ -29,6 +41,24 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
       { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', w: '110px' },
       { l: 'التصنيف', calc: (l) => labelOf(CLASS_OPTS, classOf(l.employee_id)).split(' (')[0] }] },
     totals: (ctx) => [['إجمالي أيام الأساسي', fq(total(ctx.lines, (l) => l.days))], ['إجمالي أيام السهرات', fq(total(ctx.lines, (l) => l.ot_days))], ['صافي المنصرف', fmt(total(ctx.lines, (l) => lbNet(l))), 'ok']],
+  },
+});
+
+// ---------------- سلف عمال يومية ----------------
+export const laborAdvancesPage = docScreen({ perm: 'hr.labor-advances',
+  type: 'labor_advance', title: 'سلف عمال يومية', noun: 'كشف سلف', newLabel: 'كشف سلف جديد',
+  note: 'صرف مبلغ لكل عامل يومية في نصف المدة. المبالغ دي بتترحّل تلقائياً لعمود «سلفة المدة» في كشف اليومية اللي مدته بتشمل تاريخ الصرف.',
+  listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'n_lines', l: 'عدد العاملين', num: true },
+    { k: 'total', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }, { k: 'src', l: 'من', text: (r) => r.treasury_name || r.custodian_name || '' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
+  listFoot: (c, rows) => (c.k === 'total' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.total)) : c.k === 'no' ? 'الإجمالي' : ''),
+  editor: {
+    cols: 3, header: [dateF,
+      { k: 'treasury_id', l: 'الدفع من خزينة/بنك', t: 'fk', ref: 'treasuries', help: 'خزينة أو عهدة — واحد فقط', onChange: (v, c) => { if (v) c.setHeader('custodian_id', null); } },
+      { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } }, { ...notesF, wide: true }],
+    lines: { addLabel: '＋ جديد', blank: () => ({}), cols: [
+      { ...empCol, w: '45%', filter: (x) => x.emp_type === 'daily' },
+      { k: 'amount', l: 'مبلغ السلفة', t: 'number', w: '140px', req: 1 }, { k: 'notes', l: 'ملاحظات', t: 'text' }] },
+    totals: (ctx) => [['عدد العاملين', fq(ctx.lines.filter((l) => l.employee_id).length)], ['إجمالي السلف', fmt(total(ctx.lines, (l) => Number(l.amount) || 0)), 'ok']],
   },
 });
 

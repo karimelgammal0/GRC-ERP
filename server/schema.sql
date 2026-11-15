@@ -477,3 +477,18 @@ ALTER TABLE labor_sheets ADD COLUMN IF NOT EXISTS period_from TEXT;
 ALTER TABLE labor_sheets ADD COLUMN IF NOT EXISTS period_to TEXT;
 ALTER TABLE labor_sheets ADD COLUMN IF NOT EXISTS period_name TEXT;
 ALTER TABLE labor_sheet_lines ADD COLUMN IF NOT EXISTS advance NUMERIC NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS labor_advances (       -- سلف عمال يومية (صرف مبلغ لكل عامل في نصف المدة)
+  id SERIAL PRIMARY KEY,
+  no TEXT NOT NULL UNIQUE, date TEXT NOT NULL, notes TEXT,
+  treasury_id INTEGER, custodian_id INTEGER,
+  total NUMERIC NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'posted',
+  created_by INTEGER, created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS'))
+);
+CREATE TABLE IF NOT EXISTS labor_advance_lines (
+  id SERIAL PRIMARY KEY,
+  advance_id INTEGER NOT NULL REFERENCES labor_advances(id) ON DELETE CASCADE,
+  employee_id INTEGER NOT NULL REFERENCES employees(id),
+  amount NUMERIC NOT NULL DEFAULT 0, notes TEXT
+);

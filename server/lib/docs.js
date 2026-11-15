@@ -572,6 +572,37 @@ DOCS.labor_sheet = {
 };
 
 // ============================================================
+//  سلف عمال يومية: صرف مبلغ لكل عامل في نصف المدة — بيترحّل تلقائياً لعمود «سلفة المدة» في كشف اليومية
+// ============================================================
+DOCS.labor_advance = {
+  table: 'labor_advances', lines: 'labor_advance_lines', fk: 'advance_id', seq: 'labor_advance',
+  cols: ['date', 'notes', 'treasury_id', 'custodian_id'], lineCols: ['employee_id', 'amount', 'notes'],
+  blank: (l) => !l.employee_id,
+  async validate(p, lines) {
+    p.treasury_id = p.treasury_id || null; p.custodian_id = p.custodian_id || null;
+    await sourceCheck(p);
+    const seen = new Set();
+    for (const l of lines) {
+      const e = await get('SELECT * FROM employees WHERE id=?', l.employee_id);
+      if (!e) throw new AppError('عامل غير موجود');
+      if (e.emp_type !== 'daily') throw new AppError(`«${e.name}» مش عامل يومية`);
+      if (seen.has(Number(l.employee_id))) throw new AppError(`العامل «${e.name}» مكرر في الكشف`); seen.add(Number(l.employee_id));
+      l.amount = r2(l.amount); if (!(l.amount > 0)) throw new AppError(`مبلغ السلفة للعامل «${e.name}» لازم يكون أكبر من صفر`);
+    }
+  },
+  async post(doc) {
+    const out = []; let total = 0;
+    for (const l of doc.lines) { total += l.amount; out.push(dc(await acc('acc_employee_advances'), l.amount, { employee_id: l.employee_id })); }
+    total = r2(total);
+    const c = await cashSide(doc);
+    out.push(cr(c.account_id, total, { treasury_id: c.treasury_id, custodian_id: c.custodian_id }));
+    await run('UPDATE labor_advances SET total=? WHERE id=?', total, doc.id);
+    await postJournal({ date: doc.date, source_type: 'labor_advance', source_id: doc.id, description: `سلف عمال يومية ${doc.no}`, lines: out });
+  },
+  async unpost(cur) { await deleteJournals('labor_advance', cur.id); },
+};
+
+// ============================================================
 //  كشف الرواتب الشهرية (مع توزيع التكلفة على المشروعات/المراحل)
 // ============================================================
 DOCS.payroll = {
