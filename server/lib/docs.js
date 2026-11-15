@@ -517,31 +517,38 @@ async function checkDims(project_id, item_id, stage_id, needStage) {
 }
 DOCS.labor_sheet = {
   table: 'labor_sheets', lines: 'labor_sheet_lines', fk: 'sheet_id', seq: 'labor_sheet',
-  cols: ['date', 'notes'], lineCols: ['employee_id', 'days', 'rate', 'amount', 'cost_class', 'project_id', 'item_id', 'stage_id', 'notes'],
+  cols: ['date', 'notes'], lineCols: ['employee_id', 'days', 'ot_days', 'rate', 'other_additions', 'other_deductions', 'amount', 'cost_class', 'project_id', 'item_id', 'stage_id', 'notes'],
   blank: (l) => !l.employee_id,
   async validate(p, lines) {
     for (const l of lines) {
       const e = await get('SELECT * FROM employees WHERE id=?', l.employee_id);
       if (!e) throw new AppError('عامل غير موجود');
-      if (!(num(l.days) > 0)) throw new AppError(`عدد الأيام للعامل «${e.name}» لازم يكون أكبر من صفر`);
+      l.days = num(l.days); l.ot_days = num(l.ot_days); l.other_additions = r2(l.other_additions); l.other_deductions = r2(l.other_deductions);
+      if (l.days < 0 || l.ot_days < 0 || l.other_additions < 0 || l.other_deductions < 0) throw new AppError('القيم لا يمكن أن تكون سالبة');
+      if (!(l.days + l.ot_days > 0)) throw new AppError(`أيام الأساسي أو السهرات للعامل «${e.name}» لازم تكون أكبر من صفر`);
       l.cost_class = e.cost_class;
       if (l.rate === undefined || l.rate === null || l.rate === '') l.rate = e.daily_rate;
-      l.rate = num(l.rate); l.amount = r2(l.days * l.rate);
+      // قيمة الأساسي = أيام الأساسي × اليومية، قيمة السهرات = أيام السهرات × اليومية، والصافي = الأساسي + السهرات + إضافات أخرى − خصومات أخرى
+      l.rate = num(l.rate); l.amount = r2(l.days * l.rate + l.ot_days * l.rate + l.other_additions - l.other_deductions);
+      if (l.amount < 0) throw new AppError(`صافي المنصرف للعامل «${e.name}» سالب`);
       if (e.cost_class !== 'direct') { l.stage_id = l.stage_id || null; }
       await checkDims(l.project_id, l.item_id, l.stage_id, e.cost_class === 'direct');
     }
   },
   async post(doc) {
-    const out = []; let total = 0;
+    const out = []; let total = 0, ded = 0;
     for (const l of doc.lines) {
-      total += l.amount;
+      // التكلفة = الأساسي + السهرات + إضافات أخرى، والمستحق للعامل = الصافي، وخصومات أخرى تروح لاستقطاعات العاملين
+      const cost = r2(l.days * l.rate + l.ot_days * l.rate + l.other_additions);
+      total += l.amount; ded += l.other_deductions;
       const dims = { project_id: l.project_id, item_id: l.item_id, stage_id: l.stage_id };
-      out.push(dc(await laborAccount(l.cost_class, l.stage_id), l.amount, { ...dims, employee_id: l.employee_id }));
+      out.push(dc(await laborAccount(l.cost_class, l.stage_id), cost, { ...dims, employee_id: l.employee_id }));
       out.push(cr(await acc('acc_wages_payable'), l.amount, { employee_id: l.employee_id }));
       await insertRow('cost_lines', { date: doc.date, source_type: 'labor', source_id: doc.id, source_line_id: l.id, cost_type: 'labor', cost_class: l.cost_class, ...dims,
-        employee_id: l.employee_id, qty: l.days, amount: l.amount, description: doc.no },
+        employee_id: l.employee_id, qty: r2(l.days + l.ot_days), amount: cost, description: doc.no },
       ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'project_id', 'item_id', 'stage_id', 'employee_id', 'qty', 'amount', 'description']);
     }
+    if (ded) out.push(cr(await acc('acc_deductions_payable'), r2(ded)));
     await run('UPDATE labor_sheets SET total=? WHERE id=?', r2(total), doc.id);
     await postJournal({ date: doc.date, source_type: 'labor', source_id: doc.id, description: `كشف يومية ${doc.no}`, lines: out });
   },

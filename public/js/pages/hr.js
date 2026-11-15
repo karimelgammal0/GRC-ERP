@@ -5,6 +5,11 @@ const empCol = { k: 'employee_id', l: 'العامل', t: 'fk', ref: 'employees',
 const classOf = (id) => byId('employees', id)?.cost_class;
 
 // ---------------- كشف يومية العمالة ----------------
+// يومية العمالة: قيمة الأساسي = أيام الأساسي × اليومية، قيمة السهرات = أيام السهرات × اليومية
+const lbBasic = (l) => Math.round(((Number(l.days) || 0) * (Number(l.rate) || 0)) * 100) / 100;
+const lbOt = (l) => Math.round(((Number(l.ot_days) || 0) * (Number(l.rate) || 0)) * 100) / 100;
+const lbNet = (l) => Math.round((lbBasic(l) + lbOt(l) + (Number(l.other_additions) || 0) - (Number(l.other_deductions) || 0)) * 100) / 100;
+
 export const laborSheetsPage = docScreen({ perm: 'hr.labor',
   type: 'labor_sheet', title: 'يوميات العمالة', noun: 'كشف يومية', newLabel: 'كشف يومية جديد',
   note: 'سجّل العمالة اليومية: كل عامل بعدد أيامه وأجره، ومحمّل على مشروع/بند/مرحلة. العمالة المباشرة بتتحمّل على مرحلة التصنيع، وغير المباشرة والإدارية على حساباتها بدون مشروع.',
@@ -14,13 +19,16 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
   editor: {
     cols: 3, header: [dateF, { ...notesF, wide: false }],
     lines: { blank: () => ({ days: 1 }), cols: [
-      { ...empCol, onChange: (v, l, ctx) => { const e = byId('employees', v); if (!e) return; l.rate = e.daily_rate; l.stage_id = e.cost_class === 'direct' ? e.default_stage_id : null; ctx.setLines(ctx.lines); } },
-      { k: 'days', l: 'الأيام', t: 'number', w: '80px', step: '0.25' }, { k: 'rate', l: 'أجر اليوم', t: 'number', w: '100px' },
-      { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, w: '17%', onChange: (v, l, ctx) => { const it = byId('project_items', l.item_id); if (it && it.project_id !== v) { l.item_id = null; ctx.setLines(ctx.lines); } } },
-      { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, w: '17%', filter: (x, l) => !l.project_id || x.project_id === l.project_id },
+      { ...empCol, filter: (x) => x.emp_type === 'daily', onChange: (v, l, ctx) => { const e = byId('employees', v); if (!e) return; l.rate = e.daily_rate; l.stage_id = e.cost_class === 'direct' ? e.default_stage_id : null; ctx.setLines(ctx.lines); } },
+      { k: 'days', l: 'أيام أساسي', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'ot_days', l: 'أيام سهرات', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'rate', l: 'أجر اليوم', t: 'number', w: '90px' },
+      { l: 'قيمة الأساسي', calc: (l) => lbBasic(l), fmt: (v) => fmt(v), w: '90px' }, { l: 'قيمة السهرات', calc: (l) => lbOt(l), fmt: (v) => fmt(v), w: '90px' },
+      { k: 'other_additions', l: 'إضافات أخرى', t: 'number', w: '90px', blankZero: true }, { k: 'other_deductions', l: 'خصومات أخرى', t: 'number', w: '90px', blankZero: true },
+      { l: 'صافي المنصرف', calc: (l) => lbNet(l), fmt: (v) => fmt(v), w: '100px' },
+      { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, w: '15%', onChange: (v, l, ctx) => { const it = byId('project_items', l.item_id); if (it && it.project_id !== v) { l.item_id = null; ctx.setLines(ctx.lines); } } },
+      { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, w: '15%', filter: (x, l) => !l.project_id || x.project_id === l.project_id },
       { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', w: '110px' },
-      { l: 'التصنيف', calc: (l) => labelOf(CLASS_OPTS, classOf(l.employee_id)).split(' (')[0] }, { l: 'المبلغ', calc: (l) => (Number(l.days) || 0) * (Number(l.rate) || 0), fmt: (v) => fmt(v), w: '100px' }] },
-    totals: (ctx) => [['إجمالي الأيام', fq(total(ctx.lines, (l) => l.days))], ['إجمالي الأجور', fmt(total(ctx.lines, (l) => (Number(l.days) || 0) * (Number(l.rate) || 0)))]],
+      { l: 'التصنيف', calc: (l) => labelOf(CLASS_OPTS, classOf(l.employee_id)).split(' (')[0] }] },
+    totals: (ctx) => [['إجمالي أيام الأساسي', fq(total(ctx.lines, (l) => l.days))], ['إجمالي أيام السهرات', fq(total(ctx.lines, (l) => l.ot_days))], ['صافي المنصرف', fmt(total(ctx.lines, (l) => lbNet(l))), 'ok']],
   },
 });
 

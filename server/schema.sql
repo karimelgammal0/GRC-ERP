@@ -466,3 +466,8 @@ ALTER TABLE payroll_lines ADD COLUMN IF NOT EXISTS additions_days NUMERIC NOT NU
 ALTER TABLE payroll_lines ADD COLUMN IF NOT EXISTS deductions_days NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE payroll_lines ADD COLUMN IF NOT EXISTS other_additions NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE payroll_lines ADD COLUMN IF NOT EXISTS other_deductions NUMERIC NOT NULL DEFAULT 0;
+
+-- كشف اليومية: أيام السهرات + إضافات أخرى وخصومات أخرى (amount = صافي المنصرف)
+ALTER TABLE labor_sheet_lines ADD COLUMN IF NOT EXISTS ot_days NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE labor_sheet_lines ADD COLUMN IF NOT EXISTS other_additions NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE labor_sheet_lines ADD COLUMN IF NOT EXISTS other_deductions NUMERIC NOT NULL DEFAULT 0;
