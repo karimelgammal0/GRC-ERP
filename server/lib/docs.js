@@ -191,7 +191,7 @@ DOCS.goods_receipt = {
 };
 
 // ============================================================
-//  فاتورة الشراء (آجل / نقدي) — مباشرة أو مطابقة لإذن استلام
+//  فاتورة الشراء المباشرة (آجل / نقدي) — بدون دورة طلب/أمر/استلام
 // ============================================================
 export async function invoiceOpenAmount(inv) {
   if (inv.payment_type === 'cash' || inv.status === 'void') return 0;
@@ -217,14 +217,7 @@ DOCS.purchase_invoice = {
       await must('materials', l.material_id, 'الخامة'); posQty(l);
       if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً');
       sub += r2(l.qty * l.unit_price);
-      if (l.grn_line_id) {
-        const g = await get(`SELECT gl.*, gr.supplier_id, gr.status, gr.payment_type gpt, gr.no gno FROM goods_receipt_lines gl JOIN goods_receipts gr ON gr.id=gl.receipt_id WHERE gl.id=?`, l.grn_line_id);
-        if (!g || g.status === 'void') throw new AppError('بند الاستلام غير متاح');
-        if (g.supplier_id !== Number(p.supplier_id)) throw new AppError('إذن الاستلام لمورد مختلف');
-        if (g.gpt !== p.payment_type) throw new AppError(`إذن الاستلام ${g.gno} طريقة شرائه ${g.gpt === 'cash' ? 'نقدي' : 'آجل'} — لازم الفاتورة تكون بنفس الطريقة`);
-        if (g.material_id !== Number(l.material_id)) throw new AppError('الخامة لا تطابق بند الاستلام');
-        if (num(l.qty) > g.qty - g.invoiced_qty + 1e-6) throw new AppError(`كمية الفاتورة أكبر من غير المفوتر في الاستلام (${r4(g.qty - g.invoiced_qty)})`);
-      }
+      if (l.grn_line_id) throw new AppError('الفاتورة دي كانت مطابقة لإذن استلام (منطق قديم اتلغى) — ألغِها وسجّل فاتورة مباشرة بدلها');
     }
     if (p.discount > sub + 0.001) throw new AppError('الخصم أكبر من إجمالي الفاتورة');
   },
@@ -241,36 +234,22 @@ DOCS.purchase_invoice = {
     await run('UPDATE purchase_invoices SET subtotal=?, vat_amount=?, total=?, due_date=? WHERE id=?', sub, vat, total, due, doc.id);
 
     const supplier = await nm('suppliers', doc.supplier_id);
-    let inv = 0, matched = 0; const pairs = [];
+    let inv = 0; const pairs = [];
     for (const [i, l] of L.entries()) {
       await run('UPDATE purchase_invoice_lines SET net_cost=? WHERE id=?', eff[i], l.id);
-      if (!l.grn_line_id) {
-        await addMove({ date: doc.date, warehouse_id: doc.warehouse_id, material_id: l.material_id, direction: 'in', qty: l.qty, value: eff[i],
-          doc_type: 'invoice', doc_id: doc.id, line_id: l.id, party: supplier, notes: doc.supplier_inv_no });
-        pairs.push([doc.warehouse_id, l.material_id]); inv += eff[i];
-      } else {
-        const g = await get('SELECT gl.*, gr.warehouse_id wh FROM goods_receipt_lines gl JOIN goods_receipts gr ON gr.id=gl.receipt_id WHERE gl.id=?', l.grn_line_id);
-        const grnVal = r2(l.qty * g.unit_price); const delta = r2(eff[i] - grnVal);
-        await run('UPDATE goods_receipt_lines SET invoiced_qty=invoiced_qty+? WHERE id=?', l.qty, l.grn_line_id);
-        matched += grnVal;
-        if (delta !== 0) {
-          // فرق سعر/نقل: بيتضاف لقيمة المخزون مباشرة (بدون حساب فروق أسعار)
-          await addMove({ date: doc.date, warehouse_id: g.wh, material_id: l.material_id, direction: 'in', qty: 0, value: delta,
-            doc_type: 'invoice', doc_id: doc.id, line_id: l.id, party: supplier, notes: 'فرق سعر/تحميل' });
-          pairs.push([g.wh, l.material_id]); inv += delta;
-        }
-      }
-    };
+      await addMove({ date: doc.date, warehouse_id: doc.warehouse_id, material_id: l.material_id, direction: 'in', qty: l.qty, value: eff[i],
+        doc_type: 'invoice', doc_id: doc.id, line_id: l.id, party: supplier, notes: doc.supplier_inv_no });
+      pairs.push([doc.warehouse_id, l.material_id]); inv += eff[i];
+    }
     await settle(pairs, { type: 'invoice', id: doc.id });
     const payer = doc.payment_type === 'cash'
       ? (doc.treasury_id ? { account_id: await val('SELECT account_id FROM treasuries WHERE id=?', doc.treasury_id), treasury_id: doc.treasury_id }
         : { account_id: await acc('acc_custody'), custodian_id: doc.custodian_id }) : null;
-    // قيمة الاستلامات المطابقة اتسجلت دائن على المورد/الخزينة وقت الاستلام — الفاتورة بتسجّل الباقي بس (فروق السعر والنقل والخصم والضريبة)
-    const net = r2(total - r2(matched)); const sup = { supplier_id: doc.supplier_id };
-    const lines = [dc(await acc('acc_inventory_raw'), r2(inv)), vat ? dc(await acc('acc_vat_in'), vat) : null,
-      net >= 0 ? cr(await acc('acc_ap'), net, sup) : dc(await acc('acc_ap'), -net, sup)].filter(Boolean).filter((l) => l.debit || l.credit);
-    if (payer && net) { lines.push(net > 0 ? dc(await acc('acc_ap'), net, sup) : cr(await acc('acc_ap'), -net, sup)); lines.push(net > 0 ? cr(payer.account_id, net, payer) : dc(payer.account_id, -net, payer)); }
-    if (lines.length >= 2) await postJournal({ date: doc.date, source_type: 'invoice', source_id: doc.id, description: `فاتورة شراء ${doc.no} — ${supplier}`, lines });
+    // المخزون بالتكلفة بدون الضريبة (الخصم بينقّص والنقل بيزوّد)، والضريبة في حسابها، والإجمالي على المورد (أو الخزينة لو نقدي)
+    const sup = { supplier_id: doc.supplier_id };
+    const lines = [dc(await acc('acc_inventory_raw'), r2(inv)), vat ? dc(await acc('acc_vat_in'), vat) : null, cr(await acc('acc_ap'), total, sup)].filter(Boolean).filter((l) => l.debit || l.credit);
+    if (payer) { lines.push(dc(await acc('acc_ap'), total, sup)); lines.push(cr(payer.account_id, total, payer)); }
+    await postJournal({ date: doc.date, source_type: 'invoice', source_id: doc.id, description: `فاتورة شراء ${doc.no} — ${supplier}`, lines });
   },
   async unpost(cur) {
     const a = await get(`SELECT v.no FROM voucher_allocations va JOIN vouchers v ON v.id=va.voucher_id WHERE va.invoice_id=? LIMIT 1`, cur.id);

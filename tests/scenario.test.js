@@ -61,43 +61,35 @@ near((await get('SELECT qty,avg_cost FROM material_stock WHERE material_id=?', T
 ok(!(await get(`SELECT 1 FROM accounts WHERE code='2140'`)) && !(await get(`SELECT 1 FROM settings WHERE key='acc_grni'`)), 'مفيش حساب/ربط للاستلامات غير المفوترة');
 near(await glBal('2110'), -400, 'الاستلام 400 دائن على الموردين');
 await throws(async () => await saveDoc('goods_receipt', { date: '2026-11-03', supplier_id: sup, warehouse_id: wh, order_id: po.id, lines: [{ material_id: T1, qty: 61, order_line_id: po.lines[0].id }] }, null, U), /المتبقي/, 'استلام زيادة عن الأمر');
-// فاتورة مطابقة للاستلام بسعر 11 + نقل 40 + ضريبة 14%
-const inv1 = await saveDoc('purchase_invoice', { date: '2026-11-04', supplier_id: sup, warehouse_id: wh, payment_type: 'credit', freight: 40, vat_percent: 14, discount: 0,
-  lines: [{ material_id: T1, qty: 40, unit_price: 11, grn_line_id: grn1.lines[0].id }] }, null, U);
-near(inv1.subtotal, 440, 'إجمالي الفاتورة'); near(inv1.vat_amount, 61.6, 'الضريبة 14% على 440'); near(inv1.total, 541.6, 'الإجمالي = 440 + 40 نقل + 61.6');
-// التكلفة الفعلية 480 (440+40) بدل 400 → المتوسط 12
-near((await get('SELECT value,avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 12, 'المتوسط بعد تحميل الفرق والنقل = 12');
-near(await glBal('1231'), 61.6, 'الضريبة المضافة في حسابها مش في قيمة المخزون (المتوسط 12 فوق)');
-near(await glBal('2110'), -541.6, 'الموردين 541.6 دائن (مع بقية أرصدة المورد)');
-await throws(async () => await voidDoc('goods_receipt', grn1.id, U), /فاتورة/, 'لا يمكن إلغاء استلام مفوتر');
+// لا يوجد ربط بين الفاتورة والاستلام: أي فاتورة بتتسجّل مباشرة (والمنطق القديم متاح بس كرفض)
+await throws(async () => await saveDoc('purchase_invoice', { date: '2026-11-04', supplier_id: sup, warehouse_id: wh, payment_type: 'credit', lines: [{ material_id: T1, qty: 40, unit_price: 11, grn_line_id: grn1.lines[0].id }] }, null, U), /منطق قديم/, 'مفيش مطابقة فاتورة بإذن استلام');
 const t0 = await glBal('1211'); const ap0 = await glBal('2110');
 const grnC = await saveDoc('goods_receipt', { date: '2026-11-04', supplier_id: sup, warehouse_id: wh, payment_type: 'cash', treasury_id: treasury, lines: [{ material_id: T1, qty: 1, unit_price: 10 }] }, null, U);
 near(await glBal('2110'), ap0, 'استلام نقدي: صافي أثره على الموردين صفر'); near(await glBal('1211'), t0 - 10, 'الخزينة اتخصم منها 10');
 await throws(async () => await saveDoc('goods_receipt', { date: '2026-11-04', supplier_id: sup, warehouse_id: wh, payment_type: 'cash', lines: [{ material_id: T1, qty: 1, unit_price: 10 }] }, null, U), /مصدر الدفع/, 'استلام نقدي بدون مصدر');
-await throws(async () => await saveDoc('purchase_invoice', { date: '2026-11-04', supplier_id: sup, warehouse_id: wh, payment_type: 'credit', lines: [{ material_id: T1, qty: 1, unit_price: 10, grn_line_id: grnC.lines[0].id }] }, null, U), /بنفس الطريقة/, 'فاتورة آجل على استلام نقدي');
 await voidDoc('goods_receipt', grnC.id, U);
 
 section('4) فاتورة مباشرة آجلة + نقدية من الخزينة + نقدية من عهدة (متوسط مرجح)');
 const invB = await saveDoc('purchase_invoice', { date: '2026-11-05', supplier_id: sup, warehouse_id: wh, payment_type: 'credit', lines: [{ material_id: T1, qty: 60, unit_price: 15 }] }, null, U);
-// 40 × 12 = 480 + 60 × 15 = 900 → 1380 / 100 = 13.8
-near((await get('SELECT qty,avg_cost,value FROM material_stock WHERE material_id=?', T1)).avg_cost, 13.8, 'المتوسط المرجح 13.8');
+// 40 × 12 = 480 + 60 × 15 = 900 → 1300 / 100 = 13
+near((await get('SELECT qty,avg_cost,value FROM material_stock WHERE material_id=?', T1)).avg_cost, 13, 'المتوسط المرجح 13');
 const invC = await saveDoc('purchase_invoice', { date: '2026-11-05', supplier_id: sup2, warehouse_id: wh, payment_type: 'cash', treasury_id: treasury, lines: [{ material_id: T1, qty: 100, unit_price: 20 }] }, null, U);
-// (1380 + 2000) / 200 = 16.9
-near((await get('SELECT avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 16.9, 'المتوسط بعد النقدي 16.9');
+// (1300 + 2000) / 200 = 16.5
+near((await get('SELECT avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 16.5, 'المتوسط بعد النقدي 16.5');
 near(await glBal('1211'), -2000, 'الخزينة نقصت 2000');
 const invD = await saveDoc('purchase_invoice', { date: '2026-11-05', supplier_id: sup2, warehouse_id: wh, payment_type: 'cash', custodian_id: cust, lines: [{ material_id: T1, qty: 10, unit_price: 17 }] }, null, U);
 near(await glBal('1213'), -170, 'العهدة نقصت 170');
 await throws(async () => await saveDoc('purchase_invoice', { date: '2026-11-05', supplier_id: sup2, warehouse_id: wh, payment_type: 'cash', lines: [{ material_id: T1, qty: 1, unit_price: 1 }] }, null, U), /مصدر دفع/, 'الشراء النقدي بدون مصدر');
-// الآن: 210 وحدة، قيمة 3380+170 = 3550 → متوسط 16.9048
+// الآن: 210 وحدة، قيمة 3300+170 = 3470 → متوسط 16.5238
 const st0 = await get('SELECT qty,value,avg_cost FROM material_stock WHERE material_id=?', T1);
-near(st0.qty, 210, 'رصيد 210'); near(st0.value, 3550, 'قيمة 3550');
+near(st0.qty, 210, 'رصيد 210'); near(st0.value, 3470, 'قيمة 3470');
 
 section('5) الصرف على مشروع + بند + مرحلة');
 await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, qty: 1 }] }, null, U), /المشروع والبند والمرحلة/, 'الصرف بدون بند ومرحلة');
 await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, item_id: itemOther, stage_id: stage.cast, lines: [{ material_id: T1, qty: 1 }] }, null, U), /لا يتبع المشروع/, 'بند من مشروع آخر');
 await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, item_id: item1, stage_id: stage.cast, lines: [{ material_id: T1, qty: 999 }] }, null, U), /لا يكفي/, 'صرف أكبر من الرصيد');
 const iss1 = await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, item_id: item1, stage_id: stage.cast, lines: [{ material_id: T1, qty: 50 }] }, null, U);
-near(iss1.lines[0].unit_cost, 16.9048, 'تكلفة الصرف = المتوسط', 0.001); near(iss1.lines[0].total, r2(50 * 3550 / 210), 'قيمة الصرف');
+near(iss1.lines[0].unit_cost, 16.5238, 'تكلفة الصرف = المتوسط', 0.001); near(iss1.lines[0].total, r2(50 * 3470 / 210), 'قيمة الصرف');
 const iss2 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, item_id: item2, stage_id: stage.mold, lines: [{ material_id: T1, qty: 20 }] }, null, U);
 const iss3 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'site', warehouse_id: wh, project_id: prj, site_id: site, lines: [{ material_id: T1, qty: 10 }] }, null, U);
 // التحويل لموقع: الموقع مطلوب بس لو المشروع متكود له مواقع
@@ -112,8 +104,8 @@ if (prj3) {
   await voidDoc('stock_issue', nosite.id, U);
 } else ok(false, 'لازم يكون فيه مشروع تالت في البيانات الأساسية');
 const iss4 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, qty: 5 }] }, null, U);
-const avgNow = r2(3550 / 210);
-near((await get('SELECT avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 16.9048, 'الصرف لا يغيّر المتوسط', 0.001);
+const avgNow = r2(3470 / 210);
+near((await get('SELECT avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 16.5238, 'الصرف لا يغيّر المتوسط', 0.001);
 near((await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty, 125, 'الرصيد بعد الصرف 125');
 // ربط التكلفة بالأستاذ
 const cl = async (w) => await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE ${w}`);
@@ -134,7 +126,7 @@ near(await glBal('1224'), iss1b.total, 'القيد اتحدّث');
 near(await stockTotal(), await glBal('1221'), 'قيمة المخزون = الأستاذ بعد إعادة التقييم');
 // إلغاء الفاتورة بأثر رجعي يرجع الأرقام
 const lastInv = (await get(`SELECT id FROM purchase_invoices ORDER BY id DESC LIMIT 1`)).id; await voidDoc('purchase_invoice', lastInv, U);
-near((await get('SELECT unit_cost FROM stock_issue_lines WHERE issue_id=?', iss1.id)).unit_cost, 16.9048, 'رجعت التكلفة بعد الإلغاء', 0.001);
+near((await get('SELECT unit_cost FROM stock_issue_lines WHERE issue_id=?', iss1.id)).unit_cost, 16.5238, 'رجعت التكلفة بعد الإلغاء', 0.001);
 near(await stockTotal(), await glBal('1221'), 'الاتساق بعد الإلغاء');
 
 section('7) مرتجع صرف / إلغاء / حماية');
@@ -158,16 +150,16 @@ near(await glBal('5300'), iss4.lines[0].total - adj.lines[0].value, 'عجز ال
 
 section('9) سداد الموردين وكشف الحساب');
 const openInv = invB.id;
-const pay = await saveDoc('voucher', { date: '2026-11-10', kind: 'supplier_payment', supplier_id: sup, treasury_id: treasury, amount: 1000, allocations: [{ invoice_id: openInv, amount: 900 }, { invoice_id: inv1.id, amount: 100 }] }, null, U);
+const pay = await saveDoc('voucher', { date: '2026-11-10', kind: 'supplier_payment', supplier_id: sup, treasury_id: treasury, amount: 900, allocations: [{ invoice_id: openInv, amount: 900 }] }, null, U);
 near((await get('SELECT total FROM purchase_invoices WHERE id=?', openInv)).total - 900, 0, 'فاتورة B اتسددت بالكامل');
 await throws(async () => await voidDoc('purchase_invoice', openInv, U), /سداد/, 'إلغاء فاتورة مسددة');
 await throws(async () => await saveDoc('voucher', { date: '2026-11-10', kind: 'supplier_payment', supplier_id: sup, treasury_id: treasury, amount: 5000, allocations: [{ invoice_id: openInv, amount: 5000 }] }, null, U), /المتبقي/, 'سداد أكبر من المتبقي');
 const { reportRouter } = await import('../server/routes/reports.js');
 const stmt = await all(`SELECT jl.debit, jl.credit FROM journal_lines jl WHERE jl.account_id=? AND jl.supplier_id=?`, await acc('acc_ap'), sup);
 const supBal = r2(stmt.reduce((s, x) => s + x.credit - x.debit, 0));
-near(supBal, r2(541.6 + 900 - 1000), 'رصيد المورد = فواتير − سداد');
+near(supBal, r2(400 + 900 - 900), 'رصيد المورد = استلام + فواتير − سداد');
 await voidDoc('voucher', pay.id, U);
-near(r2((await all(`SELECT jl.debit, jl.credit FROM journal_lines jl WHERE jl.account_id=? AND jl.supplier_id=?`, await acc('acc_ap'), sup)).reduce((s, x) => s + x.credit - x.debit, 0)), 1441.6, 'إلغاء السند رجّع الرصيد');
+near(r2((await all(`SELECT jl.debit, jl.credit FROM journal_lines jl WHERE jl.account_id=? AND jl.supplier_id=?`, await acc('acc_ap'), sup)).reduce((s, x) => s + x.credit - x.debit, 0)), 1300, 'إلغاء السند رجّع الرصيد');
 
 section('10) العمالة والمرتبات والمصروفات والعهد');
 const eDaily = saveDoc && await get(`SELECT 1`) && (async () => { await run(`INSERT INTO employees(code,name,emp_type,daily_rate,cost_class,default_stage_id) VALUES('EMP-T1','عامل صب','daily',200,'direct',?),('EMP-T2','سائق','daily',150,'indirect',NULL),('EMP-T3','مهندس','monthly',0,'direct',?),('EMP-T4','محاسب','monthly',0,'admin',NULL)`, stage.cast, stage.mold); await run(`UPDATE employees SET monthly_salary=6000 WHERE code='EMP-T3'`); await run(`UPDATE employees SET monthly_salary=5000 WHERE code='EMP-T4'`); return true; })();
@@ -239,7 +231,7 @@ ok(card.moves.length > 5, 'كارت الصنف'); near(card.closing.qty, 140, '�
 const bal = await api('/api/reports/stock-balances?hide_zero=1'); near(bal.total_value, await stockTotal(), 'تقييم المخزون = الأرصدة');
 const bal2 = await api(`/api/reports/stock-balances?as_of=2026-11-04&hide_zero=1`); ok(bal2.rows.length > 0, 'أرصدة المخزن في تاريخ سابق');
 const tbr = await api('/api/reports/trial-balance'); near(tbr.totals.debit, tbr.totals.credit, 'ميزان المراجعة من التقرير متزن');
-const ss = await api(`/api/reports/supplier-statement?supplier_id=${sup}`); near(ss.closing, 1441.6, 'كشف حساب المورد');
+const ss = await api(`/api/reports/supplier-statement?supplier_id=${sup}`); near(ss.closing, 1300, 'كشف حساب المورد');
 const tr = await api('/api/reports/treasury-balances'); ok(tr.length === 2, 'أرصدة الخزن');
 const dash = await api('/api/reports/dashboard'); near(dash.stock_value, await stockTotal(), 'لوحة التحكم');
 const lk = await api('/api/lookups'); ok(lk.materials.length >= 102 && lk.accounts.length > 30, 'القوائم المرجعية');

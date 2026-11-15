@@ -37,8 +37,7 @@ const LISTS = {
   purchase_order: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, s.name supplier_name,
       (SELECT COALESCE(SUM(qty*unit_price),0) FROM purchase_order_lines WHERE order_id=d.id) total FROM purchase_orders d JOIN suppliers s ON s.id=d.supplier_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   goods_receipt: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, s.name supplier_name, w.name warehouse_name,
-      (SELECT COALESCE(SUM(qty*unit_price),0) FROM goods_receipt_lines WHERE receipt_id=d.id) total,
-      (SELECT COALESCE(SUM(qty-invoiced_qty),0) FROM goods_receipt_lines WHERE receipt_id=d.id) uninvoiced_qty
+      (SELECT COALESCE(SUM(qty*unit_price),0) FROM goods_receipt_lines WHERE receipt_id=d.id) total
       FROM goods_receipts d JOIN suppliers s ON s.id=d.supplier_id JOIN warehouses w ON w.id=d.warehouse_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   purchase_invoice: async (q) => { const { sql, p } = where(q); const rows = await all(`SELECT d.*, s.name supplier_name, w.name warehouse_name,
       (SELECT COALESCE(SUM(amount),0) FROM voucher_allocations WHERE invoice_id=d.id) paid
@@ -110,9 +109,6 @@ export function helperRouter() {
   r.get('/open-orders', async (req, res) => res.json(await all(`SELECT id,no,date FROM purchase_orders WHERE supplier_id=? AND status IN ('open','partial') ORDER BY id DESC`, req.query.supplier_id)));
   r.get('/order-lines', async (req, res) => res.json(await all(`SELECT l.*, m.name material_name, l.qty-l.received_qty remaining FROM purchase_order_lines l JOIN materials m ON m.id=l.material_id
       WHERE l.order_id=? AND l.qty-l.received_qty>0.000001`, req.query.order_id)));
-  r.get('/uninvoiced-grn-lines', async (req, res) => res.json(await all(`SELECT gl.id, gl.material_id, gl.unit_price, gl.qty-gl.invoiced_qty remaining, gr.no receipt_no, gr.payment_type, gr.treasury_id, gr.custodian_id, gr.date, m.name material_name
-      FROM goods_receipt_lines gl JOIN goods_receipts gr ON gr.id=gl.receipt_id JOIN materials m ON m.id=gl.material_id
-      WHERE gr.supplier_id=? AND gr.status='posted' AND gl.qty-gl.invoiced_qty>0.000001 ORDER BY gr.date, gl.id`, req.query.supplier_id)));
   r.get('/open-invoices', async (req, res) => {
     const rows = await all(`SELECT * FROM purchase_invoices WHERE supplier_id=? AND payment_type='credit' AND status='posted' ORDER BY date, id`, req.query.supplier_id);
     const out = []; for (const i of rows) { const open = await invoiceOpenAmount(i); if (open > 0.004) out.push({ id: i.id, no: i.no, date: i.date, due_date: i.due_date, total: i.total, open }); }

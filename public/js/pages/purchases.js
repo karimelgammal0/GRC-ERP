@@ -58,7 +58,7 @@ export const receiptsPage = docScreen({ perm: 'purchases.receipts',
   note: 'الاستلام بيدخّل الخامة للمخزن فوراً بسعر أمر الشراء، وبيسجّل القيد دائن مباشرة على المورد (آجل) أو على الخزينة/العهدة (نقدي). فاتورة المورد بعد كده بتسجّل الفروق والضريبة والخصم بس.',
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'supplier_ref', l: 'مرجع المورد' }, { k: 'payment_type', l: 'الدفع', render: (r) => (r.payment_type === 'cash' ? badge('نقدي', 'info') : badge('آجل', 'warn')) },
-    { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'uninvoiced_qty', l: 'غير مفوتر', render: (r) => (r.status === 'void' ? '' : r.uninvoiced_qty > 0.000001 ? badge('غير مفوتر', 'warn') : badge('مفوتر', 'ok')) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
+    { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
     cols: 3, rebuildOn: ['payment_type'], defaults: () => ({ warehouse_id: defaultWh(), payment_type: 'credit' }),
     header: (ctx) => { const cash = ctx.header.payment_type === 'cash'; return [dateF, { ...supF, lockOnEdit: true, onChange: async (v, c) => { c.setHeader('order_id', null); await loadOrders(c); } },
@@ -68,7 +68,7 @@ export const receiptsPage = docScreen({ perm: 'purchases.receipts',
       cash && { k: 'treasury_id', l: 'الدفع من خزينة/بنك', t: 'fk', ref: 'treasuries', help: 'اختر خزينة أو عهدة (واحد فقط)', onChange: (v, c) => { if (v) c.setHeader('custodian_id', null); } },
       cash && { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } },
       { k: 'supplier_ref', l: 'رقم إذن/فاتورة المورد', t: 'text' }, { ...notesF, wide: false }].filter(Boolean); },
-    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المستلمة', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal, { l: 'تم تفويته', calc: (l) => l.invoiced_qty ?? 0, fmt: fq }] },
+    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المستلمة', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal] },
     tools: [{ label: 'سحب المتبقي من أمر الشراء', run: async (ctx) => {
       const id = Number(ctx.header.order_id); if (!id) throw new Error('اختر أمر الشراء أولاً');
       const rows = await GET('/helpers/order-lines', { order_id: id });
@@ -94,7 +94,7 @@ const invCalc = (ctx) => {
 };
 export const invoicesPage = docScreen({ perm: 'purchases.invoices',
   type: 'purchase_invoice', title: 'فواتير الشراء', noun: 'فاتورة شراء', newLabel: 'فاتورة شراء جديدة',
-  note: 'تقدر تسجّل فاتورة مشتريات مباشرة من هنا بدون طلب شراء ولا أمر ولا إذن استلام — الخامات بتدخل المخزن بتكلفة الفاتورة (بدون الضريبة). الفاتورة آجلة (على حساب المورد) أو نقدية (من خزينة أو عهدة). وتقدر تطابقها مع إذن استلام سابق، والخصم ومصاريف النقل بتتوزّع على تكلفة الخامات تلقائياً.',
+  note: 'تقدر تسجّل فاتورة مشتريات مباشرة من هنا بدون طلب شراء ولا أمر ولا إذن استلام — الخامات بتدخل المخزن بتكلفة الفاتورة (بدون الضريبة). الفاتورة آجلة (على حساب المورد) أو نقدية (من خزينة أو عهدة). والخصم ومصاريف النقل بتتوزّع على تكلفة الخامات تلقائياً.',
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'supplier_inv_no', l: 'فاتورة المورد' }, { k: 'payment_type', l: 'الدفع', render: (r) => (r.payment_type === 'cash' ? badge('نقدي', 'info') : badge('آجل', 'warn')) },
     { k: 'total', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }, { k: 'open_amount', l: 'المتبقي', num: true, fmt: (v, r) => (r.payment_type === 'cash' || r.status === 'void' ? '' : fmt(v)) }, { k: 'due_date', l: 'الاستحقاق' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -109,19 +109,7 @@ export const invoicesPage = docScreen({ perm: 'purchases.invoices',
         cash && { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } },
         { k: 'discount', l: 'خصم (مبلغ)', t: 'number' }, { k: 'freight', l: 'مصاريف نقل وتحميل (تُضاف للتكلفة)', t: 'number' }, { k: 'vat_percent', l: 'ضريبة القيمة المضافة %', t: 'number' }, { ...notesF }].filter(Boolean);
     },
-    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal, { l: 'مطابقة استلام', calc: (l) => (l.grn_line_id ? (l._grn_no || 'مطابق ✓') : 'مباشر') }] },
-    tools: [{ label: 'سحب من استلامات غير مفوترة', run: async (ctx) => {
-      const s = ctx.header.supplier_id; if (!s) throw new Error('اختر المورد أولاً');
-      const rows = await GET('/helpers/uninvoiced-grn-lines', { supplier_id: s });
-      if (!rows.length) throw new Error('لا توجد استلامات غير مفوترة لهذا المورد');
-      const chk = rows.map((r) => ({ r, c: h('input', { type: 'checkbox' }) }));
-      modal({ title: 'اختر بنود الاستلام المراد تفويتها', wide: true, body: h('div.tbl-wrap', h('table.tbl.compact', h('thead', h('tr', ['', 'إذن الاستلام', 'التاريخ', 'الخامة', 'غير المفوتر', 'سعر الاستلام'].map((x) => h('th', x)))),
-        h('tbody', chk.map(({ r, c }) => h('tr', h('td', c), h('td', r.receipt_no), h('td', r.date), h('td', r.material_name), h('td.num', fq(r.remaining)), h('td.num', fmt(r.unit_price)))))))
-      , buttons: [{ label: 'إضافة للفاتورة', cls: 'primary', onClick: () => {
-        const add = chk.filter((x) => x.c.checked).map(({ r }) => ({ material_id: r.material_id, qty: r.remaining, unit_price: r.unit_price, grn_line_id: r.id, _grn_no: r.receipt_no }));
-        const base = ctx.lines.filter((l) => l.material_id); ctx.setLines([...base, ...add]);
-        const g = chk.find((x) => x.c.checked)?.r; if (g && ctx.header.payment_type !== g.payment_type) { ctx.setHeader('payment_type', g.payment_type); ctx.setHeader('treasury_id', g.treasury_id || null); ctx.setHeader('custodian_id', g.custodian_id || null); } toast('أدخل أسعار الفاتورة الفعلية لو اختلفت عن الاستلام'); } }] });
-    } }],
+    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal] },
     totals: (ctx) => { const c = invCalc(ctx); const out = [['الإجمالي قبل الخصم', fmt(c.sub)]]; if (c.d) out.push(['الخصم', fmt(c.d)]); if (c.f) out.push(['نقل وتحميل', fmt(c.f)]); if (c.vat) out.push(['الضريبة', fmt(c.vat)]);
       out.push(['إجمالي الفاتورة', fmt(c.tot)]); if (ctx.doc && ctx.doc.payment_type === 'credit') out.push(['المتبقي على المورد', fmt(ctx.doc.open_amount), 'warn']); return out; },
     prepare: (p) => { if (p.payment_type === 'credit') { p.treasury_id = null; p.custodian_id = null; } },
