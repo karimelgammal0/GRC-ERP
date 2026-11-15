@@ -13,7 +13,8 @@ export function docScreen(cfg) {
         { k: 'status', l: 'الحالة', t: 'select', options: [['', 'الكل'], ['posted', 'معتمد'], ['void', 'ملغي'], ...(cfg.statuses || [])] }];
       const load = async (v) => {
         const rows = await GET(`/doc/${cfg.type}`, { ...cfg.fixed, ...v });
-        const t = table({ cols: cfg.listCols, rows, onRow: (r) => showEditor(r.id), rowClass: (r) => (r.status === 'void' ? 'void' : ''), name: cfg.title, foot: cfg.listFoot, empty: `لا توجد ${cfg.title}` });
+        const pcol = cfg.print ? [{ k: '_p', l: '', render: (r) => h('button.btn.sm', { title: 'طباعة', onclick: guard(async (ev) => { ev.stopPropagation(); cfg.print(await GET(`/doc/${cfg.type}/${r.id}`)); }) }, '🖨') }] : [];
+        const t = table({ cols: [...cfg.listCols, ...pcol], rows, onRow: (r) => showEditor(r.id), rowClass: (r) => (r.status === 'void' ? 'void' : ''), name: cfg.title, foot: cfg.listFoot, empty: `لا توجد ${cfg.title}` });
         tableHost.replaceChildren(t);
       };
       const dv = (v) => (typeof v === 'function' ? v() : v);
@@ -88,7 +89,7 @@ export function docScreen(cfg) {
       host.replaceChildren(
         h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); showList(); } }, '← ' + cfg.title)),
         h('div.doc-head', h('span.doc-no', doc ? doc.no : `${cfg.noun} جديد`), doc ? statusBadge(doc.status) : null, h('span.grow'),
-          doc ? h('button.btn.sm', { onclick: () => window.print() }, '🖨 طباعة') : null,
+          doc ? h('button.btn.sm', { onclick: () => (cfg.print ? cfg.print(doc) : window.print()) }, '🖨 طباعة') : null,
           doc && !voided && cfg.canVoid !== false && (!cfg.perm || can(cfg.perm + '.void')) ? h('button.btn.sm.danger', { onclick: voidIt }, 'إلغاء المستند') : null),
         voided ? h('div.note.bad', 'هذا المستند ملغي — للعرض فقط.') : noEdit ? h('div.note', 'عرض فقط — ليس لديك صلاحية التعديل على هذا المستند.') : null,
         doc && !readonly ? h('div.note', 'تعديل المستند يعكس أثره القديم ويرحّل الجديد تلقائياً (المخزون والتكلفة والقيود).') : null,

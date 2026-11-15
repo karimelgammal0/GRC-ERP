@@ -214,3 +214,27 @@ export function filterBar(fields, onRun, init = {}) {
   return bar;
 }
 export const tag = (txt) => h('span.tag', txt);
+
+/** طباعة مستند بشكل رسمي (رأس الشركة + بيانات + جدول بنود + إمضاءات) عبر iframe مخفي */
+export function printSheet({ title, no, date, meta = [], cols = [], rows = [], totals = [], notes = '', sign = [] }) {
+  const e = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${e(title)} ${e(no)}</title><style>
+    body{font-family:Tahoma,Arial,sans-serif;font-size:13px;color:#111;margin:24px}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px}
+    .co{font-size:17px;font-weight:700}.ttl{font-size:20px;font-weight:700;text-align:center;margin:6px 0 12px}
+    .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin-bottom:12px}.meta b{color:#555;font-weight:600}
+    table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #444;padding:5px 7px;text-align:right}th{background:#eee}
+    td.n{text-align:center}.tot{display:flex;justify-content:flex-end;gap:24px;font-weight:700;margin-bottom:10px}
+    .sig{display:flex;justify-content:space-around;margin-top:48px}.sig div{text-align:center;min-width:140px;border-top:1px solid #111;padding-top:6px}
+  </style></head><body>
+    <div class="top"><div class="co">${e(META.settings?.company_name || '')}</div><div>رقم: <b>${e(no)}</b><br>التاريخ: <b>${e(date)}</b></div></div>
+    <div class="ttl">${e(title)}</div>
+    <div class="meta">${meta.filter((m) => m[1]).map(([k, v]) => `<div><b>${e(k)}:</b> ${e(v)}</div>`).join('')}</div>
+    <table><thead><tr><th>#</th>${cols.map((c) => `<th>${e(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r, i) => `<tr><td class="n">${i + 1}</td>${r.map((c) => `<td>${e(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>
+    ${totals.length ? `<div class="tot">${totals.map(([k, v]) => `<span>${e(k)}: ${e(v)}</span>`).join('')}</div>` : ''}
+    ${notes ? `<div><b>ملاحظات:</b> ${e(notes)}</div>` : ''}
+    <div class="sig">${sign.map((s) => `<div>${e(s)}</div>`).join('')}</div></body></html>`;
+  const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
+  document.body.append(f); const d = f.contentWindow.document; d.open(); d.write(html); d.close();
+  setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 2000); }, 250);
+}
