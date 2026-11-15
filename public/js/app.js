@@ -55,8 +55,8 @@ function changePassword(force) {
 function shell() {
   const nav = h('nav');
   const view = h('main.main');
-  const cur = parse();
   const draw = () => {
+    const cur = parse(); // الصفحة الحالية بتتحسب عند كل رسم عشان التظليل يتبع الصفحة المفتوحة
     nav.replaceChildren(...NAV.filter(groupOk).map((g) => h('div.nav-group' + (open.has(g.id) ? '.open' : ''),
       h('div.nav-title', { onclick: () => { if (g.direct) { location.hash = `#/${g.id}/${g.items[0][0]}`; return; } open.has(g.id) ? open.delete(g.id) : open.add(g.id); draw(); } }, h('span.ico', g.ico), g.title, g.direct ? null : h('span.chev', '◀')),
       g.direct ? null : h('div.nav-items', g.items.filter(([k]) => pageOk(g, k)).map(([k, t, fn]) => h('a' + (fn ? '' : '.soon') + (cur.mod === g.id && cur.page === k ? '.active' : ''), { href: fn ? `#/${g.id}/${k}` : '#' }, t))))));
