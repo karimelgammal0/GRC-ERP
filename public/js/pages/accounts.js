@@ -88,7 +88,7 @@ export async function journalsPage(root) {
 
 // ===== نماذج القيود =====
 export async function templatesPage(root) {
-  const host = h('div'); const mod = h('select'); const sideLbl = { debit: 'مدين', credit: 'دائن' };
+  const host = h('div'); const mod = h('select'); const sideLbl = { debit: 'مدين', credit: 'دائن' }; const sideClr = { debit: '#1d5fb4', credit: '#c2410c' }; // مدين أزرق، دائن برتقالي
   const draw = async () => {
     const data = await GET('/acc/templates');
     mod.replaceChildren(h('option', { value: '' }, 'كل الموديولات'), Object.entries(data.modules).map(([k, v]) => h('option', { value: k }, v)));
@@ -96,14 +96,14 @@ export async function templatesPage(root) {
       const items = data.items.filter((t) => !mod.value || t.module === mod.value);
       host.replaceChildren(table({ name: 'نماذج القيود', rows: items, onRow: (t) => show(t, data),
         cols: [{ k: 'code', l: 'الكود' }, { k: 'name', l: 'النموذج', render: (t) => h('b', t.name) }, { k: 'module_name', l: 'الموديول' },
-          { k: 'lines', l: 'القيد', render: (t) => h('div', t.lines.map((l) => h('div', h('small', sideLbl[l.side] + ': '), l.account_code ? `${l.account_code} ${l.account_name}` : (l.role_name || '—')))) },
+          { k: 'lines', l: 'القيد', render: (t) => h('div', t.lines.map((l) => h('div', { style: { color: sideClr[l.side], fontWeight: 600 } }, h('small', sideLbl[l.side] + ': '), l.account_code ? `${l.account_code} ${l.account_name}` : (l.role_name || '—')))) },
           { k: 'system', l: 'النوع', render: (t) => badge(t.system ? 'نظام' : 'مضاف', t.system ? '' : 'ok') }] }));
     };
     mod.onchange = paint; paint();
   };
   const show = (t, data) => {
     const body = h('div', t.description ? h('div.note', t.description) : null, h('table.lines', h('thead', h('tr', ['الجانب', 'الحساب', 'ملاحظة'].map((x) => h('th', x)))),
-      h('tbody', t.lines.map((l) => h('tr', h('td', sideLbl[l.side]), h('td', l.account_code ? `${l.account_code} — ${l.account_name}` : h('i', l.role_name || '—')), h('td', l.dynamic ? 'يتحدد من المستند' : (l.role_key && !l.account_id ? 'من إعدادات ربط الحسابات' : (l.label || ''))))))));
+      h('tbody', t.lines.map((l) => h('tr', { style: { color: sideClr[l.side] } }, h('td', sideLbl[l.side]), h('td', l.account_code ? `${l.account_code} — ${l.account_name}` : h('i', l.role_name || '—')), h('td', l.dynamic ? 'يتحدد من المستند' : (l.role_key && !l.account_id ? 'من إعدادات ربط الحسابات' : (l.label || ''))))))));
     modal({ title: `${t.name} (${t.module_name})`, wide: true, body, buttons: t.system ? [] : [can('accounts.templates.edit') ? { label: 'تعديل', onClick: () => setTimeout(() => edit(t, data), 50) } : null,
       can('accounts.templates.delete') ? { label: 'حذف', cls: 'danger', onClick: async () => { await DEL('/acc/templates/' + t.id); toast('تم الحذف'); draw(); } } : null].filter(Boolean) });
   };
