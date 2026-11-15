@@ -21,7 +21,7 @@ export function checkPassword(pw, hash) {
 }
 
 const MAPPING = {
-  acc_inventory_raw: '1221', acc_ap: '2110', acc_grni: '2140', acc_vat_in: '1231', acc_wages_payable: '2130', acc_deductions_payable: '2150', acc_employee_advances: '1232',
+  acc_inventory_raw: '1221', acc_ap: '2110', acc_vat_in: '1231', acc_wages_payable: '2130', acc_deductions_payable: '2150', acc_employee_advances: '1232',
   acc_custody: '1213', acc_opening_equity: '3400', acc_site_transfer: '5200', acc_overhead_materials: '5300',
   acc_indirect_labor: '5100', acc_admin_labor: '6100',
 };
@@ -62,6 +62,21 @@ export async function ensureBaseData() {
       }
     }
     await setSetting('grni_to_ap_done', '1');
+  }
+  // إزالة حساب «استلامات غير مفوترة» نهائياً: أي رصيد متبقي بيتنقل لحساب الموردين، وبعدين الربط والحساب بيتشالوا (أو بيتوقف لو عليه حركة قديمة)
+  if (!(await getSetting('grni_removed'))) {
+    const g = await get(`SELECT id FROM accounts WHERE code='2140' AND name LIKE '%غير مفوترة%'`); const apId = Number(await getSetting('acc_ap'));
+    if (g && apId) {
+      const rows = await all(`SELECT supplier_id, SUM(debit-credit) b FROM journal_lines WHERE account_id=? GROUP BY supplier_id HAVING ABS(SUM(debit-credit))>0.004`, g.id);
+      for (const r of rows) {
+        const v = Math.round(Math.abs(r.b) * 100) / 100; const dim = r.supplier_id ? { supplier_id: r.supplier_id } : {};
+        await postJournal({ date: today(), source_type: 'grni_close', source_id: g.id, description: 'تسوية وإقفال حساب الاستلامات غير المفوترة لحساب الموردين',
+          lines: r.b < 0 ? [{ account_id: g.id, debit: v, credit: 0, ...dim }, { account_id: apId, debit: 0, credit: v, ...dim }] : [{ account_id: g.id, debit: 0, credit: v, ...dim }, { account_id: apId, debit: v, credit: 0, ...dim }] });
+      }
+    }
+    await run(`DELETE FROM settings WHERE key='acc_grni'`);
+    if (g) { if (await inUse(g.id)) await run('UPDATE accounts SET active=0 WHERE id=?', g.id); else await run('DELETE FROM accounts WHERE id=?', g.id); }
+    await setSetting('grni_removed', '1');
   }
   // ترحيل أسماء العملاء القديمة (نص في المشروع) إلى جدول العملاء وربطها
   const names = await all(`SELECT DISTINCT TRIM(client) n FROM projects WHERE client IS NOT NULL AND TRIM(client)<>'' AND client_id IS NULL`);

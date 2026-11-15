@@ -241,7 +241,7 @@ DOCS.purchase_invoice = {
     await run('UPDATE purchase_invoices SET subtotal=?, vat_amount=?, total=?, due_date=? WHERE id=?', sub, vat, total, due, doc.id);
 
     const supplier = await nm('suppliers', doc.supplier_id);
-    let inv = 0, grni = 0; const pairs = [];
+    let inv = 0, matched = 0; const pairs = [];
     for (const [i, l] of L.entries()) {
       await run('UPDATE purchase_invoice_lines SET net_cost=? WHERE id=?', eff[i], l.id);
       if (!l.grn_line_id) {
@@ -252,7 +252,7 @@ DOCS.purchase_invoice = {
         const g = await get('SELECT gl.*, gr.warehouse_id wh FROM goods_receipt_lines gl JOIN goods_receipts gr ON gr.id=gl.receipt_id WHERE gl.id=?', l.grn_line_id);
         const grnVal = r2(l.qty * g.unit_price); const delta = r2(eff[i] - grnVal);
         await run('UPDATE goods_receipt_lines SET invoiced_qty=invoiced_qty+? WHERE id=?', l.qty, l.grn_line_id);
-        grni += grnVal;
+        matched += grnVal;
         if (delta !== 0) {
           // فرق سعر/نقل: بيتضاف لقيمة المخزون مباشرة (بدون حساب فروق أسعار)
           await addMove({ date: doc.date, warehouse_id: g.wh, material_id: l.material_id, direction: 'in', qty: 0, value: delta,
@@ -266,7 +266,7 @@ DOCS.purchase_invoice = {
       ? (doc.treasury_id ? { account_id: await val('SELECT account_id FROM treasuries WHERE id=?', doc.treasury_id), treasury_id: doc.treasury_id }
         : { account_id: await acc('acc_custody'), custodian_id: doc.custodian_id }) : null;
     // قيمة الاستلامات المطابقة اتسجلت دائن على المورد/الخزينة وقت الاستلام — الفاتورة بتسجّل الباقي بس (فروق السعر والنقل والخصم والضريبة)
-    const net = r2(total - r2(grni)); const sup = { supplier_id: doc.supplier_id };
+    const net = r2(total - r2(matched)); const sup = { supplier_id: doc.supplier_id };
     const lines = [dc(await acc('acc_inventory_raw'), r2(inv)), vat ? dc(await acc('acc_vat_in'), vat) : null,
       net >= 0 ? cr(await acc('acc_ap'), net, sup) : dc(await acc('acc_ap'), -net, sup)].filter(Boolean).filter((l) => l.debit || l.credit);
     if (payer && net) { lines.push(net > 0 ? dc(await acc('acc_ap'), net, sup) : cr(await acc('acc_ap'), -net, sup)); lines.push(net > 0 ? cr(payer.account_id, net, payer) : dc(payer.account_id, -net, payer)); }

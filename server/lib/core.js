@@ -8,7 +8,6 @@ export const allSettings = async () => Object.fromEntries((await all('SELECT key
 export const ACC_KEYS = {
   acc_inventory_raw: 'مخزون الخامات',
   acc_ap: 'الموردين (دائنون)',
-  acc_grni: 'استلامات غير مفوترة',
   acc_vat_in: 'ضريبة القيمة المضافة — مدخلات',
   acc_wages_payable: 'أجور ومرتبات مستحقة',
   acc_deductions_payable: 'استقطاعات العاملين',
