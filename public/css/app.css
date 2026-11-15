@@ -163,3 +163,53 @@ input.ro, select.ro { background: #f1efe8; color: var(--ink2); }
 .perm.perm, table.perm { width: 100%; border-collapse: collapse; } table.perm td { padding: 6px 12px; border-bottom: 1px solid var(--line2); vertical-align: middle; }
 table.perm td.pg { width: 34%; font-weight: 600; } table.perm label.act { display: inline-flex; gap: 4px; align-items: center; margin-inline-end: 16px; font-size: 13px; }
 .perm-editor { max-height: 52vh; overflow: auto; }
+
+/* ================= وضع التطبيق على الموبايل ================= */
+.mbar, .tabbar { display: none; }
+@media (max-width: 900px) {
+  html { -webkit-text-size-adjust: 100%; }
+  body { font-size: 15px; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
+  .side { display: none !important; }
+  #app { display: block; min-height: 0; }
+  .main { padding: 12px 12px calc(84px + env(safe-area-inset-bottom)); }
+  .mbar { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 50; background: var(--brand); color: #fff; padding: calc(10px + env(safe-area-inset-top)) 14px 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, .18); }
+  .mb-logo { background: #fff; color: var(--brand-d); font-weight: 800; border-radius: 8px; padding: 2px 9px; font-size: 14px; }
+  .mb-back { border: none; background: rgba(255, 255, 255, .18); color: #fff; width: 38px; height: 38px; border-radius: 50%; font-size: 26px; line-height: 1; cursor: pointer; }
+  .mb-title { font-weight: 700; font-size: 17px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabbar { display: flex; position: fixed; bottom: 0; inset-inline: 0; z-index: 60; background: #fff; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 10px rgba(0, 0, 0, .08); }
+  .tabbar a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 2px 6px; color: var(--ink2); font-size: 11.5px; font-weight: 600; }
+  .tabbar a .t-ico { font-size: 20px; line-height: 1.2; }
+  .tabbar a.on { color: var(--brand); } .tabbar a.on .t-ico { background: var(--brand-l); border-radius: 14px; padding: 0 16px; }
+  /* شاشات الأزرار */
+  .mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .mgrid.small { grid-template-columns: 1fr 1fr; }
+  .mbtn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; min-height: 104px; padding: 12px 8px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); color: var(--ink); font-weight: 700; font-size: 14.5px; line-height: 1.35; cursor: pointer; }
+  .mbtn:active { background: var(--brand-l); border-color: var(--brand); transform: scale(.98); }
+  .mbtn-ico { width: 44px; height: 44px; border-radius: 14px; background: var(--brand-l); color: var(--brand-d); display: grid; place-items: center; font-size: 22px; }
+  .mbtn.soon { opacity: .45; pointer-events: none; } .mbtn.danger { color: var(--bad); } .mbtn.danger .mbtn-ico { background: var(--bad-l); color: var(--bad); }
+  .menu-user { color: var(--ink2); font-weight: 600; margin: 2px 4px 12px; }
+  /* صفحات ونماذج */
+  .page-head h2 { font-size: 19px; }
+  .page-head .crumb { display: none; }
+  .card { padding: 12px 12px; }
+  .grid2 { grid-template-columns: 1fr; } .cards-hub { grid-template-columns: 1fr 1fr; } .kpis { grid-template-columns: 1fr 1fr; }
+  .fgrid.c2, .fgrid.c3, .fgrid.c4 { grid-template-columns: 1fr; }
+  .filters .fgrid.c2 { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .filters { padding: 10px; } .filters .fgrid { min-width: 0; width: 100%; }
+  input[type=text], input[type=number], input[type=date], input[type=password], input[type=search], select, textarea, .combo-in { font-size: 16px; min-height: 44px; }
+  .btn { min-height: 42px; padding: 8px 16px; } .btn.sm { min-height: 34px; }
+  .actions .btn, .modal-foot .btn { flex: 1; }
+  .tbl-bar .search { min-width: 0; flex: 1; }
+  .lines { display: block; overflow-x: auto; white-space: nowrap; }
+  .hbars .row { grid-template-columns: 90px 1fr 80px; }
+  .multi { columns: 1; }
+  /* النوافذ بملء الشاشة */
+  .modal-back { padding: 0; align-items: stretch; }
+  .modal, .modal.wide { width: 100%; min-height: 100%; border-radius: 0; display: flex; flex-direction: column; }
+  .modal-head { position: sticky; top: 0; background: #fff; z-index: 2; padding-top: calc(14px + env(safe-area-inset-top)); }
+  .modal-body { flex: 1; } .modal-foot { position: sticky; bottom: 0; background: #fff; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  #toasts { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .toast { max-width: none; }
+}
+/* عند التشغيل كتطبيق مثبّت */
+@media (display-mode: standalone) { body { user-select: none; } input, textarea { user-select: text; } }

@@ -63,8 +63,35 @@ function shell() {
   };
   root.replaceChildren(h('div#app', h('aside.side', h('div', { style: { padding: '18px 16px 8px', fontWeight: 800, fontSize: '17px', color: '#fff' } }, 'مصنع GRC'), nav,
     h('div.side-foot', h('div', META.me.name || META.me.username), h('div', { style: { marginTop: '6px', display: 'flex', gap: '6px' } }, h('button', { onclick: () => changePassword(false) }, 'كلمة المرور'), h('button', { onclick: async () => { await POST('/logout'); location.hash = ''; loginView(); } }, 'خروج')))), view));
-  draw();
-  return { view, draw };
+  const mbar = h('header.mbar'), tabbar = h('nav.tabbar');
+  root.prepend(mbar); root.append(tabbar);
+  const TABS = [['dashboard', '▦', 'الرئيسية', '#/dashboard/home'], ['inventory', '▣', 'المخازن', '#/menu/inventory'], ['purchases', '⛟', 'المشتريات', '#/menu/purchases'], ['finance', '$', 'المالية', '#/menu/finance'], ['more', '☰', 'المزيد', '#/menu/more']];
+  const drawMobile = () => {
+    const cur = parse(); const g = NAV.find((x) => x.id === (cur.mod === 'menu' ? cur.page : cur.mod));
+    const tabId = TABS.some((t) => t[0] === g?.id) ? g.id : 'more';
+    const onMenuRoot = cur.mod === 'dashboard' || (cur.mod === 'menu' && TABS.some((t) => t[0] === cur.page));
+    const pageTitle = cur.mod === 'menu' ? (cur.page === 'more' ? 'المزيد' : g?.title) : (g?.items.find((i) => i[0] === cur.page)?.[1] || g?.title);
+    mbar.replaceChildren(
+      onMenuRoot ? h('span.mb-logo', 'GRC') : h('button.mb-back', { onclick: () => (history.length > 1 ? history.back() : (location.hash = '#/menu/' + (g?.id || 'more'))) }, '›'),
+      h('div.mb-title', pageTitle || 'مصنع GRC'));
+    tabbar.replaceChildren(...TABS.filter(([id]) => id === 'more' || id === 'dashboard' || NAV.some((x) => x.id === id && groupOk(x))).map(([id, ico, t, href]) => h('a' + (id === tabId ? '.on' : ''), { href }, h('span.t-ico', ico), t)));
+  };
+  const origDraw = draw;
+  const drawAll = () => { origDraw(); drawMobile(); };
+  drawAll();
+  return { view, draw: drawAll };
+}
+function menuScreen(view, id) {
+  const btn = (href, ico, label, cls = '') => h('a.mbtn' + cls, { href }, h('span.mbtn-ico', ico), h('span', label));
+  if (id === 'more') {
+    const more = NAV.filter((g) => !['dashboard', 'inventory', 'purchases', 'finance'].includes(g.id) && groupOk(g));
+    view.replaceChildren(h('div.menu-user', META.me.name || META.me.username), h('div.mgrid', more.map((g) => btn(`#/menu/${g.id}`, g.ico, g.title))),
+      h('div.mgrid.small', h('button.mbtn', { onclick: () => changePassword(false) }, h('span.mbtn-ico', '⚿'), h('span', 'كلمة المرور')), h('button.mbtn.danger', { onclick: async () => { await POST('/logout'); location.hash = ''; loginView(); } }, h('span.mbtn-ico', '⏻'), h('span', 'خروج'))));
+    return;
+  }
+  const g = NAV.find((x) => x.id === id);
+  if (!g) { view.replaceChildren(h('div.empty-state', 'القسم غير متاح')); return; }
+  view.replaceChildren(h('div.mgrid', g.items.filter(([k]) => pageOk(g, k)).map(([k, t, fn]) => fn ? btn(`#/${g.id}/${k}`, g.ico, t) : h('div.mbtn.soon', h('span.mbtn-ico', g.ico), h('span', t)))));
 }
 function parse() {
   const [path, qs] = (location.hash.slice(1) || '/dashboard/home').split('?'); const [, mod, page] = path.split('/');
@@ -73,6 +100,7 @@ function parse() {
 let S = null;
 async function route() {
   if (!S) return; const { mod, page, params } = parse();
+  if (mod === 'menu') { S.draw(); menuScreen(S.view, page); window.scrollTo(0, 0); return; }
   const g = NAV.find((x) => x.id === mod); const it = g?.items.find((i) => i[0] === page);
   open.add(mod); S.draw();
   if (!g || !it?.[2] || !pageOk(g, page)) { S.view.replaceChildren(h('div.empty-state', 'الصفحة غير متاحة')); return; }
