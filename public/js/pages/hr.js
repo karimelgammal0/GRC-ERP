@@ -18,7 +18,7 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
   listFoot: (c, rows) => (c.k === 'total' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.total)) : c.k === 'no' ? 'الإجمالي' : ''),
   editor: {
     cols: 3, header: [dateF, { ...notesF, wide: false }],
-    lines: { blank: () => ({ days: 1 }), cols: [
+    lines: { addLabel: '＋ جديد', blank: () => ({ days: 1 }), cols: [
       { ...empCol, filter: (x) => x.emp_type === 'daily', onChange: (v, l, ctx) => { const e = byId('employees', v); if (!e) return; l.rate = e.daily_rate; l.stage_id = e.cost_class === 'direct' ? e.default_stage_id : null; ctx.setLines(ctx.lines); } },
       { k: 'days', l: 'أيام أساسي', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'ot_days', l: 'أيام سهرات', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'rate', l: 'أجر اليوم', t: 'number', w: '90px' },
       { l: 'قيمة الأساسي', calc: (l) => lbBasic(l), fmt: (v) => fmt(v), w: '90px' }, { l: 'قيمة السهرات', calc: (l) => lbOt(l), fmt: (v) => fmt(v), w: '90px' },
@@ -50,7 +50,7 @@ export const payrollPage = docScreen({ perm: 'hr.payroll',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'month', l: 'الشهر' }, { k: 'date', l: 'التاريخ' }, { k: 'n_lines', l: 'العاملين', num: true }, { k: 'gross', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }, { k: 'deductions', l: 'الاستقطاعات', num: true, fmt: (v) => fmt(v) }, { k: 'net', l: 'الصافي', num: true, fmt: (v) => fmt(v) }, { k: 'paid_amount', l: 'المصروف', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
     cols: 3, defaults: () => ({ month: today().slice(0, 7), date: today() }), header: [{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, dateF, { ...notesF, wide: false }],
-    lines: { blank: () => ({ additions_days: 0, deductions_days: 0, other_additions: 0, other_deductions: 0 }), cols: [
+    lines: { addLabel: '＋ جديد', blank: () => ({ additions_days: 0, deductions_days: 0, other_additions: 0, other_deductions: 0 }), cols: [
       { ...empCol, filter: (x) => x.emp_type === 'monthly', onChange: (v, l, ctx) => { const e = byId('employees', v); if (e) { l.base = e.monthly_salary; l.allocations = []; ctx.setLines(ctx.lines); } } },
       { k: 'base', l: 'المرتب الأساسي', t: 'number', w: '120px', readonly: true },
       { k: 'additions_days', blankZero: true, l: 'أيام الإضافات', t: 'number', w: '90px' }, { l: 'قيمة الإضافات', calc: (l) => pAdd(l), fmt: (v) => fmt(v), w: '100px' },

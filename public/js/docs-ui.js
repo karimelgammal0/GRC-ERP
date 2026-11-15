@@ -65,7 +65,7 @@ export function docScreen(cfg) {
           tb.append(tr);
         });
         linesHost.replaceChildren(h('table.lines', h('thead', h('tr', cols.map((c) => h('th', c.l)), readonly || E.lines.fixed ? null : h('th'))), tb),
-          readonly || E.lines.fixed ? null : h('div.actions', h('button.btn.sm', { onclick: () => { st.lines.push(E.lines.blank?.() || {}); drawLines(); } }, '＋ بند'),
+          readonly || E.lines.fixed ? null : h('div.actions', h('button.btn.sm', { onclick: () => { st.lines.push(E.lines.blank?.() || {}); drawLines(); } }, E.lines.addLabel || '＋ بند'),
             ...(E.tools || []).map((t) => h('button.btn.sm', { onclick: guard(async () => { await t.run(ctx); }) }, t.label))));
       };
       const updateTotals = () => {
