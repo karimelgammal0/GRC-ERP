@@ -110,7 +110,7 @@ export function helperRouter() {
   r.get('/open-orders', async (req, res) => res.json(await all(`SELECT id,no,date FROM purchase_orders WHERE supplier_id=? AND status IN ('open','partial') ORDER BY id DESC`, req.query.supplier_id)));
   r.get('/order-lines', async (req, res) => res.json(await all(`SELECT l.*, m.name material_name, l.qty-l.received_qty remaining FROM purchase_order_lines l JOIN materials m ON m.id=l.material_id
       WHERE l.order_id=? AND l.qty-l.received_qty>0.000001`, req.query.order_id)));
-  r.get('/uninvoiced-grn-lines', async (req, res) => res.json(await all(`SELECT gl.id, gl.material_id, gl.unit_price, gl.qty-gl.invoiced_qty remaining, gr.no receipt_no, gr.date, m.name material_name
+  r.get('/uninvoiced-grn-lines', async (req, res) => res.json(await all(`SELECT gl.id, gl.material_id, gl.unit_price, gl.qty-gl.invoiced_qty remaining, gr.no receipt_no, gr.payment_type, gr.treasury_id, gr.custodian_id, gr.date, m.name material_name
       FROM goods_receipt_lines gl JOIN goods_receipts gr ON gr.id=gl.receipt_id JOIN materials m ON m.id=gl.material_id
       WHERE gr.supplier_id=? AND gr.status='posted' AND gl.qty-gl.invoiced_qty>0.000001 ORDER BY gr.date, gl.id`, req.query.supplier_id)));
   r.get('/open-invoices', async (req, res) => {

@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { all, get, run, val, tx, insertRow } from '../db.js';
 import { applyChart, readChartFile, inUse } from './coa.js';
 import { seedTemplates } from './templates.js';
-import { setSetting, getSetting, DEFAULT_SEQUENCES, nextNo } from './core.js';
+import { setSetting, getSetting, DEFAULT_SEQUENCES, nextNo, acc, today } from './core.js';
+import { postJournal } from './gl.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const seedDir = path.join(here, '..', '..', 'seed');
@@ -48,6 +49,20 @@ export async function ensureBaseData() {
   await run(`UPDATE payroll_lines SET other_additions=other_additions+additions, additions=0 WHERE additions<>0 AND additions_days=0`);
   await run(`UPDATE payroll_lines SET other_deductions=other_deductions+deductions, deductions=0 WHERE deductions<>0 AND deductions_days=0`);
   await seedTemplates();
+  // ترحيل لمرة واحدة: رصيد «استلامات غير مفوترة» للإذون القديمة اللي لسه ماتفوترتش بيتنقل لحساب الموردين (الاستلام بقى بيدّين المورد/الخزينة مباشرة)
+  if (!(await getSetting('grni_to_ap_done'))) {
+    const accId = Number(await getSetting('acc_grni')), apId = Number(await getSetting('acc_ap'));
+    if (accId && apId) {
+      const rows = await all(`SELECT gr.id, gr.no, gr.supplier_id, SUM((gl.qty-gl.invoiced_qty)*gl.unit_price) v FROM goods_receipts gr JOIN goods_receipt_lines gl ON gl.receipt_id=gr.id
+        WHERE gr.status='posted' GROUP BY gr.id, gr.no, gr.supplier_id HAVING ABS(SUM((gl.qty-gl.invoiced_qty)*gl.unit_price))>0.004 ORDER BY gr.id`);
+      for (const r of rows) {
+        const v = Math.round(r.v * 100) / 100;
+        await postJournal({ date: today(), source_type: 'receipt_ap', source_id: r.id, description: `نقل استلام غير مفوتر ${r.no} لحساب الموردين`,
+          lines: [{ account_id: accId, debit: v, credit: 0, supplier_id: r.supplier_id }, { account_id: apId, debit: 0, credit: v, supplier_id: r.supplier_id }] });
+      }
+    }
+    await setSetting('grni_to_ap_done', '1');
+  }
   // ترحيل أسماء العملاء القديمة (نص في المشروع) إلى جدول العملاء وربطها
   const names = await all(`SELECT DISTINCT TRIM(client) n FROM projects WHERE client IS NOT NULL AND TRIM(client)<>'' AND client_id IS NULL`);
   for (const { n } of names) {

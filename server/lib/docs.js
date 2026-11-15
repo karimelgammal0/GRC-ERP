@@ -132,16 +132,20 @@ export async function refreshOrderStatus(order_id) {
 }
 
 // ============================================================
-//  إذن الاستلام  (مخزون + استلامات غير مفوترة)
+//  إذن الاستلام  (مخزون + دائن مباشر على المورد/الخزينة)
 // ============================================================
 DOCS.goods_receipt = {
   table: 'goods_receipts', lines: 'goods_receipt_lines', fk: 'receipt_id', seq: 'goods_receipt',
-  cols: ['date', 'supplier_id', 'warehouse_id', 'order_id', 'supplier_ref', 'notes'],
+  cols: ['date', 'supplier_id', 'warehouse_id', 'order_id', 'supplier_ref', 'payment_type', 'treasury_id', 'custodian_id', 'notes'],
   lineCols: ['material_id', 'qty', 'unit_price', 'order_line_id', 'notes'],
   blank: (l) => !l.material_id,
   enrich(h) { h.total = r2(h.lines.reduce((s, l) => s + l.qty * l.unit_price, 0)); },
   async validate(p, lines) {
     await must('suppliers', p.supplier_id, 'المورد'); await must('warehouses', p.warehouse_id, 'المخزن');
+    // طريقة الشراء: آجل ← دائن على المورد، نقدي ← دائن على الخزينة/العهدة (من غير حساب وسيط)
+    p.payment_type = p.payment_type || 'credit';
+    if (!['credit', 'cash'].includes(p.payment_type)) throw new AppError('نوع الشراء آجل أو نقدي');
+    if (p.payment_type === 'cash') { p.treasury_id = p.treasury_id || null; p.custodian_id = p.custodian_id || null; await sourceCheck(p); } else { p.treasury_id = null; p.custodian_id = null; }
     if (p.order_id) {
       const o = await get('SELECT * FROM purchase_orders WHERE id=?', p.order_id);
       if (!o || o.status === 'void' || o.status === 'closed') throw new AppError('أمر الشراء غير متاح للاستلام');
@@ -171,15 +175,16 @@ DOCS.goods_receipt = {
     await settle(pairs, { type: 'receipt', id: doc.id });
     await refreshOrderStatus(doc.order_id);
     total = r2(total);
-    await postJournal({ date: doc.date, source_type: 'receipt', source_id: doc.id, description: `إذن استلام ${doc.no} — ${supplier}`,
-      lines: [dc(await acc('acc_inventory_raw'), total), cr(await acc('acc_grni'), total, { supplier_id: doc.supplier_id })] });
+    const lines = [dc(await acc('acc_inventory_raw'), total), cr(await acc('acc_ap'), total, { supplier_id: doc.supplier_id })];
+    if (doc.payment_type === 'cash') { const c = await cashSide(doc); lines.push(dc(await acc('acc_ap'), total, { supplier_id: doc.supplier_id }), cr(c.account_id, total, c)); }
+    await postJournal({ date: doc.date, source_type: 'receipt', source_id: doc.id, description: `إذن استلام ${doc.no} — ${supplier}`, lines });
   },
   async unpost(cur) {
     if (await val('SELECT COUNT(*) FROM goods_receipt_lines WHERE receipt_id=? AND invoiced_qty>0', cur.id))
       throw new AppError('إذن الاستلام مرتبط بفاتورة شراء — ألغِ الفاتورة أولاً');
     for (const l of await all('SELECT * FROM goods_receipt_lines WHERE receipt_id=?', cur.id))
       if (l.order_line_id) await run('UPDATE purchase_order_lines SET received_qty=MAX(0,received_qty-?) WHERE id=?', l.qty, l.order_line_id);
-    await deleteJournals('receipt', cur.id);
+    await deleteJournals('receipt', cur.id); await deleteJournals('receipt_ap', cur.id);
     await removeMoves('receipt', cur.id);
     await refreshOrderStatus(cur.order_id);
   },
@@ -213,9 +218,10 @@ DOCS.purchase_invoice = {
       if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً');
       sub += r2(l.qty * l.unit_price);
       if (l.grn_line_id) {
-        const g = await get(`SELECT gl.*, gr.supplier_id, gr.status FROM goods_receipt_lines gl JOIN goods_receipts gr ON gr.id=gl.receipt_id WHERE gl.id=?`, l.grn_line_id);
+        const g = await get(`SELECT gl.*, gr.supplier_id, gr.status, gr.payment_type gpt, gr.no gno FROM goods_receipt_lines gl JOIN goods_receipts gr ON gr.id=gl.receipt_id WHERE gl.id=?`, l.grn_line_id);
         if (!g || g.status === 'void') throw new AppError('بند الاستلام غير متاح');
         if (g.supplier_id !== Number(p.supplier_id)) throw new AppError('إذن الاستلام لمورد مختلف');
+        if (g.gpt !== p.payment_type) throw new AppError(`إذن الاستلام ${g.gno} طريقة شرائه ${g.gpt === 'cash' ? 'نقدي' : 'آجل'} — لازم الفاتورة تكون بنفس الطريقة`);
         if (g.material_id !== Number(l.material_id)) throw new AppError('الخامة لا تطابق بند الاستلام');
         if (num(l.qty) > g.qty - g.invoiced_qty + 1e-6) throw new AppError(`كمية الفاتورة أكبر من غير المفوتر في الاستلام (${r4(g.qty - g.invoiced_qty)})`);
       }
@@ -259,13 +265,12 @@ DOCS.purchase_invoice = {
     const payer = doc.payment_type === 'cash'
       ? (doc.treasury_id ? { account_id: await val('SELECT account_id FROM treasuries WHERE id=?', doc.treasury_id), treasury_id: doc.treasury_id }
         : { account_id: await acc('acc_custody'), custodian_id: doc.custodian_id }) : null;
-    const lines = [
-      dc(await acc('acc_inventory_raw'), r2(inv)), dc(await acc('acc_grni'), r2(grni), { supplier_id: doc.supplier_id }),
-      vat ? dc(await acc('acc_vat_in'), vat) : null,
-      cr(await acc('acc_ap'), total, { supplier_id: doc.supplier_id }),
-    ].filter(Boolean).filter((l) => l.debit || l.credit);
-    if (payer) { lines.push(dc(await acc('acc_ap'), total, { supplier_id: doc.supplier_id })); lines.push(cr(payer.account_id, total, payer)); }
-    await postJournal({ date: doc.date, source_type: 'invoice', source_id: doc.id, description: `فاتورة شراء ${doc.no} — ${supplier}`, lines });
+    // قيمة الاستلامات المطابقة اتسجلت دائن على المورد/الخزينة وقت الاستلام — الفاتورة بتسجّل الباقي بس (فروق السعر والنقل والخصم والضريبة)
+    const net = r2(total - r2(grni)); const sup = { supplier_id: doc.supplier_id };
+    const lines = [dc(await acc('acc_inventory_raw'), r2(inv)), vat ? dc(await acc('acc_vat_in'), vat) : null,
+      net >= 0 ? cr(await acc('acc_ap'), net, sup) : dc(await acc('acc_ap'), -net, sup)].filter(Boolean).filter((l) => l.debit || l.credit);
+    if (payer && net) { lines.push(net > 0 ? dc(await acc('acc_ap'), net, sup) : cr(await acc('acc_ap'), -net, sup)); lines.push(net > 0 ? cr(payer.account_id, net, payer) : dc(payer.account_id, -net, payer)); }
+    if (lines.length >= 2) await postJournal({ date: doc.date, source_type: 'invoice', source_id: doc.id, description: `فاتورة شراء ${doc.no} — ${supplier}`, lines });
   },
   async unpost(cur) {
     const a = await get(`SELECT v.no FROM voucher_allocations va JOIN vouchers v ON v.id=va.voucher_id WHERE va.invoice_id=? LIMIT 1`, cur.id);

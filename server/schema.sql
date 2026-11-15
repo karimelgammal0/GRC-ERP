@@ -492,3 +492,7 @@ CREATE TABLE IF NOT EXISTS labor_advance_lines (
   employee_id INTEGER NOT NULL REFERENCES employees(id),
   amount NUMERIC NOT NULL DEFAULT 0, notes TEXT
 );
+
+ALTER TABLE goods_receipts ADD COLUMN IF NOT EXISTS payment_type TEXT NOT NULL DEFAULT 'credit';
+ALTER TABLE goods_receipts ADD COLUMN IF NOT EXISTS treasury_id INTEGER;
+ALTER TABLE goods_receipts ADD COLUMN IF NOT EXISTS custodian_id INTEGER;

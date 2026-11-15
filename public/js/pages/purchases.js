@@ -48,16 +48,19 @@ export const ordersPage = docScreen({ perm: 'purchases.orders',
 // ---------------- إذن الاستلام ----------------
 export const receiptsPage = docScreen({ perm: 'purchases.receipts',
   type: 'goods_receipt', title: 'إذون الاستلام', noun: 'إذن استلام', newLabel: 'إذن استلام جديد',
-  note: 'الاستلام بيدخّل الخامة للمخزن فوراً بسعر أمر الشراء ويسجّل «استلامات غير مفوترة» لحد ما تيجي فاتورة المورد وتتطابق معاه.',
+  note: 'الاستلام بيدخّل الخامة للمخزن فوراً بسعر أمر الشراء، وبيسجّل القيد دائن مباشرة على المورد (آجل) أو على الخزينة/العهدة (نقدي). فاتورة المورد بعد كده بتسجّل الفروق والضريبة والخصم بس.',
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
-  listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'supplier_ref', l: 'مرجع المورد' },
+  listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'supplier_ref', l: 'مرجع المورد' }, { k: 'payment_type', l: 'الدفع', render: (r) => (r.payment_type === 'cash' ? badge('نقدي', 'info') : badge('آجل', 'warn')) },
     { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'uninvoiced_qty', l: 'غير مفوتر', render: (r) => (r.status === 'void' ? '' : r.uninvoiced_qty > 0.000001 ? badge('غير مفوتر', 'warn') : badge('مفوتر', 'ok')) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
-    cols: 3, defaults: () => ({ warehouse_id: defaultWh() }),
-    header: (ctx) => [dateF, { ...supF, lockOnEdit: true, onChange: async (v, c) => { c.setHeader('order_id', null); await loadOrders(c); } },
+    cols: 3, rebuildOn: ['payment_type'], defaults: () => ({ warehouse_id: defaultWh(), payment_type: 'credit' }),
+    header: (ctx) => { const cash = ctx.header.payment_type === 'cash'; return [dateF, { ...supF, lockOnEdit: true, onChange: async (v, c) => { c.setHeader('order_id', null); await loadOrders(c); } },
       { k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw' },
       { k: 'order_id', l: 'أمر الشراء (اختياري)', t: 'select', lockOnEdit: true, options: [['', '— استلام بدون أمر —'], ...(ctx.ordOpts || [])] },
-      { k: 'supplier_ref', l: 'رقم إذن/فاتورة المورد', t: 'text' }, { ...notesF, wide: false }],
+      { k: 'payment_type', l: 'نوع الشراء', t: 'select', options: PAY, req: 1 },
+      cash && { k: 'treasury_id', l: 'الدفع من خزينة/بنك', t: 'fk', ref: 'treasuries', help: 'اختر خزينة أو عهدة (واحد فقط)', onChange: (v, c) => { if (v) c.setHeader('custodian_id', null); } },
+      cash && { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } },
+      { k: 'supplier_ref', l: 'رقم إذن/فاتورة المورد', t: 'text' }, { ...notesF, wide: false }].filter(Boolean); },
     lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المستلمة', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal, { l: 'تم تفويته', calc: (l) => l.invoiced_qty ?? 0, fmt: fq }] },
     tools: [{ label: 'سحب المتبقي من أمر الشراء', run: async (ctx) => {
       const id = Number(ctx.header.order_id); if (!id) throw new Error('اختر أمر الشراء أولاً');
@@ -66,7 +69,7 @@ export const receiptsPage = docScreen({ perm: 'purchases.receipts',
     } }],
     totals: (ctx) => [['قيمة الاستلام', fmt(total(ctx.lines, (l) => (Number(l.qty) || 0) * (Number(l.unit_price) || 0)))]],
     onOpen: (ctx) => loadOrders(ctx),
-    prepare: (p) => { p.order_id = p.order_id ? Number(p.order_id) : null; },
+    prepare: (p) => { p.order_id = p.order_id ? Number(p.order_id) : null; if (p.payment_type !== 'cash') { p.treasury_id = null; p.custodian_id = null; } },
   },
 });
 async function loadOrders(ctx) {
@@ -109,7 +112,8 @@ export const invoicesPage = docScreen({ perm: 'purchases.invoices',
         h('tbody', chk.map(({ r, c }) => h('tr', h('td', c), h('td', r.receipt_no), h('td', r.date), h('td', r.material_name), h('td.num', fq(r.remaining)), h('td.num', fmt(r.unit_price)))))))
       , buttons: [{ label: 'إضافة للفاتورة', cls: 'primary', onClick: () => {
         const add = chk.filter((x) => x.c.checked).map(({ r }) => ({ material_id: r.material_id, qty: r.remaining, unit_price: r.unit_price, grn_line_id: r.id, _grn_no: r.receipt_no }));
-        const base = ctx.lines.filter((l) => l.material_id); ctx.setLines([...base, ...add]); toast('أدخل أسعار الفاتورة الفعلية لو اختلفت عن الاستلام'); } }] });
+        const base = ctx.lines.filter((l) => l.material_id); ctx.setLines([...base, ...add]);
+        const g = chk.find((x) => x.c.checked)?.r; if (g && ctx.header.payment_type !== g.payment_type) { ctx.setHeader('payment_type', g.payment_type); ctx.setHeader('treasury_id', g.treasury_id || null); ctx.setHeader('custodian_id', g.custodian_id || null); } toast('أدخل أسعار الفاتورة الفعلية لو اختلفت عن الاستلام'); } }] });
     } }],
     totals: (ctx) => { const c = invCalc(ctx); const out = [['الإجمالي قبل الخصم', fmt(c.sub)]]; if (c.d) out.push(['الخصم', fmt(c.d)]); if (c.f) out.push(['نقل وتحميل', fmt(c.f)]); if (c.vat) out.push(['الضريبة', fmt(c.vat)]);
       out.push(['إجمالي الفاتورة', fmt(c.tot)]); if (ctx.doc && ctx.doc.payment_type === 'credit') out.push(['المتبقي على المورد', fmt(ctx.doc.open_amount), 'warn']); return out; },

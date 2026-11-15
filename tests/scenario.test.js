@@ -58,7 +58,8 @@ const grn1 = await saveDoc('goods_receipt', { date: '2026-11-03', supplier_id: s
 near(grn1.lines[0].unit_price, 10, 'سعر الاستلام اتسحب من الأمر');
 ok((await get('SELECT status FROM purchase_orders WHERE id=?', po.id)).status === 'partial', 'الأمر «استلام جزئي»');
 near((await get('SELECT qty,avg_cost FROM material_stock WHERE material_id=?', T1)).qty, 40, 'رصيد الخامة 40');
-near(await glBal('2140'), -400, 'استلامات غير مفوترة 400 دائن');
+near(await glBal('2140'), 0, 'مفيش حساب وسيط: الاستلام بيدّين المورد مباشرة');
+near(await glBal('2110'), -400, 'الاستلام 400 دائن على الموردين');
 await throws(async () => await saveDoc('goods_receipt', { date: '2026-11-03', supplier_id: sup, warehouse_id: wh, order_id: po.id, lines: [{ material_id: T1, qty: 61, order_line_id: po.lines[0].id }] }, null, U), /المتبقي/, 'استلام زيادة عن الأمر');
 // فاتورة مطابقة للاستلام بسعر 11 + نقل 40 + ضريبة 14%
 const inv1 = await saveDoc('purchase_invoice', { date: '2026-11-04', supplier_id: sup, warehouse_id: wh, payment_type: 'credit', freight: 40, vat_percent: 14, discount: 0,
@@ -66,9 +67,15 @@ const inv1 = await saveDoc('purchase_invoice', { date: '2026-11-04', supplier_id
 near(inv1.subtotal, 440, 'إجمالي الفاتورة'); near(inv1.vat_amount, 61.6, 'الضريبة 14% على 440'); near(inv1.total, 541.6, 'الإجمالي = 440 + 40 نقل + 61.6');
 // التكلفة الفعلية 480 (440+40) بدل 400 → المتوسط 12
 near((await get('SELECT value,avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 12, 'المتوسط بعد تحميل الفرق والنقل = 12');
-near(await glBal('2140'), 0, 'الاستلامات غير المفوترة اتصفّت');
+near(await glBal('2140'), 0, 'مفيش رصيد في الحساب الوسيط');
 near(await glBal('2110'), -541.6, 'الموردين 541.6 دائن (مع بقية أرصدة المورد)');
 await throws(async () => await voidDoc('goods_receipt', grn1.id, U), /فاتورة/, 'لا يمكن إلغاء استلام مفوتر');
+const t0 = await glBal('1211'); const ap0 = await glBal('2110');
+const grnC = await saveDoc('goods_receipt', { date: '2026-11-04', supplier_id: sup, warehouse_id: wh, payment_type: 'cash', treasury_id: treasury, lines: [{ material_id: T1, qty: 1, unit_price: 10 }] }, null, U);
+near(await glBal('2110'), ap0, 'استلام نقدي: صافي أثره على الموردين صفر'); near(await glBal('1211'), t0 - 10, 'الخزينة اتخصم منها 10');
+await throws(async () => await saveDoc('goods_receipt', { date: '2026-11-04', supplier_id: sup, warehouse_id: wh, payment_type: 'cash', lines: [{ material_id: T1, qty: 1, unit_price: 10 }] }, null, U), /مصدر الدفع/, 'استلام نقدي بدون مصدر');
+await throws(async () => await saveDoc('purchase_invoice', { date: '2026-11-04', supplier_id: sup, warehouse_id: wh, payment_type: 'credit', lines: [{ material_id: T1, qty: 1, unit_price: 10, grn_line_id: grnC.lines[0].id }] }, null, U), /بنفس الطريقة/, 'فاتورة آجل على استلام نقدي');
+await voidDoc('goods_receipt', grnC.id, U);
 
 section('4) فاتورة مباشرة آجلة + نقدية من الخزينة + نقدية من عهدة (متوسط مرجح)');
 const invB = await saveDoc('purchase_invoice', { date: '2026-11-05', supplier_id: sup, warehouse_id: wh, payment_type: 'credit', lines: [{ material_id: T1, qty: 60, unit_price: 15 }] }, null, U);

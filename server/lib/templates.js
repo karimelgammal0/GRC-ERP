@@ -16,8 +16,9 @@ const D = (role_key, label) => ({ side: 'debit', role_key, label });
 const C = (role_key, label) => ({ side: 'credit', role_key, label });
 
 export const SYSTEM_TEMPLATES = [
-  { code: 'S-RCV', module: 'purchases', name: 'استلام بضاعة من مورد', description: 'عند ترحيل إذن الاستلام (قبل الفاتورة)', lines: [D('acc_inventory_raw'), C('acc_grni')] },
-  { code: 'S-INV', module: 'purchases', name: 'فاتورة شراء آجل', description: 'فروق السعر/النقل بتتضاف لقيمة المخزن مباشرة', lines: [D('acc_inventory_raw'), D('acc_grni', 'استلامات تمت فوترتها'), D('acc_vat_in'), C('acc_ap')] },
+  { code: 'S-RCV', module: 'purchases', name: 'استلام بضاعة من مورد', description: 'عند ترحيل إذن الاستلام: دائن مباشر على المورد (آجل)', lines: [D('acc_inventory_raw'), C('acc_ap')] },
+  { code: 'S-RCV-CASH', module: 'purchases', name: 'استلام بضاعة نقدي', description: 'استلام + سداد فوري من الخزينة/العهدة', lines: [D('acc_inventory_raw'), C('acc_ap'), D('acc_ap', 'سداد الاستلام'), C('pay_source')] },
+  { code: 'S-INV', module: 'purchases', name: 'فاتورة شراء آجل', description: 'الفاتورة المطابقة لاستلام بتسجّل الفروق والضريبة والخصم بس (قيمة الاستلام اتسجلت وقت الاستلام)', lines: [D('acc_inventory_raw'), D('acc_vat_in'), C('acc_ap')] },
   { code: 'S-INV-CASH', module: 'purchases', name: 'فاتورة شراء نقدي', description: 'قيد الفاتورة + سداد فوري', lines: [D('acc_inventory_raw'), D('acc_vat_in'), C('acc_ap'), D('acc_ap', 'سداد الفاتورة'), C('pay_source')] },
   { code: 'S-PRET', module: 'purchases', name: 'مرتجع مشتريات', description: 'إرجاع بضاعة للمورد', lines: [D('acc_ap'), C('acc_inventory_raw')] },
   { code: 'S-ISS-PROD', module: 'inventory', name: 'صرف خامات للتصنيع', description: 'صرف على مشروع/بند/مرحلة', lines: [D('stage_wip'), C('acc_inventory_raw')] },
