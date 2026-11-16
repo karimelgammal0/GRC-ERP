@@ -22,7 +22,7 @@ const NAV = [
   { id: 'finance', ico: '$', title: 'الإدارة المالية', items: [
     ['treasuries', 'الخزن والعهد (الأرصدة)', fin.treasuriesPage], ['supplier-payments', 'سداد الموردين', fin.supplierPaymentsPage], ['expenses', 'سندات المصروفات', fin.expensesVoucherPage], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
     ['custody', 'سندات العهد', fin.custodyVouchersPage], ['transfers', 'تحويلات بين الخزن', fin.transfersPage], ['other', 'سندات قبض/صرف أخرى', fin.otherVouchersPage],
-    ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage], ['custody-statement', 'كشف حساب عهدة', fin.custodyStatementPage]] },
+    ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage, true], ['custody-statement', 'كشف حساب عهدة', fin.custodyStatementPage]] },
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
   { id: 'reports', ico: '◔', title: 'التقارير', direct: true, items: [
     ['hub', 'كل التقارير', rep.hub], ['project-stage', 'تكلفة المشاريع × المراحل', rep.projectStagePage], ['stage-project', 'تكلفة المراحل × المشاريع', rep.stageProjectPage], ['project-analysis', 'تحليل مشروع (بنود)', rep.projectAnalysisPage],
@@ -59,7 +59,7 @@ function shell() {
     const cur = parse(); // الصفحة الحالية بتتحسب عند كل رسم عشان التظليل يتبع الصفحة المفتوحة
     nav.replaceChildren(...NAV.filter(groupOk).map((g) => h('div.nav-group' + (open.has(g.id) ? '.open' : ''),
       h('div.nav-title', { onclick: () => { if (g.direct) { location.hash = `#/${g.id}/${g.items[0][0]}`; return; } open.has(g.id) ? open.delete(g.id) : open.add(g.id); draw(); } }, h('span.ico', g.ico), g.title, g.direct ? null : h('span.chev', '◀')),
-      g.direct ? null : h('div.nav-items', g.items.filter(([k]) => pageOk(g, k)).map(([k, t, fn]) => h('a' + (fn ? '' : '.soon') + (cur.mod === g.id && cur.page === k ? '.active' : ''), { href: fn ? `#/${g.id}/${k}` : '#' }, t))))));
+      g.direct ? null : h('div.nav-items', g.items.filter(([k, , , hid]) => !hid && pageOk(g, k)).map(([k, t, fn]) => h('a' + (fn ? '' : '.soon') + (cur.mod === g.id && cur.page === k ? '.active' : ''), { href: fn ? `#/${g.id}/${k}` : '#' }, t))))));
   };
   root.replaceChildren(h('div#app', h('aside.side', h('div', { style: { padding: '18px 16px 8px', fontWeight: 800, fontSize: '17px', color: '#fff' } }, 'مصنع GRC'), nav,
     h('div.side-foot', h('div', META.me.name || META.me.username), h('div', { style: { marginTop: '6px', display: 'flex', gap: '6px' } }, h('button', { onclick: () => changePassword(false) }, 'كلمة المرور'), h('button', { onclick: async () => { await POST('/logout'); location.hash = ''; loginView(); } }, 'خروج')))), view));
@@ -91,7 +91,7 @@ function menuScreen(view, id) {
   }
   const g = NAV.find((x) => x.id === id);
   if (!g) { view.replaceChildren(h('div.empty-state', 'القسم غير متاح')); return; }
-  view.replaceChildren(h('div.mgrid', g.items.filter(([k]) => pageOk(g, k)).map(([k, t, fn]) => fn ? btn(`#/${g.id}/${k}`, g.ico, t) : h('div.mbtn.soon', h('span.mbtn-ico', g.ico), h('span', t)))));
+  view.replaceChildren(h('div.mgrid', g.items.filter(([k, , , hid]) => !hid && pageOk(g, k)).map(([k, t, fn]) => fn ? btn(`#/${g.id}/${k}`, g.ico, t) : h('div.mbtn.soon', h('span.mbtn-ico', g.ico), h('span', t)))));
 }
 function parse() {
   const [path, qs] = (location.hash.slice(1) || '/dashboard/home').split('?'); const [, mod, page] = path.split('/');
