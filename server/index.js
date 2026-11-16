@@ -28,7 +28,7 @@ app.use('/api', (req, res, next) => { // تسجيل الطلبات البطيئ�
   res.on('finish', () => { const ms = Math.round(performance.now() - s0); if (ms > 700 && req.path !== '/health') console.log(`[slow] ${req.method} ${req.originalUrl.split('?')[0]} ${ms}ms`); });
   next();
 });
-app.use(express.static(path.join(here, '..', 'public')));
+app.use(express.static(path.join(here, '..', 'public'), { setHeaders: (res, f) => { if (/manifest\.webmanifest$|sw\.js$|index\.html$/.test(f)) res.setHeader('Cache-Control', 'no-cache'); } }));
 
 // تنفيذ طلبات التعديل واحد تلو الآخر (إعادة التقييم بالمتوسط المرجح لازم تكون متسلسلة)
 // فحص الصحة: بيلمس قاعدة البيانات (بيستخدمه Railway للـ Healthcheck)
