@@ -364,7 +364,11 @@ DOCS.stock_issue = {
     }
     if (p.kind === 'production') {
       if (!p.project_id || !p.item_id || !p.stage_id) throw new AppError('صرف الإنتاج لازم يتحدد له: المشروع والبند والمرحلة');
-      p.site_id = null;
+      // الموقع اختياري هنا، ومسموح بس لو المشروع متكود له مواقع نشطة وتابع له
+      if (p.site_id) {
+        const ok = await get('SELECT 1 x FROM sites WHERE id=? AND project_id=? AND active=1', p.site_id, p.project_id);
+        if (!ok) throw new AppError('الموقع المختار لا يتبع المشروع');
+      } else p.site_id = null;
     }
     if (p.kind === 'site') {
       if (!p.project_id) throw new AppError('التحويل لموقع لازم يتحدد له المشروع');

@@ -56,6 +56,7 @@ export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true,
       const k = ctx.header.kind; const p = ctx.header.project_id;
       return [dateF, { k: 'kind', l: 'نوع الصرف', t: 'select', options: ISSUE_KINDS, lockOnEdit: true, req: 1, help: k === 'overhead' ? 'مواد تشغيل عامة للمصنع (زيوت، أدوات، نظافة…) مش تابعة لمشروع: تتحمّل كتكلفة غير مباشرة ومبتدخلش في تكلفة أي مشروع.' : 'مواد داخلة في تصنيع بند معين: تتحمّل على المشروع + البند + المرحلة وتدخل في تكلفة الإنتاج.' }, whF(ctx),
         k !== 'overhead' && { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', req: 1, combo: true, onChange: (v, c) => { const it = byId('project_items', c.header.item_id); if (it && it.project_id !== v) c.setHeader('item_id', null); c.header.site_id = null; } },
+        k !== 'overhead' && sitesOf(p).length > 0 && { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, filter: (x) => x.project_id === Number(p) },
         k === 'production' && { k: 'item_id', l: 'البند داخل المشروع', t: 'fk', ref: 'project_items', req: 1, combo: true, filter: (x) => !p || x.project_id === p, help: p ? '' : 'اختر المشروع أولاً', action: canAddItems() ? { label: '＋ بند جديد', onClick: () => addItemDialog(ctx) } : null },
         { k: 'stage_id', l: k === 'overhead' ? 'المرحلة (اختياري)' : 'مرحلة التصنيع', t: 'fk', ref: 'stages', req: k === 'production' },
         receivedF, { ...notesF, wide: false }].filter(Boolean);
