@@ -24,7 +24,7 @@ export const CATALOG = [
     P('transfers', 'تحويلات بين الخزن', DOC), P('other', 'سندات قبض/صرف أخرى', DOC), P('treasury-statement', 'كشف خزينة'), P('custody-statement', 'كشف عهدة')] },
   { id: 'accounts', title: 'الحسابات', pages: [
     P('chart', 'دليل الحسابات', [...CRUD, ['import', 'استيراد CSV']]), P('periods', 'الفترات المالية', [['generate', 'إنشاء فترات سنة'], ['toggle', 'قفل / فتح فترة']]),
-    P('journals', 'قيود اليومية', CRUD), P('templates', 'نماذج القيود', CRUD), P('account-links', 'ربط الحسابات', [['edit', 'تعديل الربط']])] },
+    P('journals', 'قيود اليومية', CRUD), P('templates', 'نماذج القيود', CRUD), P('account-links', 'ربط الحسابات', [['edit', 'تعديل الربط']]), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']])] },
   { id: 'reports', title: 'التقارير', pages: [
     P('hub', 'كل التقارير'), P('project-stage', 'تكلفة المشاريع × المراحل'), P('stage-project', 'تكلفة المراحل × المشاريع'), P('project-analysis', 'تحليل مشروع (بنود)'), P('material-usage', 'استهلاك الخامات'),
     P('cost-detail', 'تفاصيل التكاليف'), P('expenses', 'المصروفات'), P('labor', 'العمالة'), P('trial-balance', 'ميزان المراجعة'), P('ledger', 'أستاذ الحساب'), P('income', 'قائمة الدخل')] },
@@ -32,7 +32,7 @@ export const CATALOG = [
     P('general', 'عام (بيانات الشركة)', [['edit', 'تعديل']]), P('opening', 'الأرصدة الافتتاحية', [['edit', 'حفظ وتطبيق'], ['lock', 'قفل نهائي'], ['unlock', 'فك القفل']]),
     P('materials', 'الخامات', CRUD), P('categories', 'فئات الخامات', CRUD), P('units', 'وحدات القياس', CRUD), P('warehouses', 'المخازن', CRUD), P('clients', 'العملاء', CRUD), P('projects', 'المشروعات', CRUD),
     P('project-items', 'بنود المشروعات', CRUD), P('stages', 'مراحل التصنيع', CRUD), P('sites', 'المواقع', CRUD), P('suppliers', 'الموردين', CRUD), P('treasuries', 'الخزن والبنوك', CRUD),
-    P('custodians', 'العهد', CRUD), P('expense-cats', 'المصروفات', CRUD), P('employees', 'العاملين', CRUD), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']])] },
+    P('custodians', 'العهد', CRUD), P('expense-cats', 'المصروفات', CRUD), P('employees', 'العاملين', CRUD)] },
 ];
 
 export const PAGE_KEYS = CATALOG.flatMap((m) => m.pages.map((p) => `${m.id}.${p.id}`));
@@ -40,14 +40,15 @@ export const ALL_KEYS = CATALOG.flatMap((m) => m.pages.flatMap((p) => [`${m.id}.
 const ALL_SET = new Set(ALL_KEYS);
 
 // كانت للمدير فقط في النظام القديم — مبتتمنحش تلقائياً للمستخدم القديم
-const LEGACY_EXCLUDE = new Set(['settings.general.edit', 'settings.opening.edit', 'settings.opening.lock', 'settings.opening.unlock', 'settings.sequences.edit', 'accounts.chart.import', 'accounts.account-links.edit', 'inventory.issues.add_item', 'inventory.issues.reopen', 'inventory.site-transfers.reopen']);
+const LEGACY_EXCLUDE = new Set(['settings.general.edit', 'settings.opening.edit', 'settings.opening.lock', 'settings.opening.unlock', 'accounts.sequences.edit', 'accounts.chart.import', 'accounts.account-links.edit', 'inventory.issues.add_item', 'inventory.issues.reopen', 'inventory.site-transfers.reopen']);
 
 export function userPerms(u) {
   if (!u) return new Set();
   if (u.role === 'admin') return new Set(ALL_KEYS);
   let p = null;
   try { p = u.perms ? JSON.parse(u.perms) : null; } catch { p = null; }
-  if (Array.isArray(p)) return new Set(p.filter((k) => ALL_SET.has(k)));
+  // الترقيم اتنقل من الإعدادات للحسابات: نحافظ على صلاحيات المستخدمين المحفوظة بالمفتاح القديم
+  if (Array.isArray(p)) return new Set(p.map((k) => k.replace(/^settings\.sequences/, 'accounts.sequences')).filter((k) => ALL_SET.has(k)));
   const mods = JSON.parse(u.modules || '[]'); const out = new Set();
   for (const k of ALL_KEYS) if (mods.includes(k.split('.')[0]) && !LEGACY_EXCLUDE.has(k)) out.add(k);
   if (mods.includes('perm_add_items')) out.add('inventory.issues.add_item');

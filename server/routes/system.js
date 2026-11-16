@@ -74,7 +74,7 @@ export async function systemRouter() {
   });
   r.get('/sequences', async (req, res) => { const ord = DEFAULT_SEQUENCES.map((x) => x[0]); const rows = await all('SELECT * FROM sequences'); res.json(rows.sort((a, b) => (ord.indexOf(a.key) + 1 || 999) - (ord.indexOf(b.key) + 1 || 999) || a.key.localeCompare(b.key))); });
   r.put('/sequences/:key', async (req, res) => {
-    need(req.user, 'settings.sequences.edit');
+    need(req.user, 'accounts.sequences.edit');
     const b = req.body; const cur = await get('SELECT * FROM sequences WHERE key=?', req.params.key); if (!cur) throw new AppError('غير موجود', 404);
     await run('UPDATE sequences SET prefix=?, padding=?, next_no=? WHERE key=?', String(b.prefix ?? cur.prefix), Math.min(10, Math.max(1, Number(b.padding ?? cur.padding))), Math.max(1, Number(b.next_no ?? cur.next_no)), req.params.key);
     res.json(await get('SELECT * FROM sequences WHERE key=?', req.params.key));

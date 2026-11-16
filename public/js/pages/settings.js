@@ -92,7 +92,7 @@ export async function generalPage(root) {
 export async function sequencesPage(root) {
   const rows = await GET('/sequences'); const tb = h('tbody');
   rows.forEach((r) => {
-    const ro = !can('settings.sequences.edit');
+    const ro = !can('accounts.sequences.edit');
     const inp = { p: h('input', { type: 'text', value: r.prefix, disabled: ro, style: { width: '110px' } }), pad: h('input', { type: 'number', value: r.padding, disabled: ro, style: { width: '70px' } }), n: h('input', { type: 'number', value: r.next_no, disabled: ro, style: { width: '110px' } }) };
     tb.append(h('tr', h('td', r.label), h('td', inp.p), h('td', inp.pad), h('td', inp.n), h('td.num', `${inp.p.value}${String(inp.n.value).padStart(Number(inp.pad.value), '0')}`),
       h('td', ro ? null : h('button.btn.sm', { onclick: guard(async () => { await PUT(`/sequences/${r.key}`, { prefix: inp.p.value, padding: Number(inp.pad.value), next_no: Number(inp.n.value) }); toast('تم'); }) }, 'حفظ'))));
