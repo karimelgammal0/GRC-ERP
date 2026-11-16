@@ -21,7 +21,7 @@ export const CATALOG = [
   { id: 'hr', title: 'الموارد البشرية', pages: [P('labor', 'يوميات العمالة', DOC), P('labor-advances', 'سلف عمال يومية', DOC), P('payroll', 'الرواتب الشهرية', DOC)] },
   { id: 'finance', title: 'الإدارة المالية', pages: [
     P('treasuries', 'الخزن والعهد (الأرصدة)'), P('supplier-payments', 'سداد الموردين', DOC), P('expenses', 'سندات المصروفات', DOC), P('wages', 'صرف الأجور', DOC), P('custody', 'سندات العهد', DOC),
-    P('transfers', 'تحويلات بين الخزن', DOC), P('other', 'سندات قبض/صرف أخرى', DOC), P('treasury-statement', 'كشف خزينة'), P('custody-statement', 'كشف عهدة')] },
+    P('transfers', 'تحويلات بين الخزن', DOC), P('other', 'سندات قبض/صرف أخرى', DOC), P('treasury-statement', 'كشف خزينة'), P('custody-statement', 'كشف حساب عهدة')] },
   { id: 'accounts', title: 'الحسابات', pages: [
     P('chart', 'دليل الحسابات', [...CRUD, ['import', 'استيراد CSV']]), P('periods', 'الفترات المالية', [['generate', 'إنشاء فترات سنة'], ['toggle', 'قفل / فتح فترة']]),
     P('journals', 'قيود اليومية', CRUD), P('templates', 'نماذج القيود', CRUD), P('account-links', 'ربط الحسابات', [['edit', 'تعديل الربط']]), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']])] },

@@ -22,7 +22,7 @@ const NAV = [
   { id: 'finance', ico: '$', title: 'الإدارة المالية', items: [
     ['treasuries', 'الخزن والعهد (الأرصدة)', fin.treasuriesPage], ['supplier-payments', 'سداد الموردين', fin.supplierPaymentsPage], ['expenses', 'سندات المصروفات', fin.expensesVoucherPage], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
     ['custody', 'سندات العهد', fin.custodyVouchersPage], ['transfers', 'تحويلات بين الخزن', fin.transfersPage], ['other', 'سندات قبض/صرف أخرى', fin.otherVouchersPage],
-    ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage], ['custody-statement', 'كشف عهدة', fin.custodyStatementPage]] },
+    ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage], ['custody-statement', 'كشف حساب عهدة', fin.custodyStatementPage]] },
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
   { id: 'reports', ico: '◔', title: 'التقارير', direct: true, items: [
     ['hub', 'كل التقارير', rep.hub], ['project-stage', 'تكلفة المشاريع × المراحل', rep.projectStagePage], ['stage-project', 'تكلفة المراحل × المشاريع', rep.stageProjectPage], ['project-analysis', 'تحليل مشروع (بنود)', rep.projectAnalysisPage],
