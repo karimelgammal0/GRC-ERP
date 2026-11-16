@@ -24,7 +24,7 @@ const NAV = [
     ['custody', 'سندات العهد', fin.custodyVouchersPage], ['transfers', 'تحويلات بين الخزن', fin.transfersPage], ['other', 'سندات قبض/صرف أخرى', fin.otherVouchersPage],
     ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage], ['custody-statement', 'كشف عهدة', fin.custodyStatementPage]] },
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
-  { id: 'reports', ico: '◔', title: 'التقارير', items: [
+  { id: 'reports', ico: '◔', title: 'التقارير', direct: true, items: [
     ['hub', 'كل التقارير', rep.hub], ['project-stage', 'تكلفة المشاريع × المراحل', rep.projectStagePage], ['stage-project', 'تكلفة المراحل × المشاريع', rep.stageProjectPage], ['project-analysis', 'تحليل مشروع (بنود)', rep.projectAnalysisPage],
     ['material-usage', 'استهلاك الخامات', rep.materialUsagePage], ['cost-detail', 'تفاصيل التكاليف', rep.costDetailPage], ['expenses', 'المصروفات', rep.expensesReport], ['labor', 'العمالة', rep.laborReport],
     ['trial-balance', 'ميزان المراجعة', rep.trialBalancePage], ['ledger', 'أستاذ الحساب', rep.ledgerPage], ['income', 'قائمة الدخل', rep.incomePage]] },
