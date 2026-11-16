@@ -91,6 +91,17 @@ export async function docRouter() {
     res.json(await saveDoc(req.params.type, req.body, id, req.user));
   });
   await r.post('/:type/:id/void', async (req, res) => { known(req.params.type); const id = Number(req.params.id); allow(req, req.params.type, await kindOf(req.params.type, id), 'void'); res.json(await voidDoc(req.params.type, id, req.user)); });
+  await r.post('/:type/:id/reopen', async (req, res) => {
+    known(req.params.type); const id = Number(req.params.id);
+    if (req.params.type !== 'stock_issue') throw new AppError('غير مدعوم');
+    allow(req, 'stock_issue', await kindOf('stock_issue', id), 'reopen');
+    const cur = await get('SELECT * FROM stock_issues WHERE id=?', id); if (!cur) throw new AppError('المستند غير موجود', 404);
+    if (cur.kind === 'return') throw new AppError('المرتجع غير مقفول');
+    if (cur.status !== 'posted') throw new AppError('الإذن ملغي');
+    if (cur.reopened) throw new AppError('الإذن مفتوح بالفعل');
+    await run('UPDATE stock_issues SET reopened=1 WHERE id=?', id); await audit(req.user, 'reopen', 'stock_issue', id, { no: cur.no });
+    res.json(await getDoc('stock_issue', id));
+  });
   await r.post('/:type/:id/close', async (req, res) => {
     known(req.params.type); allow(req, req.params.type, null, 'close');
     const t = { purchase_order: 'purchase_orders', purchase_request: 'purchase_requests' }[req.params.type];

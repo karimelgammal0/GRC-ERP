@@ -30,7 +30,8 @@ export function docScreen(cfg) {
       if (!doc && E.lines && !st.lines.length) st.lines = [E.lines.blank?.() || {}];
       const voided = doc?.status === 'void';
       const noEdit = !!cfg.perm && !can(cfg.perm + (doc ? '.edit' : '.create'));
-      const readonly = voided || noEdit;
+      const locked = !!cfg.lockable && doc?.status === 'posted' && doc.kind !== 'return' && !doc.reopened;
+      const readonly = voided || noEdit || locked;
       const ctx = {
         st, get header() { return st.header; }, get lines() { return st.lines; }, doc,
         setHeader(k, v) { st.header[k] = v; hf?.set(k, v); },
@@ -80,6 +81,10 @@ export function docScreen(cfg) {
         const saved = id ? await PUT(`/doc/${cfg.type}/${id}`, payload) : await POST(`/doc/${cfg.type}`, payload);
         toast(`تم الحفظ — ${saved.no}`); E.afterSave?.(saved); showList();
       });
+      const reopenIt = guard(async () => {
+        if (!(await confirmBox(`إعادة فتح ${cfg.noun} ${doc.no} للتعديل؟ بعد حفظ التعديل بيتقفل تاني تلقائياً.`, 'إعادة فتح'))) return;
+        await POST(`/doc/${cfg.type}/${id}/reopen`); toast('تم فتح الإذن للتعديل'); showEditor(id);
+      });
       const voidIt = guard(async () => {
         if (!(await confirmBox(`إلغاء ${cfg.noun} ${doc.no}؟ سيتم عكس أثره على المخزون والحسابات.`, 'إلغاء المستند', true))) return;
         await POST(`/doc/${cfg.type}/${id}/void`); toast('تم الإلغاء'); showList();
@@ -90,7 +95,10 @@ export function docScreen(cfg) {
         h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); showList(); } }, '← ' + cfg.title)),
         h('div.doc-head', h('span.doc-no', doc ? doc.no : `${cfg.noun} جديد`), doc ? statusBadge(doc.status) : null, h('span.grow'),
           doc ? h('button.btn.sm', { onclick: () => (cfg.print ? cfg.print(doc) : window.print()) }, '🖨 طباعة') : null,
+          locked && can(cfg.perm + '.reopen') ? h('button.btn.sm', { onclick: reopenIt }, '🔓 إعادة فتح') : null,
           doc && !voided && cfg.canVoid !== false && (!cfg.perm || can(cfg.perm + '.void')) ? h('button.btn.sm.danger', { onclick: voidIt }, 'إلغاء المستند') : null),
+        locked ? h('div.note', 'الإذن معتمد ومقفول للتعديل. لإضافة بنود أنشئ إذن جديد' + (can(cfg.perm + '.reopen') ? '، أو اضغط «إعادة فتح» للتعديل عليه.' : '، أو اطلب من صاحب الصلاحية إعادة فتحه.')) : null,
+        cfg.lockable && doc?.reopened && !voided ? h('div.note.bad', 'الإذن مفتوح للتعديل — بعد حفظ التعديل بيتقفل تاني.') : null,
         voided ? h('div.note.bad', 'هذا المستند ملغي — للعرض فقط.') : noEdit ? h('div.note', 'عرض فقط — ليس لديك صلاحية التعديل على هذا المستند.') : null,
         doc && !readonly ? h('div.note', 'تعديل المستند يعكس أثره القديم ويرحّل الجديد تلقائياً (المخزون والتكلفة والقيود).') : null,
         E.intro ? h('div.note', E.intro) : null,

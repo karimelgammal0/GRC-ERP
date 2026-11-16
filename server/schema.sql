@@ -413,6 +413,8 @@ CREATE INDEX IF NOT EXISTS ix_cl_date ON cost_lines(date);
 -- ربط حقل «مقدم الطلب» و«المستلم» بجدول العاملين (بدل النص الحر) — آمن للتكرار على قاعدة موجودة
 ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS requested_by_id INTEGER REFERENCES employees(id);
 ALTER TABLE stock_issues ADD COLUMN IF NOT EXISTS received_by_id INTEGER REFERENCES employees(id);
+-- أذون الصرف/التحويل المعتمدة بتتقفل؛ reopened=1 معناها اتفتحت بصلاحية للتعديل مرة واحدة
+ALTER TABLE stock_issues ADD COLUMN IF NOT EXISTS reopened INTEGER NOT NULL DEFAULT 0;
 
 -- العملاء + ربط المشروع بالعميل + ربط صاحب العهدة بالموظف
 CREATE TABLE IF NOT EXISTS clients (

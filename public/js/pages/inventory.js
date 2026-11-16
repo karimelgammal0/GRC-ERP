@@ -41,7 +41,7 @@ const whF = (ctx) => ({ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'war
 const receivedF = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true };
 
 // ---------------- إذن صرف (إنتاج / تشغيل غير مباشر) ----------------
-export const issuesPage = docScreen({ perm: 'inventory.issues',
+export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true,
   type: 'stock_issue', title: 'أذون الصرف', noun: 'إذن صرف', newLabel: 'إذن صرف جديد', fixed: { only: 'issues' }, defaultFrom: monthStart, defaultTo: today,
   note: 'كل صرف من المخزن بيتحدد له: المشروع + البند + المرحلة — ومنها بتتجمّع تكلفة كل مشروع وكل مرحلة تلقائياً بالمتوسط المرجح. (تحويل الخامات لمواقع المشاريع له شاشة منفصلة.)',
   filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...ISSUE_KINDS] }],
@@ -66,7 +66,7 @@ export const issuesPage = docScreen({ perm: 'inventory.issues',
 });
 
 // ---------------- تحويل خامات لموقع (منفصل عن صرف الإنتاج) ----------------
-export const siteTransfersPage = docScreen({ perm: 'inventory.site-transfers',
+export const siteTransfersPage = docScreen({ perm: 'inventory.site-transfers', lockable: true,
   type: 'stock_issue', title: 'التحويل للمواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' }, defaultFrom: monthStart, defaultTo: today,
   note: 'تحويل خامات من المخزن لمشروع. لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
   filters: (() => { let fp = null; return [

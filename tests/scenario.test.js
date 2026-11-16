@@ -139,8 +139,10 @@ await voidDoc('stock_issue', ret.id, U);
 await voidDoc('stock_issue', iss2.id, U);
 near(await cl(`stage_id=${stage.mold}`), 0, 'تكلفة القوالب صفر بعد الإلغاء');
 // تعديل إذن صرف (كمية)
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, item_id: item1, stage_id: stage.cast, lines: [{ material_id: T1, qty: 30 }] }, iss1.id, U), /مقفول/, 'الإذن المعتمد مقفول للتعديل');
+await run('UPDATE stock_issues SET reopened=1 WHERE id=?', iss1.id);   // إعادة فتح بصلاحية
 const iss1e = await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, item_id: item1, stage_id: stage.cast, lines: [{ material_id: T1, qty: 30 }] }, iss1.id, U);
-near(iss1e.lines[0].qty, 30, 'تعديل الكمية'); near((await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty, 165, 'الرصيد بعد التعديل (إلغاء 20 + تخفيض 20)');
+near(iss1e.lines[0].qty, 30, 'تعديل الكمية'); ok(!(await get('SELECT reopened FROM stock_issues WHERE id=?', iss1.id)).reopened, 'الإذن اتقفل تاني بعد التعديل'); near((await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty, 165, 'الرصيد بعد التعديل (إلغاء 20 + تخفيض 20)');
 near(await stockTotal(), await glBal('1221'), 'الاتساق بعد التعديل');
 
 section('8) الجرد والتسوية');

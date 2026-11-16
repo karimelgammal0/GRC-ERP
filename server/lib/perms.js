@@ -13,7 +13,7 @@ const P = (id, title, actions = []) => ({ id, title, actions });
 
 export const CATALOG = [
   { id: 'inventory', title: 'مخازن المواد الخام', pages: [
-    P('issues', 'صرف للإنتاج والتشغيل', [...DOC, ['add_item', 'إضافة بند مشروع من الشاشة']]), P('site-transfers', 'التحويل للمواقع', DOC), P('returns', 'مرتجع للمخزن', DOC), P('adjustments', 'جرد وتسويات', DOC),
+    P('issues', 'صرف للإنتاج والتشغيل', [...DOC, ['add_item', 'إضافة بند مشروع من الشاشة'], ['reopen', 'إعادة فتح إذن معتمد للتعديل']]), P('site-transfers', 'التحويل للمواقع', [...DOC, ['reopen', 'إعادة فتح إذن معتمد للتعديل']]), P('returns', 'مرتجع للمخزن', DOC), P('adjustments', 'جرد وتسويات', DOC),
     P('balances', 'أرصدة المخزون'), P('stock-card', 'كارت الصنف'), P('moves', 'حركة المخزون')] },
   { id: 'purchases', title: 'المشتريات', pages: [
     P('requests', 'طلبات الشراء', [...DOC, ['close', 'إغلاق']]), P('orders', 'أوامر الشراء', [...DOC, ['close', 'إغلاق الأمر']]), P('receipts', 'إذونات الاستلام', DOC), P('invoices', 'فواتير الشراء', DOC),
@@ -40,7 +40,7 @@ export const ALL_KEYS = CATALOG.flatMap((m) => m.pages.flatMap((p) => [`${m.id}.
 const ALL_SET = new Set(ALL_KEYS);
 
 // كانت للمدير فقط في النظام القديم — مبتتمنحش تلقائياً للمستخدم القديم
-const LEGACY_EXCLUDE = new Set(['settings.general.edit', 'settings.opening.edit', 'settings.opening.lock', 'settings.opening.unlock', 'settings.sequences.edit', 'accounts.chart.import', 'accounts.account-links.edit', 'inventory.issues.add_item']);
+const LEGACY_EXCLUDE = new Set(['settings.general.edit', 'settings.opening.edit', 'settings.opening.lock', 'settings.opening.unlock', 'settings.sequences.edit', 'accounts.chart.import', 'accounts.account-links.edit', 'inventory.issues.add_item', 'inventory.issues.reopen', 'inventory.site-transfers.reopen']);
 
 export function userPerms(u) {
   if (!u) return new Set();

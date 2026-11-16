@@ -37,6 +37,7 @@ export async function saveDoc(type, p, id, user) {
       const cur = await get(`SELECT * FROM ${D.table} WHERE id=?`, id);
       if (!cur) throw new AppError('المستند غير موجود', 404);
       if (cur.status === 'void') throw new AppError('المستند ملغي ولا يمكن تعديله');
+      if (D.locked?.(cur)) throw new AppError('الإذن معتمد ومقفول — أضف البنود في إذن جديد، أو اطلب إعادة فتحه بصلاحية');
       await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.unpost?.(cur);
       if (D.lines) await run(`DELETE FROM ${D.lines} WHERE ${D.fk}=?`, id);
       await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.validate?.(p, lines, id);
@@ -47,6 +48,7 @@ export async function saveDoc(type, p, id, user) {
       docId = await insertRow(D.table, { ...p, no, created_by: user?.id ?? null }, [...D.cols, 'no', 'created_by']);
     }
     for (const l of lines) l.id = await insertRow(D.lines, { ...l, [D.fk]: docId }, [...D.lineCols, D.fk]);
+    if (id && D.relock) await D.relock(id);
     const doc = await getDoc(type, docId);
     await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.post?.(doc, user, p);
     await audit(user, id ? 'edit' : 'create', type, docId, { no: doc.no });
@@ -338,6 +340,8 @@ onRecost.issue = buildIssue;
 DOCS.stock_issue = {
   table: 'stock_issues', lines: 'stock_issue_lines', fk: 'issue_id',
   seq: (p) => (p.kind === 'return' ? 'stock_return' : 'stock_issue'),
+  locked: (cur) => cur.status === 'posted' && cur.kind !== 'return' && !cur.reopened,
+  relock: async (id) => { await run('UPDATE stock_issues SET reopened=0 WHERE id=?', id); },
   cols: ['date', 'kind', 'warehouse_id', 'project_id', 'item_id', 'stage_id', 'site_id', 'ref_issue_id', 'received_by_id', 'notes'],
   lineCols: ['material_id', 'qty', 'ref_line_id', 'notes'],
   blank: (l) => !l.material_id && !l.ref_line_id,
