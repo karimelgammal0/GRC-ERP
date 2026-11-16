@@ -248,6 +248,7 @@ export function reportRouter() {
     const month = new Date().toISOString().slice(0, 7);
     const stock = (await get('SELECT COALESCE(SUM(value),0) v, COUNT(CASE WHEN qty>0 THEN 1 END) n FROM material_stock')).v;
     const lowN = await val(`SELECT COUNT(*) FROM materials m LEFT JOIN material_stock s ON s.material_id=m.id WHERE m.active=1 AND m.min_qty>0 AND COALESCE(s.qty,0)<=m.min_qty`);
+    const lowItems = (await all(`SELECT m.id, m.name, m.min_qty, u.name unit, COALESCE(s.qty,0) qty FROM materials m LEFT JOIN material_stock s ON s.material_id=m.id LEFT JOIN units u ON u.id=m.unit_id WHERE m.active=1 AND m.min_qty>0`)).map((x) => ({ ...x, pct: Math.max(0, Math.round(x.qty / x.min_qty * 100)) })).sort((a, b) => (a.qty / a.min_qty) - (b.qty / b.min_qty));
     const apTotal = await val(`SELECT COALESCE(SUM(credit-debit),0) FROM journal_lines WHERE account_id=? AND supplier_id IS NOT NULL`, await acc('acc_ap'));
     const treas = await all(`SELECT t.name, COALESCE((SELECT SUM(jl.debit-jl.credit) FROM journal_lines jl WHERE jl.treasury_id=t.id AND jl.account_id=t.account_id),0) balance FROM treasuries t WHERE t.active=1`);
     const custody = await val(`SELECT COALESCE(SUM(debit-credit),0) FROM journal_lines WHERE account_id=?`, await acc('acc_custody'));
@@ -255,7 +256,7 @@ export function reportRouter() {
     const byStage = await all(`SELECT COALESCE(st.name,'غير محدد') name, ROUND(SUM(c.amount),2) amt FROM cost_lines c LEFT JOIN stages st ON st.id=c.stage_id GROUP BY 1 ORDER BY amt DESC`);
     const topProjects = await all(`SELECT COALESCE(p.name,'غير محدد') name, ROUND(SUM(c.amount),2) amt FROM cost_lines c LEFT JOIN projects p ON p.id=c.project_id WHERE c.project_id IS NOT NULL GROUP BY 1 ORDER BY amt DESC LIMIT 6`);
     const unpaid = await val(`SELECT COALESCE(SUM(total-COALESCE((SELECT SUM(amount) FROM voucher_allocations WHERE invoice_id=i.id),0)),0) FROM purchase_invoices i WHERE payment_type='credit' AND status='posted' AND due_date<?`, new Date().toISOString().slice(0, 10));
-    res.json({ stock_value: r2(stock), low_stock: lowN, ap_total: r2(apTotal), overdue_ap: r2(unpaid), treasuries: treas.map((t) => ({ ...t, balance: r2(t.balance) })), custody: r2(custody), month, month_cost: monthCost, by_stage: byStage, top_projects: topProjects });
+    res.json({ stock_value: r2(stock), low_stock: lowN, low_items: lowItems, ap_total: r2(apTotal), overdue_ap: r2(unpaid), treasuries: treas.map((t) => ({ ...t, balance: r2(t.balance) })), custody: r2(custody), month, month_cost: monthCost, by_stage: byStage, top_projects: topProjects });
   });
   return r;
 }
