@@ -10,11 +10,11 @@ const file = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..',
 /**
  * تحميل كميات وقيم الأصناف الافتتاحية من seed/opening-stock.json إلى جدول opening_stock (مرة واحدة لكل version).
  * - مبيلمسش الأرصدة المقفولة، ومبيطبّقش القيود (التطبيق من شاشة الأرصدة الافتتاحية).
- * - الصفوف اللي اتعدّلت يدوياً من الشاشة بتتسيب زي ما هي.
+ * - الصفوف اللي اتعدّلت يدوياً من الشاشة بتتسيب زي ما هي، إلا لو الملف فيه force:true (نسخة جرد جديدة تستبدل كل الأرصدة).
  */
 export async function loadOpeningStockSeed() {
   if (!fs.existsSync(file)) return;
-  const { version, items } = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const { version, items, force } = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (!version || await getSetting('opening_seed_version') === version) return;
   if (await openingLocked()) { console.log(`أرصدة الأصناف الافتتاحية (${version}) لم تُحمّل: الأرصدة مقفلة`); return; }
   let done = 0, kept = 0, missing = 0;
@@ -23,7 +23,7 @@ export async function loadOpeningStockSeed() {
       const m = await get('SELECT id FROM materials WHERE code=?', it.code);
       if (!m) { missing++; continue; }
       const cur = await get('SELECT source FROM opening_stock WHERE material_id=?', m.id);
-      if (cur?.source === 'معدّل يدوياً') { kept++; continue; }
+      if (cur?.source === 'معدّل يدوياً' && !force) { kept++; continue; }
       await run(`INSERT INTO opening_stock(material_id,qty,value,source,note) VALUES(?,?,?,?,?)
         ON CONFLICT(material_id) DO UPDATE SET qty=excluded.qty, value=excluded.value, source=excluded.source, note=excluded.note`,
         m.id, it.qty, r2(it.value), it.source, it.note || null);
