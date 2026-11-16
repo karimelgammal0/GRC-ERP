@@ -90,7 +90,7 @@ export async function trialBalancePage(root) {
 }
 export async function ledgerPage(root, params) {
   const host = h('div');
-  const fb = filterBar([{ k: 'account_id', l: 'الحساب', t: 'fk', ref: 'accounts', combo: true, req: 1 }, { k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'project_id', l: 'مشروع', t: 'fk', ref: 'projects', combo: true }], async (v) => {
+  const fb = filterBar([{ k: 'account_id', l: 'الحساب', t: 'fk', ref: 'accounts', combo: true, req: 1, filter: (x) => x.postable }, { k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'project_id', l: 'مشروع', t: 'fk', ref: 'projects', combo: true }], async (v) => {
     if (!v.account_id) { host.replaceChildren(h('div.empty-state', 'اختر الحساب')); return; }
     const d = await GET('/reports/ledger', v);
     host.replaceChildren(h('div.kpis', kpi('رصيد أول', fmt(d.opening)), kpi('الرصيد الختامي', fmt(d.closing))),
