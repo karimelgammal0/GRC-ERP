@@ -59,10 +59,21 @@ export function masterPage(name, opts = {}) {
             const r = await DEL(`/m/${name}/${rec.id}`); toast(r.message || 'تم الحذف'); close(); await load(); return false; } } : null].filter(Boolean),
       });
     };
+    const fileIn = h('input', { type: 'file', accept: '.xlsx', style: { display: 'none' }, onchange: async (e) => {
+      const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+      try {
+        const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+        const r = await POST(`/m/${name}/import`, { file: btoa(bin) }); toast(r.message); await loadLookups(true); await load();
+      } catch (err) { modal({ title: 'تعذّر رفع الملف', body: h('pre', { style: { whiteSpace: 'pre-wrap', direction: 'rtl' } }, err.message), buttons: [] }); }
+    } });
+    const downloadTemplate = async () => {
+      const res = await fetch(`/api/m/${name}/template`); if (!res.ok) { toast('تعذّر تحميل النموذج'); return; }
+      h('a', { href: URL.createObjectURL(await res.blob()), download: 'نموذج-بنود-المشروعات.xlsx' }).click();
+    };
     const bar = h('div.filters', { style: { alignItems: 'center' } },
       opts.filterBy ? (() => { const sel = fieldInput({ t: 'fk', ref: opts.filterRef, combo: true, onChange: (v) => { filterVal[opts.filterBy] = v; load(); } }, null); sel.style.minWidth = '280px'; return h('label.fld', h('span', opts.filterLabel), sel); })() : null,
       h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('input', { type: 'checkbox', onchange: (e) => { showInactive = e.target.checked; load(); } }), 'إظهار المعطّل'));
-    root.replaceChildren(pageHead(title, canC ? h('button.btn.primary', { onclick: () => edit(null) }, '＋ جديد') : null), opts.note ? h('div.note', opts.note) : null, bar, tableHost);
+    root.replaceChildren(pageHead(title, name === 'project_items' && canC ? h('button.btn', { onclick: downloadTemplate }, '⬇ نموذج Excel') : null, name === 'project_items' && canC ? h('button.btn', { onclick: () => fileIn.click() }, '⬆ رفع من Excel') : null, canC ? h('button.btn.primary', { onclick: () => edit(null) }, '＋ جديد') : null), opts.note ? h('div.note', opts.note) : null, fileIn, bar, tableHost);
     await load();
   };
 }

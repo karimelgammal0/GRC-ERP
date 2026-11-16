@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import ExcelJS from 'exceljs';
 import { all, get, run, val, tx, insertRow, updateRow, AppError } from '../db.js';
 import { nextNo, audit } from '../lib/core.js';
 import { can } from '../lib/perms.js';
@@ -168,6 +169,50 @@ export async function masterRouter() {
     const name = req.path.split('/')[1]; const action = { POST: 'create', PUT: 'edit', DELETE: 'delete' }[req.method];
     if (PAGE_OF[name] && action && can(req.user, masterKeys(name, action))) return next();
     res.status(403).json({ error: 'ليس لديك صلاحية على هذا التكويد' });
+  });
+  // ---------- بنود المشروعات: نموذج Excel + رفع جماعي ----------
+  const HEAD = ['كود المشروع', 'اسم البند', 'الكمية', 'الوحدة', 'ملاحظات'];
+  r.get('/project_items/template', async (req, res) => {
+    const wb = new ExcelJS.Workbook(); wb.views = [{ rightToLeft: true }];
+    const ws = wb.addWorksheet('البنود', { views: [{ rightToLeft: true, state: 'frozen', ySplit: 1 }] });
+    ws.columns = HEAD.map((h, i) => ({ header: h, key: 'c' + i, width: [16, 40, 12, 14, 30][i] }));
+    ws.getRow(1).font = { bold: true }; ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    const projects = await all('SELECT code, name FROM projects WHERE active=1 ORDER BY code'); const units = await all('SELECT code, name FROM units WHERE active=1 ORDER BY code');
+    ws.addRow([projects[0]?.code || 'P-001', 'مثال: بانيل GRC واجهة', 120, units[0]?.name || 'م2', 'احذف صف المثال قبل الرفع']);
+    const ref = wb.addWorksheet('قوائم مرجعية', { views: [{ rightToLeft: true }] });
+    ref.columns = [{ header: 'كود المشروع', width: 16 }, { header: 'اسم المشروع', width: 36 }, { header: 'الوحدة', width: 16 }]; ref.getRow(1).font = { bold: true };
+    for (let i = 0; i < Math.max(projects.length, units.length); i++) ref.addRow([projects[i]?.code, projects[i]?.name, units[i]?.name]);
+    res.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('content-disposition', "attachment; filename*=UTF-8''" + encodeURIComponent('نموذج-بنود-المشروعات.xlsx'));
+    await wb.xlsx.write(res); res.end();
+  });
+  r.post('/project_items/import', async (req, res) => {
+    if (!req.body?.file) throw new AppError('ارفع ملف Excel');
+    const wb = new ExcelJS.Workbook();
+    try { await wb.xlsx.load(Buffer.from(req.body.file, 'base64')); } catch { throw new AppError('الملف مش Excel صالح (.xlsx)'); }
+    const ws = wb.worksheets[0]; if (!ws) throw new AppError('الملف فاضي');
+    const cell = (row, i) => { let v = row.getCell(i).value; if (v && typeof v === 'object') v = v.result ?? v.text ?? (v.richText ? v.richText.map((x) => x.text).join('') : ''); return v === null || v === undefined ? '' : String(v).trim(); };
+    const projects = await all('SELECT id, code, name FROM projects'); const units = await all('SELECT id, code, name FROM units');
+    const pBy = new Map(); for (const p of projects) { pBy.set(p.code.toLowerCase(), p.id); if (!pBy.has(p.name.toLowerCase())) pBy.set(p.name.toLowerCase(), p.id); }
+    const uBy = new Map(); for (const u of units) { uBy.set(u.name.toLowerCase(), u.id); uBy.set(u.code.toLowerCase(), u.id); }
+    const rows = [], errors = [];
+    ws.eachRow((row, n) => {
+      if (n === 1) return;
+      const [pc, name, q, un, notes] = [1, 2, 3, 4, 5].map((i) => cell(row, i));
+      if (!pc && !name && !q && !un && !notes) return;
+      const err = (m) => errors.push(`صف ${n}: ${m}`);
+      const pid = pBy.get(pc.toLowerCase()); if (!pc) err('كود المشروع فاضي'); else if (!pid) err(`المشروع «${pc}» غير موجود`);
+      if (!name) err('اسم البند فاضي');
+      let qty = null; if (q !== '') { qty = Number(q.replace(/,/g, '')); if (Number.isNaN(qty)) { err(`الكمية «${q}» مش رقم`); qty = null; } }
+      let uid = null; if (un) { uid = uBy.get(un.toLowerCase()); if (!uid) err(`الوحدة «${un}» غير موجودة`); }
+      rows.push({ project_id: pid, name, qty, unit_id: uid || null, notes: notes || null });
+    });
+    if (!rows.length) throw new AppError('مفيش بنود في الملف');
+    if (errors.length) throw new AppError(`في ${errors.length} خطأ — لم يتم رفع أي بند:\n` + errors.slice(0, 15).join('\n') + (errors.length > 15 ? '\n…' : ''));
+    const M = MASTERS.project_items;
+    await tx(async () => { for (const o of rows) await insertRow(M.table, { ...o, code: await nextNo(M.seq) }, allowed(M)); });
+    await audit(req.user, 'import', M.table, 0, { count: rows.length });
+    res.json({ count: rows.length, message: `تم رفع ${rows.length} بند` });
   });
   r.get('/:name', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);
