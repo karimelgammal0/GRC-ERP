@@ -171,17 +171,24 @@ export async function masterRouter() {
     res.status(403).json({ error: 'ليس لديك صلاحية على هذا التكويد' });
   });
   // ---------- بنود المشروعات: نموذج Excel + رفع جماعي ----------
-  const HEAD = ['كود المشروع', 'اسم البند', 'الكمية', 'الوحدة', 'ملاحظات'];
+  const HEAD = ['كود المشروع', 'اسم المشروع', 'اسم البند', 'الكمية', 'الوحدة', 'ملاحظات']; const TPL_ROWS = 500;
   r.get('/project_items/template', async (req, res) => {
-    const wb = new ExcelJS.Workbook(); wb.views = [{ rightToLeft: true }];
+    const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('البنود', { views: [{ rightToLeft: true, state: 'frozen', ySplit: 1 }] });
-    ws.columns = HEAD.map((h, i) => ({ header: h, key: 'c' + i, width: [16, 40, 12, 14, 30][i] }));
-    ws.getRow(1).font = { bold: true }; ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
-    const projects = await all('SELECT code, name FROM projects WHERE active=1 ORDER BY code'); const units = await all('SELECT code, name FROM units WHERE active=1 ORDER BY code');
-    ws.addRow([projects[0]?.code || 'P-001', 'مثال: بانيل GRC واجهة', 120, units[0]?.name || 'م2', 'احذف صف المثال قبل الرفع']);
     const ref = wb.addWorksheet('قوائم مرجعية', { views: [{ rightToLeft: true }] });
-    ref.columns = [{ header: 'كود المشروع', width: 16 }, { header: 'اسم المشروع', width: 36 }, { header: 'الوحدة', width: 16 }]; ref.getRow(1).font = { bold: true };
-    for (let i = 0; i < Math.max(projects.length, units.length); i++) ref.addRow([projects[i]?.code, projects[i]?.name, units[i]?.name]);
+    const lst = wb.addWorksheet('_الوحدات', { state: 'hidden' });
+    ws.columns = HEAD.map((h, i) => ({ header: h, key: 'c' + i, width: [16, 30, 40, 12, 14, 30][i] }));
+    ws.getRow(1).font = { bold: true }; ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    const projects = await all('SELECT code, name FROM projects WHERE active=1 ORDER BY code'); const units = await all('SELECT name FROM units WHERE active=1 ORDER BY code');
+    ref.columns = [{ header: 'كود المشروع', width: 16 }, { header: 'اسم المشروع', width: 36 }]; ref.getRow(1).font = { bold: true };
+    projects.forEach((p) => ref.addRow([p.code, p.name]));
+    units.forEach((u) => lst.addRow([u.name]));
+    const uRange = `'_الوحدات'!$A$1:$A$${Math.max(units.length, 1)}`;
+    for (let n = 2; n <= TPL_ROWS + 1; n++) {
+      ws.getCell(`B${n}`).value = { formula: `IF(A${n}="","",IFERROR(VLOOKUP(A${n},'قوائم مرجعية'!$A:$B,2,FALSE),"كود غير موجود"))` };
+      ws.getCell(`B${n}`).font = { color: { argb: 'FF475569' } };
+      ws.getCell(`E${n}`).dataValidation = { type: 'list', allowBlank: true, formulae: [uRange], showErrorMessage: true, errorTitle: 'وحدة غير صحيحة', error: 'اختر الوحدة من القائمة' };
+    }
     res.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('content-disposition', "attachment; filename*=UTF-8''" + encodeURIComponent('نموذج-بنود-المشروعات.xlsx'));
     await wb.xlsx.write(res); res.end();
@@ -198,7 +205,7 @@ export async function masterRouter() {
     const rows = [], errors = [];
     ws.eachRow((row, n) => {
       if (n === 1) return;
-      const [pc, name, q, un, notes] = [1, 2, 3, 4, 5].map((i) => cell(row, i));
+      const [pc, name, q, un, notes] = [1, 3, 4, 5, 6].map((i) => cell(row, i));
       if (!pc && !name && !q && !un && !notes) return;
       const err = (m) => errors.push(`صف ${n}: ${m}`);
       const pid = pBy.get(pc.toLowerCase()); if (!pc) err('كود المشروع فاضي'); else if (!pid) err(`المشروع «${pc}» غير موجود`);
