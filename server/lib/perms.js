@@ -20,8 +20,7 @@ export const CATALOG = [
     P('returns', 'مرتجعات الشراء', DOC), P('supplier-statement', 'كشف حساب مورد'), P('supplier-balances', 'أرصدة الموردين')] },
   { id: 'hr', title: 'الموارد البشرية', pages: [P('labor', 'يوميات العمالة', DOC), P('labor-advances', 'سلف عمال يومية', DOC), P('payroll', 'الرواتب الشهرية', DOC)] },
   { id: 'finance', title: 'الإدارة المالية', pages: [
-    P('treasuries', 'الخزن والعهد (الأرصدة)'), P('supplier-payments', 'سداد الموردين', DOC), P('expenses', 'سندات المصروفات', DOC), P('wages', 'صرف الأجور', DOC), P('custody', 'سندات العهد', DOC),
-    P('transfers', 'تحويلات بين الخزن', DOC), P('other', 'سندات قبض/صرف أخرى', DOC), P('treasury-statement', 'كشف خزينة'), P('custody-statement', 'كشف حساب عهدة')] },
+    P('treasuries', 'الخزن والعهد (الأرصدة)'), P('expenses', 'سندات المصروفات (مصروفات وسداد موردين)', DOC), P('wages', 'صرف الأجور', DOC), P('custody', 'سندات العهد والتحويلات', DOC), P('other', 'سندات قبض/صرف أخرى', DOC), P('treasury-statement', 'كشف خزينة'), P('custody-statement', 'كشف حساب عهدة')] },
   { id: 'accounts', title: 'الحسابات', pages: [
     P('chart', 'دليل الحسابات', [...CRUD, ['import', 'استيراد CSV']]), P('periods', 'الفترات المالية', [['generate', 'إنشاء فترات سنة'], ['toggle', 'قفل / فتح فترة']]),
     P('journals', 'قيود اليومية', CRUD), P('templates', 'نماذج القيود', CRUD), P('account-links', 'ربط الحسابات', [['edit', 'تعديل الربط']]), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']])] },
@@ -32,7 +31,7 @@ export const CATALOG = [
     P('general', 'عام (بيانات الشركة)', [['edit', 'تعديل']]), P('opening', 'الأرصدة الافتتاحية', [['edit', 'حفظ وتطبيق'], ['lock', 'قفل نهائي'], ['unlock', 'فك القفل']]),
     P('materials', 'الخامات', CRUD), P('categories', 'فئات الخامات', CRUD), P('units', 'وحدات القياس', CRUD), P('warehouses', 'المخازن', CRUD), P('clients', 'العملاء', CRUD), P('projects', 'المشروعات', CRUD),
     P('project-items', 'بنود المشروعات', CRUD), P('stages', 'مراحل التصنيع', CRUD), P('sites', 'المواقع', CRUD), P('suppliers', 'الموردين', CRUD), P('treasuries', 'الخزن والبنوك', CRUD),
-    P('custodians', 'العهد', CRUD), P('expense-cats', 'المصروفات', CRUD), P('employees', 'العاملين', CRUD)] },
+    P('custodians', 'العهد', CRUD), P('expense-cats', 'المصروفات', CRUD), P('payment-types', 'أنواع المدفوعات', CRUD), P('employees', 'العاملين', CRUD)] },
 ];
 
 export const PAGE_KEYS = CATALOG.flatMap((m) => m.pages.map((p) => `${m.id}.${p.id}`));
@@ -48,7 +47,7 @@ export function userPerms(u) {
   let p = null;
   try { p = u.perms ? JSON.parse(u.perms) : null; } catch { p = null; }
   // الترقيم اتنقل من الإعدادات للحسابات: نحافظ على صلاحيات المستخدمين المحفوظة بالمفتاح القديم
-  if (Array.isArray(p)) return new Set(p.map((k) => k.replace(/^settings\.sequences/, 'accounts.sequences')).filter((k) => ALL_SET.has(k)));
+  if (Array.isArray(p)) return new Set(p.map((k) => k.replace(/^settings\.sequences/, 'accounts.sequences').replace(/^finance\.supplier-payments/, 'finance.expenses').replace(/^finance\.transfers/, 'finance.custody')).filter((k) => ALL_SET.has(k)));
   const mods = JSON.parse(u.modules || '[]'); const out = new Set();
   for (const k of ALL_KEYS) if (mods.includes(k.split('.')[0]) && !LEGACY_EXCLUDE.has(k)) out.add(k);
   if (mods.includes('perm_add_items')) out.add('inventory.issues.add_item');

@@ -11,7 +11,7 @@ const MODULE_OF = {
   stock_issue: 'inventory', stock_adjustment: 'inventory', labor_sheet: 'hr', labor_advance: 'hr', payroll: 'hr', voucher: 'finance',
 };
 export { canModule as canUse } from '../lib/perms.js';
-const VOUCHER_PAGE = { supplier_payment: 'supplier-payments', expense: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'transfers', receipt: 'other', payment_other: 'other' };
+const VOUCHER_PAGE = { supplier_payment: 'expenses', expense: 'expenses', disbursement: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'custody', receipt: 'other', payment_other: 'other' };
 const TYPE_PAGE = { purchase_request: 'purchases.requests', purchase_order: 'purchases.orders', goods_receipt: 'purchases.receipts', purchase_invoice: 'purchases.invoices', purchase_return: 'purchases.returns', stock_adjustment: 'inventory.adjustments', labor_sheet: 'hr.labor', labor_advance: 'hr.labor-advances', payroll: 'hr.payroll' };
 const ISSUE_PAGE = { production: 'inventory.issues', overhead: 'inventory.issues', site: 'inventory.site-transfers', return: 'inventory.returns' };
 /** مفتاح صفحة المستند (حسب نوعه وكوده لو متعدد الصفحات) */
@@ -29,6 +29,17 @@ function where(q, base = []) {
   eq('d.warehouse_id', 'warehouse_id'); eq('d.site_id', 'site_id'); eq('d.treasury_id', 'treasury_id'); eq('d.custodian_id', 'custodian_id');
   if (q.q) { w.push('d.no LIKE ?'); p.push(`%${q.q}%`); }
   return { sql: w.length ? 'WHERE ' + w.join(' AND ') : '', p };
+}
+
+const PARTY_TABLE = { supplier: 'suppliers', expense: 'expense_categories', client: 'clients', employee: 'employees', custodian: 'custodians', account: 'accounts' };
+/** أسماء الأطراف في سندات الصرف متعددة الأسطر (للعرض في القائمة) */
+async function attachPartyText(rows) {
+  const ids = rows.filter((r) => r.kind === 'disbursement').map((r) => Number(r.id)); if (!ids.length) return;
+  const ls = await all(`SELECT l.voucher_id, l.party_id, t.link FROM voucher_lines l JOIN payment_types t ON t.id=l.payment_type_id WHERE l.voucher_id IN (${ids.join(',')}) ORDER BY l.id`);
+  const names = {};
+  for (const [link, tbl] of Object.entries(PARTY_TABLE)) names[link] = Object.fromEntries((await all(`SELECT id, name FROM ${tbl}`)).map((x) => [x.id, x.name]));
+  const by = {}; for (const l of ls) (by[l.voucher_id] ||= []).push(names[l.link]?.[l.party_id] || '');
+  for (const r of rows) if (r.kind === 'disbursement') r.party_text = (by[r.id] || []).filter(Boolean).join('، ');
 }
 
 const LISTS = {
@@ -58,10 +69,11 @@ const LISTS = {
   labor_advance: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, t.name treasury_name, c.name custodian_name, (SELECT COUNT(*) FROM labor_advance_lines WHERE advance_id=d.id) n_lines
       FROM labor_advances d LEFT JOIN treasuries t ON t.id=d.treasury_id LEFT JOIN custodians c ON c.id=d.custodian_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   payroll: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, (SELECT COUNT(*) FROM payroll_lines WHERE run_id=d.id) n_lines FROM payroll_runs d ${sql} ORDER BY d.month DESC, d.id DESC LIMIT 500`, ...p); },
-  voucher: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, s.name supplier_name, t.name treasury_name, t2.name to_treasury_name, c.name custodian_name, ec.name category_name, a.name account_name
+  voucher: async (q) => { const base = []; if (q.only === 'expenses') base.push(`d.kind IN ('disbursement','expense','supplier_payment')`); if (q.only === 'custody') base.push(`d.kind IN ('custody_issue','custody_return','transfer')`);
+    const { sql, p } = where(q, base); const rows = await all(`SELECT d.*, s.name supplier_name, t.name treasury_name, t2.name to_treasury_name, c.name custodian_name, ec.name category_name, a.name account_name
       FROM vouchers d LEFT JOIN suppliers s ON s.id=d.supplier_id LEFT JOIN treasuries t ON t.id=d.treasury_id LEFT JOIN treasuries t2 ON t2.id=d.to_treasury_id
       LEFT JOIN custodians c ON c.id=d.custodian_id LEFT JOIN expense_categories ec ON ec.id=d.category_id LEFT JOIN accounts a ON a.id=d.account_id
-      ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
+      ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); await attachPartyText(rows); return rows; },
 };
 
 export async function docRouter() {

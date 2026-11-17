@@ -27,7 +27,8 @@ export function docScreen(cfg) {
       const E = cfg.editor;
       const doc = id ? await GET(`/doc/${cfg.type}/${id}`) : null;
       const st = { header: { date: today(), ...(E.defaults?.() || {}), ...(init || {}), ...(doc || {}) }, lines: doc?.lines ? doc.lines.map((l) => ({ ...l })) : (init?.lines ? init.lines : []), doc, ctx: null };
-      if (!doc && E.lines && !st.lines.length) st.lines = [E.lines.blank?.() || {}];
+      const hasLines = !!E.lines && (E.lines.show ? E.lines.show(st.header) : true);
+      if (!doc && hasLines && !st.lines.length) st.lines = [E.lines.blank?.() || {}];
       const voided = doc?.status === 'void';
       const noEdit = !!cfg.perm && !can(cfg.perm + (doc ? '.edit' : '.create'));
       const locked = !!cfg.lockable && doc?.status === 'posted' && doc.kind !== 'return' && !doc.reopened;
@@ -53,7 +54,7 @@ export function docScreen(cfg) {
 
       const refreshComputed = () => calcCells.forEach(({ td, c, l }) => { const v = c.calc(l, ctx); td.textContent = c.fmt ? c.fmt(v) : (v ?? ''); td.className = 'ro' + (v < 0 ? ' neg' : ''); });
       const drawLines = () => {
-        if (!E.lines) { linesHost.replaceChildren(); return; }
+        if (!hasLines) { linesHost.replaceChildren(); return; }
         calcCells = []; const cols = typeof E.lines.cols === 'function' ? E.lines.cols(ctx) : E.lines.cols;
         const tb = h('tbody');
         st.lines.forEach((l, i) => {
@@ -73,7 +74,8 @@ export function docScreen(cfg) {
       const updateTotals = () => {
         totalsHost.replaceChildren(...(E.totals?.(ctx) || []).map(([l, v, cls]) => h('div' + (cls ? '.' + cls : ''), h('small', l), h('b', v))));
       };
-      const drawExtra = () => { if (E.extra) extraHost.replaceChildren(E.extra(ctx) || ''); };
+      const extraCard = E.extra ? card(E.extraTitle || null, extraHost) : null;
+      const drawExtra = () => { if (!E.extra) return; const v = E.extra(ctx); extraHost.replaceChildren(...(v ? [v] : [])); extraCard.style.display = v ? '' : 'none'; };
 
       const save = guard(async () => {
         const v = hf.values(); const payload = { ...st.header, ...v, lines: st.lines.map(({ ...l }) => l) };
@@ -102,7 +104,7 @@ export function docScreen(cfg) {
         voided ? h('div.note.bad', 'هذا المستند ملغي — للعرض فقط.') : noEdit ? h('div.note', 'عرض فقط — ليس لديك صلاحية التعديل على هذا المستند.') : null,
         doc && !readonly ? h('div.note', 'تعديل المستند يعكس أثره القديم ويرحّل الجديد تلقائياً (المخزون والتكلفة والقيود).') : null,
         E.intro ? h('div.note', E.intro) : null,
-        card(null, headerHost), E.lines ? card(E.lines.title || 'البنود', linesHost) : null, E.extra ? card(E.extraTitle || null, extraHost) : null,
+        card(null, headerHost), hasLines ? card(E.lines.title || 'البنود', linesHost) : null, extraCard,
         h('div.card', totalsHost),
         readonly ? (E.buttons ? h('div.actions', E.buttons(ctx)) : null) : h('div.actions', h('button.btn.primary', { onclick: save }, doc ? 'حفظ التعديل' : 'حفظ واعتماد'), h('button.btn', { onclick: showList }, 'رجوع'), ...(E.buttons?.(ctx) || [])));
       if (E.onOpen) await E.onOpen(ctx);

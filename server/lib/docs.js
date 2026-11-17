@@ -664,7 +664,7 @@ DOCS.payroll = {
 //  سندات الخزينة والعهد
 // ============================================================
 const VOUCHER_KINDS = {
-  supplier_payment: 'سداد مورد', expense: 'مصروف', wage_payment: 'صرف أجور ومرتبات', custody_issue: 'صرف عهدة',
+  disbursement: 'سند صرف', supplier_payment: 'سداد مورد', expense: 'مصروف', wage_payment: 'صرف أجور ومرتبات', custody_issue: 'صرف عهدة',
   custody_return: 'رد عهدة', transfer: 'تحويل بين الخزن', receipt: 'سند قبض', payment_other: 'سند صرف آخر',
 };
 export { VOUCHER_KINDS };
@@ -676,15 +676,60 @@ async function sourceCheck(p) {
   if (!!p.treasury_id === !!p.custodian_id) throw new AppError('حدد مصدر الدفع: خزينة أو عهدة (واحد فقط)');
   if (p.treasury_id) await must('treasuries', p.treasury_id, 'الخزينة'); else await must('custodians', p.custodian_id, 'صاحب العهدة');
 }
+// الجدول اللي كل نوع دفع بيرتبط بيه (اسم الطرف في سطر سند الصرف)
+const PAY_TABLE = { supplier: 'suppliers', expense: 'expense_categories', client: 'clients', employee: 'employees', custodian: 'custodians', account: 'accounts' };
+/** توزيع مبلغ السداد على فواتير المورد الآجلة المفتوحة (الأقدم أولاً)؛ الباقي يفضل دفعة مقدمة */
+async function allocateToInvoices(voucherId, supplierId, amount) {
+  let left = r2(amount);
+  const invs = await all(`SELECT * FROM purchase_invoices WHERE supplier_id=? AND payment_type='credit' AND status='posted' ORDER BY date, id`, supplierId);
+  for (const inv of invs) {
+    if (left <= 0.004) break;
+    const open = await invoiceOpenAmount(inv); if (open <= 0.004) continue;
+    const x = r2(Math.min(left, open));
+    await insertRow('voucher_allocations', { voucher_id: voucherId, invoice_id: inv.id, amount: x }, ['voucher_id', 'invoice_id', 'amount']);
+    left = r2(left - x);
+  }
+}
 DOCS.voucher = {
-  table: 'vouchers', lines: null, seq: (p) => `v_${p.kind}`, requireLines: false,
+  table: 'vouchers', lines: 'voucher_lines', fk: 'voucher_id', requireLines: false,
+  seq: (p) => (p.kind === 'disbursement' ? 'v_expense' : `v_${p.kind}`),
+  lineCols: ['payment_type_id', 'party_id', 'amount', 'project_id', 'item_id', 'stage_id', 'notes'],
+  blank: (l) => !l.payment_type_id && !l.party_id && !num(l.amount) && !String(l.notes || '').trim(),
   cols: ['date', 'kind', 'treasury_id', 'custodian_id', 'to_treasury_id', 'supplier_id', 'category_id', 'account_id', 'project_id', 'item_id', 'stage_id', 'amount', 'description', 'ref_no'],
   async enrich(h) {
     h.allocations = await all('SELECT * FROM voucher_allocations WHERE voucher_id=?', h.id);
     h.wage_links = await all('SELECT * FROM voucher_wage_links WHERE voucher_id=?', h.id);
   },
-  async validate(p) {
+  async validate(p, lines) {
     if (!VOUCHER_KINDS[p.kind]) throw new AppError('نوع السند غير معروف');
+    if (p.kind === 'disbursement') {
+      if (!lines.length) throw new AppError('أضف مصروف أو سداد واحد على الأقل');
+      await sourceCheck(p);
+      let sum = 0;
+      for (const [i, l] of lines.entries()) {
+        const at = `السطر ${i + 1}: `;
+        const t = await get('SELECT * FROM payment_types WHERE id=?', l.payment_type_id);
+        if (!t) throw new AppError(at + 'اختر نوع الدفع');
+        if (!l.party_id) throw new AppError(at + 'اختر الاسم');
+        const party = await get(`SELECT * FROM ${PAY_TABLE[t.link]} WHERE id=?`, l.party_id);
+        if (!party) throw new AppError(at + 'الاسم غير موجود');
+        l.amount = r2(l.amount);
+        if (!(l.amount > 0)) throw new AppError(at + 'القيمة لازم تكون أكبر من صفر');
+        if (t.link === 'expense') {
+          if (party.cost_class === 'direct') {
+            if (!l.project_id) throw new AppError(at + 'المصروف المباشر لازم يتحدد له المشروع');
+            if (!l.stage_id) throw new AppError(at + 'المصروف المباشر لازم يتحدد له مرحلة التصنيع');
+          } else if (!party.account_id) throw new AppError(at + `فئة المصروف «${party.name}» غير مربوطة بحساب`);
+        } else if (['client', 'employee'].includes(t.link) && !t.account_id) throw new AppError(at + `نوع الدفع «${t.name}» غير مربوط بحساب — اربطه من الإعدادات`);
+        else if (t.link === 'account' && !party.postable) throw new AppError(at + 'اختر حساب فرعي (يقبل قيود)');
+        if (l.project_id) await must('projects', l.project_id, 'المشروع');
+        if (l.stage_id) await must('stages', l.stage_id, 'المرحلة');
+        await checkDims(l.project_id, l.item_id, l.stage_id, false);
+        sum += l.amount;
+      }
+      p.amount = r2(sum);
+      return;
+    }
     p.amount = r2(p.amount);
     if (!(p.amount > 0)) throw new AppError('المبلغ لازم يكون أكبر من صفر');
     const k = p.kind;
@@ -727,7 +772,28 @@ DOCS.voucher = {
   async post(doc, user, p) {
     const k = doc.kind; const a = doc.amount; const desc = doc.description || VOUCHER_KINDS[k];
     const src = async () => await cashSide(doc); let lines;
-    if (k === 'supplier_payment') {
+    if (k === 'disbursement') {
+      lines = []; const types = {}; const cats = {};
+      for (const l of doc.lines) {
+        const t = types[l.payment_type_id] ||= await get('SELECT * FROM payment_types WHERE id=?', l.payment_type_id);
+        const note = String(l.notes || '').trim() || null;
+        const dims = { project_id: l.project_id, item_id: l.item_id, stage_id: l.stage_id };
+        if (t.link === 'supplier') {
+          lines.push(dc(await acc('acc_ap'), l.amount, { supplier_id: l.party_id, description: note }));
+          await allocateToInvoices(doc.id, l.party_id, l.amount);
+        } else if (t.link === 'expense') {
+          const c = cats[l.party_id] ||= await get('SELECT * FROM expense_categories WHERE id=?', l.party_id);
+          const debitAcc = c.cost_class === 'direct' ? await laborAccount('direct', l.stage_id) : c.account_id;
+          lines.push(dc(debitAcc, l.amount, { ...dims, description: note }));
+          await insertRow('cost_lines', { date: doc.date, source_type: 'voucher', source_id: doc.id, source_line_id: l.id, cost_type: 'expense', cost_class: c.cost_class, ...dims, category_id: c.id, qty: 1, amount: l.amount, description: `${doc.no} — ${note || c.name}` },
+            ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'project_id', 'item_id', 'stage_id', 'category_id', 'qty', 'amount', 'description']);
+        } else if (t.link === 'client') lines.push(dc(t.account_id, l.amount, { project_id: l.project_id, description: note }));
+        else if (t.link === 'employee') lines.push(dc(t.account_id, l.amount, { employee_id: l.party_id, project_id: l.project_id, description: note }));
+        else if (t.link === 'custodian') lines.push(dc(await acc('acc_custody'), l.amount, { custodian_id: l.party_id, description: note }));
+        else lines.push(dc(l.party_id, l.amount, { project_id: l.project_id, description: note }));
+      }
+      const s = await src(); lines.push(cr(s.account_id, a, s));
+    } else if (k === 'supplier_payment') {
       lines = [dc(await acc('acc_ap'), a, { supplier_id: doc.supplier_id }), cr((await src()).account_id, a, await src())];
       for (const al of (p.allocations || []).filter((x) => num(x.amount) > 0)) await insertRow('voucher_allocations', { voucher_id: doc.id, invoice_id: al.invoice_id, amount: r2(al.amount) }, ['voucher_id', 'invoice_id', 'amount']);
     } else if (k === 'expense') {

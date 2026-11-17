@@ -354,6 +354,20 @@ CREATE TABLE IF NOT EXISTS voucher_wage_links (  -- ربط سند الأجور �
   sheet_id INTEGER, run_id INTEGER,
   amount NUMERIC NOT NULL
 );
+CREATE TABLE IF NOT EXISTS payment_types (       -- أنواع المدفوعات: كل نوع مربوط بجدول (موردين/مصروفات/عملاء/عاملين/عهد/حسابات)
+  id SERIAL PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+  link TEXT NOT NULL DEFAULT 'supplier',         -- supplier | expense | client | employee | custodian | account
+  account_id INTEGER,                            -- الحساب المدين لأنواع العملاء/العاملين
+  active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS voucher_lines (       -- أسطر سند الصرف (أكتر من مصروف/مورد في سند واحد)
+  id SERIAL PRIMARY KEY,
+  voucher_id INTEGER NOT NULL REFERENCES vouchers(id) ON DELETE CASCADE,
+  payment_type_id INTEGER NOT NULL, party_id INTEGER NOT NULL,
+  amount NUMERIC NOT NULL,
+  project_id INTEGER, item_id INTEGER, stage_id INTEGER, notes TEXT
+);
 
 -- ---------- الموارد البشرية ----------
 CREATE TABLE IF NOT EXISTS labor_sheets (        -- كشف يومية العمالة

@@ -42,6 +42,9 @@ export async function ensureBaseData() {
   }
   for (const [key, label, prefix, padding] of DEFAULT_SEQUENCES)
     await run('INSERT INTO sequences(key,label,prefix,padding) VALUES(?,?,?,?) ON CONFLICT DO NOTHING', key, label, prefix, padding);
+  if (!Number(await val('SELECT COUNT(*) FROM payment_types'))) {
+    for (const [name, link] of [['موردين', 'supplier'], ['مصروفات', 'expense']]) await run('INSERT INTO payment_types(code,name,link) VALUES(?,?,?)', await nextNo('payment_type'), name, link);
+  }
   // ترحيل التسمية: «مسير» ← «كشف» (اسم الترقيم، ووصف قيود الرواتب القديمة)
   await run(`UPDATE sequences SET label='كشوف الرواتب' WHERE key='payroll' AND label LIKE '%مسير%'`);
   await run(`UPDATE journal_entries SET description=REPLACE(description,'مسير رواتب','كشف رواتب') WHERE source_type='payroll' AND description LIKE '%مسير رواتب%'`);

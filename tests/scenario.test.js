@@ -2,7 +2,7 @@
 import os from 'node:os'; import path from 'node:path'; import fs from 'node:fs';
 process.env.DATABASE_URL = ''; // الاختبار دايماً على Postgres مضمّن في الذاكرة، مش على Supabase
 process.env.PGLITE_MEMORY = '1'; process.env.NO_LISTEN = '1';
-const { all, get, val, run, r2, AppError, initSchema } = await import('../server/db.js');
+const { all, get, val, run, r2, AppError, initSchema, insertRow } = await import('../server/db.js');
 await initSchema();
 const { seedAll } = await import('../server/lib/seed.js');
 const { saveDoc, voidDoc } = await import('../server/lib/docs.js');
@@ -275,6 +275,38 @@ const m1 = await send('POST', '/api/m/materials', { name: 'خامة بدون ح�
 const s1 = await send('POST', '/api/m/suppliers', { name: 'مورد بدون ائتمان', credit_days: '' }); ok(s1.status === 200 && s1.j.credit_days === 0, 'مورد بدون مدة ائتمان');
 const sq = await api('/api/sequences'); ok(sq.length > 20 && sq[0].key === 'unit', 'شاشة الترقيم');
 
+section('17) سند صرف متعدد الأسطر (مصروفات + سداد موردين في سند واحد)');
+const ptSup = await val(`SELECT id FROM payment_types WHERE link='supplier'`), ptExp = await val(`SELECT id FROM payment_types WHERE link='expense'`);
+ok(ptSup && ptExp, 'أنواع المدفوعات الافتراضية موجودة');
+const catInd = await val(`SELECT id FROM expense_categories WHERE name='إيجارات'`), catDir = await val(`SELECT id FROM expense_categories WHERE cost_class='direct'`);
+const apOf = async (sid) => r2((await all(`SELECT dJl.debit, dJl.credit FROM journal_lines dJl WHERE dJl.account_id=? AND dJl.supplier_id=?`, await acc('acc_ap'), sid)).reduce((s, x) => s + x.credit - x.debit, 0));
+const apStart = await apOf(sup);
+const disLines = [{ payment_type_id: ptSup, party_id: sup, amount: 150 }, { payment_type_id: ptExp, party_id: catInd, amount: 250, notes: 'إيجار' }, { payment_type_id: ptExp, party_id: catDir, amount: 100, project_id: prj, item_id: item1, stage_id: stage.cast }];
+const dis = await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', treasury_id: treasury, description: 'سند متعدد', lines: disLines }, null, U);
+near(dis.amount, 500, 'إجمالي السند = مجموع الأسطر');
+ok(dis.lines.length === 3, 'الأسطر اتحفظت');
+const dJl = await all(`SELECT dJl.debit, dJl.credit FROM journal_entries je JOIN journal_lines dJl ON dJl.entry_id=je.id WHERE je.source_type='voucher' AND je.source_id=?`, dis.id);
+near(dJl.reduce((s, x) => s + x.debit, 0), 500, 'مدين القيد = 500'); near(dJl.reduce((s, x) => s + x.credit, 0), 500, 'دائن القيد = 500');
+near(apStart - await apOf(sup), 150, 'رصيد المورد نقص بقيمة السداد');
+near(await cl(`source_type='voucher' AND source_id=${dis.id}`), 350, 'تكلفة المصروفات (مباشر + غير مباشر) اتسجلت');
+await throws(async () => await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', treasury_id: treasury, lines: [{ payment_type_id: ptExp, party_id: catDir, amount: 10 }] }, null, U), /المشروع/, 'مصروف مباشر بدون مشروع');
+await throws(async () => await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', treasury_id: treasury, lines: [] }, null, U), /أضف/, 'سند بدون أسطر');
+await throws(async () => await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', treasury_id: treasury, custodian_id: cust, lines: [{ payment_type_id: ptSup, party_id: sup, amount: 10 }] }, null, U), /خزينة أو عهدة/, 'خزينة وعهدة معاً');
+const dis2 = await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', treasury_id: treasury, description: 'سند متعدد', lines: disLines.slice(0, 2) }, dis.id, U);
+near(dis2.amount, 400, 'تعديل السند حدّث الإجمالي');
+ok((await val(`SELECT COUNT(*) FROM journal_entries WHERE source_type='voucher' AND source_id=?`, dis.id)) === 1, 'التعديل استبدل القيد');
+near(await cl(`source_type='voucher' AND source_id=${dis.id}`), 250, 'تكلفة السند بعد التعديل');
+const viaCust = await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', custodian_id: cust, lines: [{ payment_type_id: ptExp, party_id: catInd, amount: 60 }] }, null, U);
+near(viaCust.amount, 60, 'الصرف من عهدة');
+await voidDoc('voucher', dis.id, U);
+near(apStart - await apOf(sup), 0, 'إلغاء السند رجّع رصيد المورد');
+ok((await val(`SELECT COUNT(*) FROM journal_entries WHERE source_type='voucher' AND source_id=?`, dis.id)) === 0, 'إلغاء السند حذف القيد');
+// العملاء/العاملين: نوع دفع جديد لازم له حساب مدين
+const { MASTERS } = await import('../server/routes/masters.js'); ok(MASTERS.payment_types, 'تكويد أنواع المدفوعات موجود');
+const clAcc = await val(`SELECT id FROM accounts WHERE postable=1 ORDER BY code LIMIT 1`); const cl1 = await val('SELECT id FROM clients LIMIT 1');
+const ptCl = await insertRow('payment_types', { code: 'PT-T', name: 'عملاء', link: 'client', account_id: clAcc }, ['code', 'name', 'link', 'account_id']);
+if (cl1) { const vc = await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', treasury_id: treasury, lines: [{ payment_type_id: ptCl, party_id: cl1, amount: 75 }] }, null, U); near(vc.amount, 75, 'سداد لعميل على الحساب المربوط بالنوع'); }
+
 section('16) الصلاحيات التفصيلية');
 const { userPerms: UP } = await import('../server/lib/perms.js');
 const adm = await ckOf('admin');
@@ -310,6 +342,14 @@ const meV = await (await fetch(base + '/api/me', { headers: { cookie: ckView } }
 const usr = await send('PUT', '/api/users/' + (await val("SELECT id FROM users WHERE username='p_view'")), { perms: ['reports.hub', 'reports.hub.zzz', 'inventory.issues.create'] }, adm);
 ok(usr.status === 200 && JSON.parse(await val("SELECT perms FROM users WHERE username='p_view'")).sort().join() === 'inventory.issues,inventory.issues.create,reports.hub', 'حفظ صلاحيات مستخدم (تنظيف + فرض مفتاح الصفحة)');
 ok((await send('PUT', '/api/users/1', { perms: [] }, ckCreate)).status === 403, 'إدارة المستخدمين للمدير فقط');
+const lkp = await (await fetch(base + "/api/lookups", { headers: { cookie: adm } })).json();
+ok(Array.isArray(lkp.payment_types) && lkp.payment_types.length >= 2, 'أنواع المدفوعات في القوائم المرجعية');
+const lstE = await (await fetch(base + '/api/doc/voucher?only=expenses', { headers: { cookie: adm } })).json();
+ok(lstE.some((r) => r.kind === 'disbursement' && r.party_text) && lstE.every((r) => ['disbursement', 'expense', 'supplier_payment'].includes(r.kind)), 'قائمة سندات المصروفات: النوع + أسماء الأطراف');
+const lstC = await (await fetch(base + '/api/doc/voucher?only=custody', { headers: { cookie: adm } })).json();
+ok(lstC.length && lstC.every((r) => ['custody_issue', 'custody_return', 'transfer'].includes(r.kind)), 'قائمة العهد والتحويلات مدموجة');
+const lp = UP({ role: 'user', perms: JSON.stringify(['finance.supplier-payments', 'finance.transfers']) });
+ok(lp.has('finance.expenses') && lp.has('finance.custody'), 'صلاحيات سداد الموردين والتحويلات القديمة اتحوّلت للصفحات الجديدة');
 server.close();
 
 console.log(`\n${fail ? '✗' : '✓'} ${pass} اختبار نجح، ${fail} فشل`);
