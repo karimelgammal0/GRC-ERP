@@ -321,7 +321,7 @@ async function buildIssue(id) {
     total += value; { const it = l.item_id ?? h.item_id ?? null, sg = l.stage_id ?? h.stage_id ?? null, key = `${it}|${sg}`; byItem.set(key, { it, sg, amt: r2((byItem.get(key)?.amt || 0) + value) }); }
     await insertRow('cost_lines', {
       date: h.date, source_type: 'issue', source_id: id, source_line_id: l.id, cost_type: 'material',
-      cost_class: kind === 'overhead' ? 'indirect' : 'direct', project_id: h.project_id, item_id: l.item_id ?? h.item_id, stage_id: l.stage_id ?? h.stage_id, site_id: h.site_id,
+      cost_class: kind === 'overhead' ? 'indirect' : kind === 'site' ? 'transfer' : 'direct', project_id: h.project_id, item_id: l.item_id ?? h.item_id, stage_id: l.stage_id ?? h.stage_id, site_id: h.site_id,
       material_id: l.material_id, qty: sign * l.qty, amount: sign * value, description: h.no,
     }, ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'project_id', 'item_id', 'stage_id', 'site_id', 'material_id', 'qty', 'amount', 'description']);
   }

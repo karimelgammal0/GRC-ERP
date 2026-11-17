@@ -1,6 +1,7 @@
 import { h, GET, L, META, can, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, modal, nameOf, labelOf, CLASS_OPTS } from '../core.js';
 
 const CT = [['', 'الكل'], ['material', 'خامات'], ['labor', 'عمالة'], ['expense', 'مصروفات']];
+const REP_CLASS = [...CLASS_OPTS, ['transfer', 'تحويلات للمواقع (خارج تكلفة التصنيع)']];
 const COSTF = [{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'cost_type', l: 'نوع التكلفة', t: 'select', options: CT }];
 
 export async function hub(root) {
@@ -40,7 +41,7 @@ const docLink = (r) => {
 };
 const costTable = (rows) => table({ name: 'تفاصيل التكلفة', compact: true, rows,
   cols: [{ k: 'date', l: 'التاريخ' }, { k: 'doc_no', l: 'رقم المستند', render: docLink, text: (r) => r.doc_no || '' }, { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'cost_type', l: 'النوع', text: (r) => labelOf(CT, r.cost_type) },
-    { k: 'cost_class', l: 'التصنيف', text: (r) => labelOf(CLASS_OPTS, r.cost_class).split(' (')[0] }, { k: 'desc', l: 'البيان', text: (r) => r.material_name || r.employee_name || r.category_name || r.site_name || r.description || '' },
+    { k: 'cost_class', l: 'التصنيف', text: (r) => labelOf(REP_CLASS, r.cost_class).split(' (')[0] }, { k: 'desc', l: 'البيان', text: (r) => r.material_name || r.employee_name || r.category_name || r.site_name || r.description || '' },
     { k: 'qty', l: 'الكمية', num: true, fmt: (v) => fq(v) }, { k: 'amount', l: 'المبلغ', num: true, fmt: (v) => fmt(v) }],
   foot: (c, rows) => (c.k === 'amount' ? fmt(rows.reduce((s, r) => s + r.amount, 0)) : c.k === 'date' ? 'الإجمالي' : '') });
 
@@ -74,7 +75,7 @@ export const materialUsagePage = pivotPage({ title: 'استهلاك الخاما
 
 export async function costDetailPage(root) {
   const host = h('div');
-  const fb = filterBar([...COSTF, { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'cost_class', l: 'التصنيف', t: 'select', options: [['', 'الكل'], ...CLASS_OPTS] }],
+  const fb = filterBar([...COSTF, { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'cost_class', l: 'التصنيف', t: 'select', options: [['', 'الكل (بدون التحويلات)'], ...REP_CLASS] }],
     async (v) => host.replaceChildren(costTable(await GET('/reports/cost-lines', v))), { from: monthStart() });
   root.replaceChildren(pageHead('تفاصيل التكاليف'), fb, host); fb.run();
 }

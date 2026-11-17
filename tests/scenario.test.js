@@ -233,11 +233,13 @@ ok(await putSc({ shortcuts: ['inventory/issues?new=1', 'reports/hub'] }) === 200
 ok(await putSc({ shortcuts: ['<script>'] }) !== 200, 'رفض مفتاح وصول سريع غير صالح');
 ok(JSON.parse((await api('/api/me')).shortcuts).length === 2, 'الوصول السريع بيرجع مع بيانات المستخدم');
 const cLines = await api('/api/reports/cost-lines'); ok(cLines.length > 0 && cLines.every((x) => x.doc_no), 'كل سطر تكلفة له رقم مستند مصدر');
+const trLines = await api('/api/reports/cost-lines?cost_class=transfer'); ok(trLines.length > 0 && trLines.every((x) => x.cost_class === 'transfer'), 'التحويلات للمواقع تصنيفها «تحويل» منفصل');
+ok(!(await api('/api/reports/cost-lines')).some((x) => x.cost_class === 'transfer'), 'تفاصيل التكاليف الافتراضية بدون التحويلات');
 const lastP = await api(`/api/helpers/last-price?material_id=${T1}`); ok(lastP && Number(lastP.unit_price) > 0, 'آخر سعر شراء للخامة');
 const piv = await api('/api/reports/cost-pivot?row=project&col=stage');
 const pname = await val('SELECT name FROM projects WHERE id=?', prj); const prow = piv.rows.find((x) => x.name === pname);
 ok(prow && prow.total > 0, 'مصفوفة المشروع × المرحلة فيها بيانات');
-near(piv.totals.total, await cl('1=1'), 'إجمالي المصفوفة = جدول التكلفة');
+near(piv.totals.total, await cl("cost_class<>'transfer'"), 'إجمالي المصفوفة = جدول التكلفة');
 const piv2 = await api('/api/reports/cost-pivot?row=stage&col=project');
 near(piv2.totals.total, piv.totals.total, 'مرحلة × مشروع نفس الإجمالي');
 const card = await api(`/api/reports/stock-card?material_id=${T1}`);
