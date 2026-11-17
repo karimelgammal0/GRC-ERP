@@ -97,6 +97,21 @@ function parse() {
   const [path, qs] = (location.hash.slice(1) || '/dashboard/home').split('?'); const [, mod, page] = path.split('/');
   return { mod: mod || 'dashboard', page: page || NAV.find((g) => g.id === (mod || 'dashboard'))?.items[0][0], params: Object.fromEntries(new URLSearchParams(qs || '')) };
 }
+// فهرس الصفحات والأزرار المتاحة للمستخدم (لوحة الوصول السريع)
+function buildCatalog() {
+  const out = [];
+  for (const g of NAV) {
+    if (g.id === 'dashboard') continue;
+    for (const [k, t, fn, hid] of g.items) {
+      if (!fn || hid || !pageOk(g, k)) continue;
+      out.push({ key: `${g.id}/${k}`, label: t, group: g.title, href: `#/${g.id}/${k}` });
+      const ni = fn.newInfo;
+      if (ni && (!ni.perm || can(ni.perm + '.create'))) out.push({ key: `${g.id}/${k}?new=1`, label: ni.label, group: g.title, href: `#/${g.id}/${k}?new=1`, isNew: true });
+    }
+  }
+  return out;
+}
+META.catalog = buildCatalog;
 let S = null;
 async function route() {
   if (!S) return; const { mod, page, params } = parse();

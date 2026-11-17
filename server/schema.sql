@@ -436,6 +436,7 @@ ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS requested_by_id INTEGER R
 ALTER TABLE stock_issues ADD COLUMN IF NOT EXISTS received_by_id INTEGER REFERENCES employees(id);
 -- أذون الصرف/التحويل المعتمدة بتتقفل؛ reopened=1 معناها اتفتحت بصلاحية للتعديل مرة واحدة
 ALTER TABLE stock_issues ADD COLUMN IF NOT EXISTS reopened INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS shortcuts TEXT;
 ALTER TABLE stock_issue_lines ADD COLUMN IF NOT EXISTS item_id INTEGER REFERENCES project_items(id);
 ALTER TABLE stock_issue_lines ADD COLUMN IF NOT EXISTS stage_id INTEGER REFERENCES stages(id);
 UPDATE stock_issue_lines l SET stage_id = i.stage_id FROM stock_issues i WHERE i.id = l.issue_id AND l.stage_id IS NULL AND i.stage_id IS NOT NULL;

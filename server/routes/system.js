@@ -32,6 +32,12 @@ export async function systemRouter() {
   const r = Router();
   await r.post('/logout', async (req, res) => { await run('DELETE FROM sessions WHERE token=?', req.token); res.setHeader('Set-Cookie', 'sid=; Path=/; Max-Age=0'); res.json({ ok: true }); });
   r.get('/me', (req, res) => { const { pass_hash, ...u } = req.user; const perms = [...userPerms(req.user)]; res.json({ ...u, perms, modules: [...new Set(perms.map((k) => k.split('.')[0]))] }); });
+  // الوصول السريع في لوحة التحكم: قائمة مفاتيح صفحات/أزرار لكل مستخدم (null = الافتراضي)
+  await r.put('/me/shortcuts', async (req, res) => {
+    const list = req.body?.shortcuts;
+    if (!Array.isArray(list) || list.length > 24 || list.some((x) => typeof x !== 'string' || x.length > 80 || !/^[\w-]+\/[\w-]+(\?new=1)?$/.test(x))) throw new AppError('قائمة الوصول السريع غير صالحة');
+    await run('UPDATE users SET shortcuts=? WHERE id=?', JSON.stringify([...new Set(list)]), req.user.id); res.json({ ok: true });
+  });
   await r.post('/change-password', async (req, res) => {
     const { old_password, new_password } = req.body;
     if (!checkPassword(String(old_password || ''), req.user.pass_hash)) throw new AppError('كلمة المرور الحالية غير صحيحة');

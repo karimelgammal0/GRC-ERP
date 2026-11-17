@@ -5,7 +5,7 @@ import { entryUnits, toBaseQty } from './units.js';
 import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, formGrid, fieldInput, pageHead, card, toast, guard, confirmBox, statusBadge, byId, nameOf, can } from './core.js';
 
 export function docScreen(cfg) {
-  return function render(root, params = {}) {
+  const render = function render(root, params = {}) {
     const host = h('div'); root.replaceChildren(host);
     const showList = () => {
       const tableHost = h('div');
@@ -112,6 +112,9 @@ export function docScreen(cfg) {
 
     if (params.new) showEditor(null, params.init); else if (params.id) showEditor(Number(params.id)); else showList();
   };
+  // بيانات بتستخدمها لوحة الوصول السريع عشان تعرض زر «جديد» لو المستخدم يقدر ينشئ
+  render.newInfo = cfg.canCreate === false ? null : { label: cfg.newLabel || `${cfg.noun} جديد`, perm: cfg.perm };
+  return render;
 }
 
 // حقول جاهزة مشتركة
