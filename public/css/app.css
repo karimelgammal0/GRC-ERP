@@ -143,6 +143,26 @@ input.ro, select.ro { background: #f1efe8; color: var(--ink2); }
 .empty-state { text-align: center; color: var(--ink2); padding: 40px 10px; }
 
 @media (max-width: 900px) { #app { grid-template-columns: 1fr; } .side { position: static; height: auto; } .main { padding: 14px; } .fgrid.c3, .fgrid.c4 { grid-template-columns: 1fr 1fr; } }
+/* رسوم بيانية */
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+@media (max-width: 800px) { .chart-grid { grid-template-columns: 1fr; } }
+.bar-row { display: grid; grid-template-columns: 130px 1fr 95px; gap: 8px; align-items: center; margin: 7px 0; }
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.bar-track { display: flex; background: var(--bg, #f1f5f9); border-radius: 6px; height: 16px; overflow: hidden; }
+.bar-seg { display: block; height: 100%; }
+.bar-val { font-size: 12px; text-align: left; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; margin-bottom: 6px; }
+.legend.col { flex-direction: column; flex-wrap: nowrap; margin: 0; }
+.legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-inline-end: 5px; vertical-align: -1px; }
+.donut-wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.print-only { display: none; }
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-only { display: block; } .mbar, .tabbar, .page-head { display: none !important; }
+  .print-head { border-bottom: 2px solid #111; margin-bottom: 10px; padding-bottom: 6px; }
+  .ph-co { font-weight: 700; font-size: 15px; } .ph-title { font-size: 20px; font-weight: 700; text-align: center; margin: 4px 0; } .ph-filters, .ph-date { font-size: 11px; color: #444; }
+  .chart-grid, .kpis { break-inside: avoid; } .card { break-inside: avoid; } .hint, .note { display: none; }
+}
 @media print {
   .side, .tbl-bar, .filters, .actions, .page-head .btn, .no-print, #toasts { display: none !important; }
   #app { display: block; } .main { padding: 0; } body { background: #fff; font-size: 12px; } .card, .tbl-wrap { box-shadow: none; }
