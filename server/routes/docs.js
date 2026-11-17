@@ -176,6 +176,15 @@ export function helperRouter() {
     res.json(await get('SELECT * FROM project_items WHERE id=?', id));
   });
   r.get('/stock', async (req, res) => res.json(await stockOf(Number(req.query.warehouse_id), Number(req.query.material_id))));
+  // آخر سعر شراء للخامة (من فواتير الشراء واستلامات البضاعة المعتمدة)، بالوحدة الأساسية
+  r.get('/last-price', async (req, res) => {
+    const row = await get(`SELECT unit_price, date, supplier_name FROM (
+        SELECT l.unit_price, d.date, d.id, 1 src, s.name supplier_name FROM purchase_invoice_lines l JOIN purchase_invoices d ON d.id=l.invoice_id JOIN suppliers s ON s.id=d.supplier_id WHERE l.material_id=? AND d.status<>'void' AND l.unit_price>0
+        UNION ALL
+        SELECT l.unit_price, d.date, d.id, 0 src, s.name supplier_name FROM goods_receipt_lines l JOIN goods_receipts d ON d.id=l.receipt_id JOIN suppliers s ON s.id=d.supplier_id WHERE l.material_id=? AND d.status<>'void' AND l.unit_price>0
+      ) x ORDER BY date DESC, src DESC, id DESC LIMIT 1`, req.query.material_id, req.query.material_id);
+    res.json(row || null);
+  });
   r.get('/stock-all', async (req, res) => res.json(await all(`SELECT material_id, qty, value, avg_cost FROM material_stock WHERE warehouse_id=?`, req.query.warehouse_id)));
   r.get('/project-items', async (req, res) => res.json(await all(`SELECT id,code,name FROM project_items WHERE project_id=? AND active=1 ORDER BY code`, req.query.project_id)));
   r.get('/employee-rates', async (req, res) => res.json(await all(`SELECT id, code, name, emp_type, daily_rate, monthly_salary, cost_class, default_stage_id FROM employees WHERE active=1 ORDER BY code`)));

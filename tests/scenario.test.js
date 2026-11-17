@@ -228,6 +228,7 @@ const server = app.listen(0); const base = `http://127.0.0.1:${server.address().
 const login = await fetch(base + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'admin123' }) });
 const cookie = login.headers.get('set-cookie').split(';')[0];
 const api = async (p) => { const r = await fetch(base + p, { headers: { cookie } }); const j = await r.json(); if (!r.ok) throw new Error(p + ' → ' + j.error); return j; };
+const lastP = await api(`/api/helpers/last-price?material_id=${T1}`); ok(lastP && Number(lastP.unit_price) > 0, 'آخر سعر شراء للخامة');
 const piv = await api('/api/reports/cost-pivot?row=project&col=stage');
 const pname = await val('SELECT name FROM projects WHERE id=?', prj); const prow = piv.rows.find((x) => x.name === pname);
 ok(prow && prow.total > 0, 'مصفوفة المشروع × المرحلة فيها بيانات');

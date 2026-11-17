@@ -6,6 +6,13 @@ const unitOf = (mid) => nameOf('units', byId('materials', mid)?.unit_id);
 const PAY = [['credit', 'آجل (على حساب المورد)'], ['cash', 'نقدي']];
 const matCol = { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '38%', onChange: matChange };
 const unitCol = { l: 'الوحدة', calc: (l) => unitOf(l.material_id), w: '80px' };
+// فاتورة الشراء: لما تختار خامة والسعر فاضي، السعر يتملا من آخر سعر شراء للخامة
+const fillLastPrice = async (v, l, ctx) => {
+  matChange(v, l, ctx);
+  if (!v || (Number(l.unit_price) || 0) > 0) return;
+  const p = await GET('/helpers/last-price', { material_id: v });
+  if (p && l.material_id === v && !(Number(l.unit_price) > 0)) { l.unit_price = Number(p.unit_price); ctx.setLines(ctx.lines); }
+};
 const supF = { k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true, req: 1 };
 const lineTotal = { l: 'الإجمالي', calc: (l) => (Number(l.qty) || 0) * (Number(l.unit_price) || 0), fmt: (v) => fmt(v), w: '120px' };
 const dateStatusCols = [{ k: 'date', l: 'التاريخ' }];
@@ -109,7 +116,7 @@ export const invoicesPage = docScreen({ perm: 'purchases.invoices',
         cash && { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } },
         { k: 'discount', l: 'خصم (مبلغ)', t: 'number' }, { k: 'freight', l: 'مصاريف نقل وتحميل (تُضاف للتكلفة)', t: 'number' }, { k: 'vat_percent', l: 'ضريبة القيمة المضافة %', t: 'number' }, { ...notesF }].filter(Boolean);
     },
-    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal] },
+    lines: { blank: () => ({}), cols: [{ ...matCol, onChange: fillLastPrice }, qtyCol({ l: 'الكمية', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal] },
     totals: (ctx) => { const c = invCalc(ctx); const out = [['الإجمالي قبل الخصم', fmt(c.sub)]]; if (c.d) out.push(['الخصم', fmt(c.d)]); if (c.f) out.push(['نقل وتحميل', fmt(c.f)]); if (c.vat) out.push(['الضريبة', fmt(c.vat)]);
       out.push(['إجمالي الفاتورة', fmt(c.tot)]); if (ctx.doc && ctx.doc.payment_type === 'credit') out.push(['المتبقي على المورد', fmt(ctx.doc.open_amount), 'warn']); return out; },
     prepare: (p) => { if (p.payment_type === 'credit') { p.treasury_id = null; p.custodian_id = null; } },
