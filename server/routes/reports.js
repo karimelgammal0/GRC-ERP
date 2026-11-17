@@ -13,8 +13,10 @@ function costWhere(q) {
   if (q.to) { w.push('c.date<=?'); p.push(q.to); }
   for (const k of ['project_id', 'stage_id', 'item_id', 'site_id', 'material_id', 'employee_id', 'category_id']) if (q[k]) { w.push(`c.${k}=?`); p.push(q[k]); }
   if (q.cost_type) { w.push('c.cost_type=?'); p.push(q.cost_type); }
-  // التحويلات للمواقع مش تكلفة تصنيع: بتطلع بس لو اخترتها صراحةً في فلتر التصنيف
-  if (q.cost_class) { w.push('c.cost_class=?'); p.push(q.cost_class); } else w.push(`c.cost_class<>'transfer'`);
+  if (q.cost_class) { w.push('c.cost_class=?'); p.push(q.cost_class); }
+  // النطاق: تصنيع (الافتراضي، بدون التحويلات للمواقع) | تحويلات للمواقع | الكل
+  const scope = q.scope || (q.cost_class === 'transfer' ? 'all' : 'manufacturing');
+  if (scope === 'manufacturing') w.push(`c.cost_class<>'transfer'`); else if (scope === 'transfer') w.push(`c.cost_class='transfer'`);
   return { sql: w.join(' AND '), p };
 }
 const DIM = {
@@ -35,7 +37,7 @@ const nameOf = (names, k) => (k === 0 || k === '0' ? 'غير محدد' : names[k
 
 // كل تقرير ليه صفحة (أو أكتر) بتستخدمه — المستخدم لازم يكون له صلاحية على واحدة منهم
 const REPORT_PAGES = {
-  'cost-pivot': ['reports.project-stage', 'reports.stage-project', 'reports.project-analysis'], 'cost-lines': ['reports.cost-detail', 'reports.material-usage', 'reports.project-stage', 'reports.stage-project', 'reports.project-analysis'],
+  'cost-pivot': ['reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.factory-cost'], 'cost-lines': ['reports.cost-detail', 'reports.material-usage', 'reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.factory-cost'],
   'stock-card': ['inventory.stock-card'], 'stock-balances': ['inventory.balances'], 'stock-moves': ['inventory.moves'],
   'supplier-statement': ['purchases.supplier-statement'], 'supplier-balances': ['purchases.supplier-balances'],
   'treasury-statement': ['finance.treasury-statement'], 'treasury-balances': ['finance.treasuries'], 'custody-statement': ['finance.custody-statement'], 'custody-balances': ['finance.treasuries'],

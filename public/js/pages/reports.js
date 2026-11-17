@@ -1,8 +1,9 @@
 import { h, GET, L, META, can, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, modal, nameOf, labelOf, CLASS_OPTS } from '../core.js';
 
 const CT = [['', 'الكل'], ['material', 'خامات'], ['labor', 'عمالة'], ['expense', 'مصروفات']];
-const REP_CLASS = [...CLASS_OPTS, ['transfer', 'تحويلات للمواقع (خارج تكلفة التصنيع)']];
-const COSTF = [{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'cost_type', l: 'نوع التكلفة', t: 'select', options: CT }];
+const REP_CLASS = [...CLASS_OPTS, ['transfer', 'تحويلات للمواقع']];
+const SCOPES = [['manufacturing', 'تصنيع (بدون التحويلات للمواقع)'], ['transfer', 'تحويلات للمواقع'], ['all', 'الكل']];
+const COSTF = [{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'cost_type', l: 'نوع التكلفة', t: 'select', options: CT }, { k: 'scope', l: 'النطاق', t: 'select', options: SCOPES }];
 
 export async function hub(root) {
   const items = [
@@ -10,6 +11,7 @@ export async function hub(root) {
     ['تكلفة المراحل على كل المشاريع', 'كل مرحلة وتوزيعها على المشروعات', '#/reports/stage-project'],
     ['تحليل مشروع (بند × مرحلة)', 'تفصيل مشروع واحد على البنود والمراحل — بداية تكلفة البند', '#/reports/project-analysis'],
     ['استهلاك الخامات', 'الخامة × المشروع أو المرحلة', '#/reports/material-usage'],
+    ['تكاليف المصنع', 'إجمالي تكاليف المصنع مصنفة مباشرة / غير مباشرة / إدارية (شهري أو حسب النوع)', '#/reports/factory-cost'],
     ['تفاصيل التكاليف', 'كل سطر تكلفة بفلاتر مشروع/بند/مرحلة/نوع', '#/reports/cost-detail'],
     ['المصروفات', 'حسب الفئة/التصنيف/المشروع/الشهر', '#/reports/expenses'],
     ['العمالة', 'حسب العامل/المرحلة/المشروع/التصنيف', '#/reports/labor'],
@@ -60,7 +62,7 @@ function pivotPage({ title, row, col, rowRef, colRef, rowLbl, extra = [], note }
       host.replaceChildren(h('div.kpis', kpi('إجمالي التكلفة', fmt(d.totals.total)), kpi('خامات', fmt(d.totals.material)), kpi('عمالة', fmt(d.totals.labor)), kpi('مصروفات', fmt(d.totals.expense))),
         table({ name: title, cols, rows: d.rows, foot }), h('div.hint', 'اضغط على أي رقم لعرض الحركات اللي كوّنته.'));
     };
-    const fb = filterBar([...COSTF, ...extra], run, { from: monthStart(), project_id: params.project_id ? Number(params.project_id) : null });
+    const fb = filterBar([...COSTF, ...extra], run, { from: monthStart(), scope: 'manufacturing', project_id: params.project_id ? Number(params.project_id) : null });
     root.replaceChildren(pageHead(title), note ? h('div.note', note) : null, fb, host); fb.run();
   };
 }
@@ -75,9 +77,27 @@ export const materialUsagePage = pivotPage({ title: 'استهلاك الخاما
 
 export async function costDetailPage(root) {
   const host = h('div');
-  const fb = filterBar([...COSTF, { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'cost_class', l: 'التصنيف', t: 'select', options: [['', 'الكل (بدون التحويلات)'], ...REP_CLASS] }],
-    async (v) => host.replaceChildren(costTable(await GET('/reports/cost-lines', v))), { from: monthStart() });
+  const fb = filterBar([...COSTF, { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'cost_class', l: 'التصنيف', t: 'select', options: [['', 'الكل'], ...CLASS_OPTS] }],
+    async (v) => host.replaceChildren(costTable(await GET('/reports/cost-lines', v))), { from: monthStart(), scope: 'manufacturing' });
   root.replaceChildren(pageHead('تفاصيل التكاليف'), fb, host); fb.run();
+}
+// تكاليف المصنع: كل التكاليف (بدون التحويلات للمواقع) مصنفة مباشرة / غير مباشرة / إدارية، شهرياً أو حسب نوع التكلفة
+export async function factoryCostPage(root) {
+  const host = h('div'); const ORD = ['direct', 'indirect', 'admin'];
+  const fb = filterBar([{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'by', l: 'الأعمدة', t: 'select', options: [['month', 'شهري'], ['type', 'حسب نوع التكلفة (خامات/عمالة/مصروفات)']] }], async (v) => {
+    const by = v.by || 'month'; const d = await GET('/reports/cost-pivot', { row: 'class', col: by, from: v.from, to: v.to });
+    const rows = [...d.rows].sort((a, b) => ORD.indexOf(a.key) - ORD.indexOf(b.key));
+    const drill = (cls, ck) => () => { const f = { from: v.from, to: v.to, cost_class: cls }; if (ck != null) { if (by === 'type') f.cost_type = ck; else { f.from = `${ck}-01`; f.to = `${ck}-31`; if (v.from && v.from > f.from) f.from = v.from; if (v.to && v.to < f.to) f.to = v.to; } } openDrill(f, `${labelOf(REP_CLASS, cls).split(' (')[0]}${ck != null ? ' — ' + (d.cols.find((c) => String(c.key) === String(ck))?.name || ck) : ''}`); };
+    const cell = (val, fn) => (val ? h('a', { href: '#', onclick: (e) => { e.preventDefault(); fn(); } }, fmt(val)) : '');
+    const cols = [{ k: 'name', l: 'التصنيف', render: (r) => h('b', r.name) },
+      ...d.cols.map((c) => ({ k: 'c' + c.key, l: c.name || 'غير محدد', num: true, render: (r) => cell(r.values[c.key], drill(r.key, c.key)) })),
+      { k: 'total', l: 'الإجمالي', num: true, render: (r) => h('b', cell(r.total, drill(r.key, null)) || '') }];
+    const foot = (c) => (c.k === 'name' ? 'الإجمالي' : c.k.startsWith('c') ? fmt(d.totals.values[c.k.slice(1)]) : c.k === 'total' ? fmt(d.totals.total) : '');
+    const tot = Object.fromEntries(rows.map((r) => [r.key, r.total]));
+    host.replaceChildren(h('div.kpis', kpi('إجمالي تكاليف المصنع', fmt(d.totals.total)), kpi('مباشرة', fmt(tot.direct || 0)), kpi('غير مباشرة', fmt(tot.indirect || 0)), kpi('إدارية', fmt(tot.admin || 0))),
+      table({ name: 'تكاليف المصنع', cols, rows, foot }), h('div.hint', 'التحويلات للمواقع غير محسوبة هنا. اضغط على أي رقم لعرض السطور اللي كوّنته.'));
+  }, { from: monthStart(), by: 'month' });
+  root.replaceChildren(pageHead('تكاليف المصنع'), fb, host); fb.run();
 }
 function groupReport(title, endpoint, groups, cols, extraFilters = []) {
   return async (root) => {

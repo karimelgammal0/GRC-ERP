@@ -26,7 +26,7 @@ const NAV = [
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
   { id: 'reports', ico: '◔', title: 'التقارير', direct: true, items: [
     ['hub', 'كل التقارير', rep.hub], ['project-stage', 'تكلفة المشاريع × المراحل', rep.projectStagePage], ['stage-project', 'تكلفة المراحل × المشاريع', rep.stageProjectPage], ['project-analysis', 'تحليل مشروع (بنود)', rep.projectAnalysisPage],
-    ['material-usage', 'استهلاك الخامات', rep.materialUsagePage], ['cost-detail', 'تفاصيل التكاليف', rep.costDetailPage], ['expenses', 'المصروفات', rep.expensesReport], ['labor', 'العمالة', rep.laborReport],
+    ['material-usage', 'استهلاك الخامات', rep.materialUsagePage], ['factory-cost', 'تكاليف المصنع', rep.factoryCostPage], ['cost-detail', 'تفاصيل التكاليف', rep.costDetailPage], ['expenses', 'المصروفات', rep.expensesReport], ['labor', 'العمالة', rep.laborReport],
     ['trial-balance', 'ميزان المراجعة', rep.trialBalancePage], ['ledger', 'كشف حساب أستاذ', rep.ledgerPage], ['income', 'قائمة الدخل', rep.incomePage]] },
   { id: 'settings', ico: '⚙', title: 'الإعدادات', items: [
     ['general', 'عام (بيانات الشركة)', generalPage], ['opening', 'الأرصدة الافتتاحية', openingPage],
