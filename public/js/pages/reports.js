@@ -24,8 +24,22 @@ function openDrill(filters, title) {
   const body = h('div', 'جاري التحميل…'); modal({ title, wide: true, body });
   GET('/reports/cost-lines', filters).then((rows) => body.replaceChildren(costTable(rows)));
 }
+// رابط المستند المصدر لسطر تكلفة: [الصفحة, مفتاح الصلاحية]
+const VOUCHER_PG = { supplier_payment: 'expenses', expense: 'expenses', disbursement: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'custody', receipt: 'other', payment_other: 'other', collection: 'other' };
+const docPage = (r) => {
+  const t = r.source_type;
+  if (t === 'issue') return ['inventory', r.doc_kind === 'site' ? 'site-transfers' : r.doc_kind === 'return' ? 'returns' : 'issues'];
+  if (t === 'voucher') return VOUCHER_PG[r.doc_kind] ? ['finance', VOUCHER_PG[r.doc_kind]] : null;
+  return { receipt: ['purchases', 'receipts'], invoice: ['purchases', 'invoices'], preturn: ['purchases', 'returns'], adjustment: ['inventory', 'adjustments'],
+    labor: ['hr', 'labor'], labor_advance: ['hr', 'labor-advances'], payroll: ['hr', 'payroll'] }[t] || null;
+};
+const docLink = (r) => {
+  if (!r.doc_no) return '';
+  const pg = docPage(r);
+  return pg && can(`${pg[0]}.${pg[1]}`) ? h('a', { href: `#/${pg[0]}/${pg[1]}?id=${r.source_id}`, title: 'فتح المستند' }, r.doc_no) : r.doc_no;
+};
 const costTable = (rows) => table({ name: 'تفاصيل التكلفة', compact: true, rows,
-  cols: [{ k: 'date', l: 'التاريخ' }, { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'cost_type', l: 'النوع', text: (r) => labelOf(CT, r.cost_type) },
+  cols: [{ k: 'date', l: 'التاريخ' }, { k: 'doc_no', l: 'رقم المستند', render: docLink, text: (r) => r.doc_no || '' }, { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'cost_type', l: 'النوع', text: (r) => labelOf(CT, r.cost_type) },
     { k: 'cost_class', l: 'التصنيف', text: (r) => labelOf(CLASS_OPTS, r.cost_class).split(' (')[0] }, { k: 'desc', l: 'البيان', text: (r) => r.material_name || r.employee_name || r.category_name || r.site_name || r.description || '' },
     { k: 'qty', l: 'الكمية', num: true, fmt: (v) => fq(v) }, { k: 'amount', l: 'المبلغ', num: true, fmt: (v) => fmt(v) }],
   foot: (c, rows) => (c.k === 'amount' ? fmt(rows.reduce((s, r) => s + r.amount, 0)) : c.k === 'date' ? 'الإجمالي' : '') });

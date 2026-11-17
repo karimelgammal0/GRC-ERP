@@ -232,6 +232,7 @@ const putSc = async (body) => (await fetch(base + '/api/me/shortcuts', { method:
 ok(await putSc({ shortcuts: ['inventory/issues?new=1', 'reports/hub'] }) === 200, 'حفظ الوصول السريع');
 ok(await putSc({ shortcuts: ['<script>'] }) !== 200, 'رفض مفتاح وصول سريع غير صالح');
 ok(JSON.parse((await api('/api/me')).shortcuts).length === 2, 'الوصول السريع بيرجع مع بيانات المستخدم');
+const cLines = await api('/api/reports/cost-lines'); ok(cLines.length > 0 && cLines.every((x) => x.doc_no), 'كل سطر تكلفة له رقم مستند مصدر');
 const lastP = await api(`/api/helpers/last-price?material_id=${T1}`); ok(lastP && Number(lastP.unit_price) > 0, 'آخر سعر شراء للخامة');
 const piv = await api('/api/reports/cost-pivot?row=project&col=stage');
 const pname = await val('SELECT name FROM projects WHERE id=?', prj); const prow = piv.rows.find((x) => x.name === pname);

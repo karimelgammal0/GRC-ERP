@@ -80,7 +80,13 @@ export function reportRouter() {
 
   r.get('/cost-lines', async (req, res) => {
     const { sql, p } = costWhere(req.query);
-    res.json(await all(`SELECT c.*, pr.name project_name, it.name item_name, st.name stage_name, si.name site_name, m.name material_name, e.name employee_name, ec.name category_name
+    res.json(await all(`SELECT c.*, pr.name project_name, it.name item_name, st.name stage_name, si.name site_name, m.name material_name, e.name employee_name, ec.name category_name,
+      CASE c.source_type WHEN 'issue' THEN (SELECT no FROM stock_issues WHERE id=c.source_id) WHEN 'receipt' THEN (SELECT no FROM goods_receipts WHERE id=c.source_id)
+        WHEN 'invoice' THEN (SELECT no FROM purchase_invoices WHERE id=c.source_id) WHEN 'preturn' THEN (SELECT no FROM purchase_returns WHERE id=c.source_id)
+        WHEN 'adjustment' THEN (SELECT no FROM stock_adjustments WHERE id=c.source_id) WHEN 'labor' THEN (SELECT no FROM labor_sheets WHERE id=c.source_id)
+        WHEN 'labor_advance' THEN (SELECT no FROM labor_advances WHERE id=c.source_id) WHEN 'payroll' THEN (SELECT no FROM payroll_runs WHERE id=c.source_id)
+        WHEN 'voucher' THEN (SELECT no FROM vouchers WHERE id=c.source_id) END doc_no,
+      CASE c.source_type WHEN 'issue' THEN (SELECT kind FROM stock_issues WHERE id=c.source_id) WHEN 'voucher' THEN (SELECT kind FROM vouchers WHERE id=c.source_id) END doc_kind
       FROM cost_lines c LEFT JOIN projects pr ON pr.id=c.project_id LEFT JOIN project_items it ON it.id=c.item_id LEFT JOIN stages st ON st.id=c.stage_id
       LEFT JOIN sites si ON si.id=c.site_id LEFT JOIN materials m ON m.id=c.material_id LEFT JOIN employees e ON e.id=c.employee_id LEFT JOIN expense_categories ec ON ec.id=c.category_id
       WHERE ${sql} ORDER BY c.date DESC, c.id DESC LIMIT 3000`, ...p));
