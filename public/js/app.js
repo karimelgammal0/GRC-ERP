@@ -1,4 +1,4 @@
-import { h, GET, POST, META, can, loadLookups, loadMeta, toast, modal, formGrid } from './core.js';
+import { h, GET, POST, META, APP, can, loadLookups, loadMeta, toast, modal, formGrid } from './core.js';
 import { masterPage, generalPage, sequencesPage, openingPage, usersPage, auditPage } from './pages/settings.js';
 import * as inv from './pages/inventory.js';
 import * as pur from './pages/purchases.js';
@@ -111,7 +111,7 @@ function buildCatalog() {
   }
   return out;
 }
-META.catalog = buildCatalog;
+APP.catalog = buildCatalog;
 let S = null;
 async function route() {
   if (!S) return; const { mod, page, params } = parse();

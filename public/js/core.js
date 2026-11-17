@@ -70,7 +70,7 @@ export const confirmBox = (msg, okLabel = 'تأكيد', danger = false) => new P
 });
 
 // ---------- القوائم المرجعية (lookups) ----------
-export const L = {}; export const META = {};
+export const L = {}; export const META = {}; export const APP = {}; // APP: دوال بتسجلها الواجهة (مش بتتكتب فوقها من السيرفر)
 export async function loadLookups() { Object.assign(L, await GET('/lookups')); }
 export async function loadMeta() { Object.assign(META, await GET('/meta')); }
 /** صلاحية المستخدم الحالي: can('inventory.issues') = يشوف الصفحة، can('inventory.issues.create') = زرار الإنشاء. المدير يقدر على كل شيء */

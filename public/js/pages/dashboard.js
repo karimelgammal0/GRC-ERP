@@ -1,16 +1,16 @@
-import { h, GET, PUT, META, modal, toast, fmt, fq, kpi, card, pageHead } from '../core.js';
+import { h, GET, PUT, META, APP, modal, toast, fmt, fq, kpi, card, pageHead } from '../core.js';
 const DEFAULT_SHORTCUTS = ['inventory/issues?new=1', 'purchases/invoices?new=1', 'finance/expenses?new=1', 'reports/hub'];
 const savedShortcuts = () => { try { const v = JSON.parse(META.me.shortcuts || 'null'); return Array.isArray(v) ? v : null; } catch { return null; } };
 function quickAccessCard() {
   const host = h('div');
   const draw = () => {
-    const cat = META.catalog(); const byKey = Object.fromEntries(cat.map((c) => [c.key, c]));
+    const cat = APP.catalog(); const byKey = Object.fromEntries(cat.map((c) => [c.key, c]));
     const keys = savedShortcuts() ?? DEFAULT_SHORTCUTS; const items = keys.map((k) => byKey[k]).filter(Boolean);
     host.replaceChildren(items.length ? h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '10px' } }, items.map((c) => h('a.btn' + (c.isNew ? '.primary' : ''), { href: c.href }, (c.isNew ? '＋ ' : '') + c.label.replace(/^＋\s*/, ''))))
       : h('div.empty-state', 'لا توجد اختصارات — اضغط «تخصيص» لإضافة الصفحات والأزرار اللي بتستخدمها كتير'));
   };
   const edit = () => {
-    const cat = META.catalog(); const chosen = new Set(savedShortcuts() ?? DEFAULT_SHORTCUTS); const groups = [...new Set(cat.map((c) => c.group))];
+    const cat = APP.catalog(); const chosen = new Set(savedShortcuts() ?? DEFAULT_SHORTCUTS); const groups = [...new Set(cat.map((c) => c.group))];
     const body = h('div', { style: { maxHeight: '60vh', overflow: 'auto' } }, h('div.note', 'علّم على الصفحات والأزرار اللي عايزها تظهر في «وصول سريع». زر «＋ جديد» بيفتح الشاشة على مستند جديد مباشرة.'),
       groups.map((g) => h('div', { style: { margin: '12px 0' } }, h('b', g), h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: '6px', marginTop: '6px' } },
         cat.filter((c) => c.group === g).map((c) => h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center', cursor: 'pointer' } },
