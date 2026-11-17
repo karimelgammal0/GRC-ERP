@@ -716,7 +716,6 @@ DOCS.voucher = {
         if (!party) throw new AppError(at + 'الاسم غير موجود');
         l.amount = r2(l.amount);
         if (!(l.amount > 0)) throw new AppError(at + 'القيمة لازم تكون أكبر من صفر');
-        if (['client', 'employee'].includes(t.link) && !t.account_id) throw new AppError(at + `نوع المقبوض «${t.name}» غير مربوط بحساب — اربطه من الإعدادات`);
         if (t.link === 'account' && !party.postable) throw new AppError(at + 'اختر حساب فرعي (يقبل قيود)');
         l.stage_id = null;
         if (l.project_id) await must('projects', l.project_id, 'المشروع');
@@ -744,8 +743,7 @@ DOCS.voucher = {
             if (!l.project_id) throw new AppError(at + 'المصروف المباشر لازم يتحدد له المشروع');
             if (!l.stage_id) throw new AppError(at + 'المصروف المباشر لازم يتحدد له مرحلة التصنيع');
           } else if (!party.account_id) throw new AppError(at + `فئة المصروف «${party.name}» غير مربوطة بحساب`);
-        } else if (['client', 'employee'].includes(t.link) && !t.account_id) throw new AppError(at + `نوع الدفع «${t.name}» غير مربوط بحساب — اربطه من الإعدادات`);
-        else if (t.link === 'account' && !party.postable) throw new AppError(at + 'اختر حساب فرعي (يقبل قيود)');
+        } else if (t.link === 'account' && !party.postable) throw new AppError(at + 'اختر حساب فرعي (يقبل قيود)');
         if (l.project_id) await must('projects', l.project_id, 'المشروع');
         if (l.stage_id) await must('stages', l.stage_id, 'المرحلة');
         await checkDims(l.project_id, l.item_id, l.stage_id, false);
@@ -802,9 +800,9 @@ DOCS.voucher = {
       for (const l of doc.lines) {
         const t = types[l.payment_type_id] ||= await get('SELECT * FROM receipt_types WHERE id=?', l.payment_type_id);
         const note = String(l.notes || '').trim() || null;
-        if (t.link === 'client') lines.push(cr(t.account_id, l.amount, { project_id: l.project_id, item_id: l.item_id, description: note }));
+        if (t.link === 'client') lines.push(cr(await acc('acc_ar'), l.amount, { client_id: l.party_id, project_id: l.project_id, item_id: l.item_id, description: note }));
         else if (t.link === 'supplier') lines.push(cr(await acc('acc_ap'), l.amount, { supplier_id: l.party_id, description: note }));
-        else if (t.link === 'employee') lines.push(cr(t.account_id, l.amount, { employee_id: l.party_id, project_id: l.project_id, description: note }));
+        else if (t.link === 'employee') lines.push(cr(await acc('acc_employee_advances'), l.amount, { employee_id: l.party_id, project_id: l.project_id, description: note }));
         else if (t.link === 'custodian') lines.push(cr(await acc('acc_custody'), l.amount, { custodian_id: l.party_id, description: note }));
         else lines.push(cr(l.party_id, l.amount, { project_id: l.project_id, item_id: l.item_id, description: note }));
       }
@@ -823,8 +821,8 @@ DOCS.voucher = {
           lines.push(dc(debitAcc, l.amount, { ...dims, description: note }));
           await insertRow('cost_lines', { date: doc.date, source_type: 'voucher', source_id: doc.id, source_line_id: l.id, cost_type: 'expense', cost_class: c.cost_class, ...dims, category_id: c.id, qty: 1, amount: l.amount, description: `${doc.no} — ${note || c.name}` },
             ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'project_id', 'item_id', 'stage_id', 'category_id', 'qty', 'amount', 'description']);
-        } else if (t.link === 'client') lines.push(dc(t.account_id, l.amount, { project_id: l.project_id, description: note }));
-        else if (t.link === 'employee') lines.push(dc(t.account_id, l.amount, { employee_id: l.party_id, project_id: l.project_id, description: note }));
+        } else if (t.link === 'client') lines.push(dc(await acc('acc_ar'), l.amount, { client_id: l.party_id, project_id: l.project_id, description: note }));
+        else if (t.link === 'employee') lines.push(dc(await acc('acc_employee_advances'), l.amount, { employee_id: l.party_id, project_id: l.project_id, description: note }));
         else if (t.link === 'custodian') lines.push(dc(await acc('acc_custody'), l.amount, { custodian_id: l.party_id, description: note }));
         else lines.push(dc(l.party_id, l.amount, { project_id: l.project_id, description: note }));
       }

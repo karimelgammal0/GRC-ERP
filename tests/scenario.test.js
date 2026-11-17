@@ -304,8 +304,9 @@ ok((await val(`SELECT COUNT(*) FROM journal_entries WHERE source_type='voucher' 
 // العملاء/العاملين: نوع دفع جديد لازم له حساب مدين
 const { MASTERS } = await import('../server/routes/masters.js'); ok(MASTERS.payment_types, 'تكويد أنواع المدفوعات موجود');
 const clAcc = await val(`SELECT id FROM accounts WHERE postable=1 ORDER BY code LIMIT 1`); const cl1 = await val('SELECT id FROM clients LIMIT 1');
-const ptCl = await insertRow('payment_types', { code: 'PT-T', name: 'عملاء', link: 'client', account_id: clAcc }, ['code', 'name', 'link', 'account_id']);
-if (cl1) { const vc = await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', treasury_id: treasury, lines: [{ payment_type_id: ptCl, party_id: cl1, amount: 75 }] }, null, U); near(vc.amount, 75, 'سداد لعميل على الحساب المربوط بالنوع'); }
+await setSetting('acc_ar', clAcc);
+const ptCl = await insertRow('payment_types', { code: 'PT-T', name: 'عملاء', link: 'client' }, ['code', 'name', 'link']);
+if (cl1) { const vc = await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', treasury_id: treasury, lines: [{ payment_type_id: ptCl, party_id: cl1, amount: 75 }] }, null, U); near(vc.amount, 75, 'سداد لعميل على حساب العملاء'); }
 
 section('18) سند مقبوضات متعدد الأسطر');
 const rtSup = await val(`SELECT id FROM receipt_types WHERE link='supplier'`), rtCus = await val(`SELECT id FROM receipt_types WHERE link='custodian'`);
@@ -317,8 +318,8 @@ const cJl = await all(`SELECT jl.debit, jl.credit FROM journal_entries je JOIN j
 near(cJl.reduce((x, r) => x + r.debit, 0), 100, 'مدين القيد'); near(cJl.reduce((x, r) => x + r.credit, 0), 100, 'دائن القيد');
 near(await apOf(sup) - apB, 40, 'المقبوض من مورد اتسجل على حسابه');
 await throws(async () => await saveDoc('voucher', { date: '2026-11-14', kind: 'collection', treasury_id: treasury, lines: [{ payment_type_id: rtSup, amount: 5 }] }, null, U), /الاسم/, 'سطر بدون اسم');
-const rtCl = await insertRow('receipt_types', { code: 'RT-T', name: 'عملاء', link: 'client', account_id: clAcc }, ['code', 'name', 'link', 'account_id']);
-if (cl1) near((await saveDoc('voucher', { date: '2026-11-14', kind: 'collection', custodian_id: cust, lines: [{ payment_type_id: rtCl, party_id: cl1, amount: 25, project_id: prj }] }, null, U)).amount, 25, 'مقبوض من عميل على حساب النوع (إيداع في عهدة)');
+const rtCl = await insertRow('receipt_types', { code: 'RT-T', name: 'عملاء', link: 'client' }, ['code', 'name', 'link']);
+if (cl1) near((await saveDoc('voucher', { date: '2026-11-14', kind: 'collection', custodian_id: cust, lines: [{ payment_type_id: rtCl, party_id: cl1, amount: 25, project_id: prj }] }, null, U)).amount, 25, 'مقبوض من عميل على حساب العملاء (إيداع في عهدة)');
 await voidDoc('voucher', col.id, U);
 near(await apOf(sup) - apB, 0, 'إلغاء سند المقبوضات رجّع الرصيد');
 

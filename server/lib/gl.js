@@ -1,7 +1,7 @@
 import { all, get, run, insertRow, AppError, r2 } from '../db.js';
 import { assertOpenPeriod, nextNo } from './core.js';
 
-const DIMS = ['supplier_id', 'treasury_id', 'custodian_id', 'employee_id', 'project_id', 'item_id', 'stage_id'];
+const DIMS = ['client_id', 'supplier_id', 'treasury_id', 'custodian_id', 'employee_id', 'project_id', 'item_id', 'stage_id'];
 
 /**
  * ترحيل قيد يومية. كل سطر: {account_id, debit, credit, description, + أبعاد التحليل}

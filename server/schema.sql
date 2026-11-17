@@ -445,6 +445,7 @@ CREATE TABLE IF NOT EXISTS clients (
   active INTEGER NOT NULL DEFAULT 1
 );
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS client_id INTEGER REFERENCES clients(id);
+ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS client_id INTEGER;
 ALTER TABLE custodians ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES employees(id);
 
 -- نماذج القيود (قيود النظام الجاهزة + نماذج يضيفها المستخدم مربوطة بالدليل والموديول)

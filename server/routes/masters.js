@@ -76,16 +76,14 @@ export const MASTERS = {
   payment_types: {
     title: 'أنواع المدفوعات', table: 'payment_types', seq: 'payment_type',
     fields: [T('name', 'اسم النوع', 'text', { req: 1 }),
-      T('link', 'يرتبط بجدول', 'select', { req: 1, options: [['supplier', 'الموردين'], ['expense', 'فئات المصروفات'], ['client', 'العملاء'], ['employee', 'العاملين'], ['custodian', 'أصحاب العهد'], ['account', 'حسابات دليل الحسابات']] }),
-      T('account_id', 'الحساب المدين (للعملاء والعاملين فقط)', 'fk', { ref: 'accounts', help: 'الموردين بيتسجلوا على حساب الموردين، والمصروفات على حساب الفئة، والعهد على حساب العهد تلقائياً' })],
-    cols: ['code', 'name', 'link', 'account_id'], used: [['voucher_lines', 'payment_type_id']],
+      T('link', 'يرتبط بجدول', 'select', { req: 1, options: [['supplier', 'الموردين'], ['expense', 'فئات المصروفات'], ['client', 'العملاء'], ['employee', 'العاملين'], ['custodian', 'أصحاب العهد'], ['account', 'حسابات دليل الحسابات']] })],
+    cols: ['code', 'name', 'link'], used: [['voucher_lines', 'payment_type_id']],
   },
   receipt_types: {
     title: 'أنواع المقبوضات', table: 'receipt_types', seq: 'receipt_type',
     fields: [T('name', 'اسم النوع', 'text', { req: 1 }),
-      T('link', 'يرتبط بجدول', 'select', { req: 1, options: [['client', 'العملاء'], ['supplier', 'الموردين'], ['employee', 'العاملين'], ['custodian', 'أصحاب العهد'], ['account', 'حسابات دليل الحسابات']] }),
-      T('account_id', 'الحساب الدائن (للعملاء والعاملين فقط)', 'fk', { ref: 'accounts', help: 'الموردين بيتسجلوا على حساب الموردين، والعهد على حساب العهد تلقائياً' })],
-    cols: ['code', 'name', 'link', 'account_id'], used: [['voucher_lines', 'payment_type_id']],
+      T('link', 'يرتبط بجدول', 'select', { req: 1, options: [['client', 'العملاء'], ['supplier', 'الموردين'], ['employee', 'العاملين'], ['custodian', 'أصحاب العهد'], ['account', 'حسابات دليل الحسابات']] })],
+    cols: ['code', 'name', 'link'], used: [['voucher_lines', 'payment_type_id']],
   },
   employees: {
     title: 'العاملين', table: 'employees', seq: 'employee',
@@ -168,18 +166,14 @@ async function extraChecks(name, o, id) {
   if (name === 'payment_types') {
     const cur = id ? await get('SELECT * FROM payment_types WHERE id=?', id) : {};
     const m = { ...cur, ...o };
-    if (['client', 'employee'].includes(m.link) && !m.account_id) throw new AppError('نوع الدفع المرتبط بالعملاء أو العاملين لازم يتحدد له الحساب المدين');
-    if (!['client', 'employee'].includes(m.link)) o.account_id = null;
     if (id && cur.link !== m.link && await val('SELECT COUNT(*) FROM voucher_lines WHERE payment_type_id=?', id) > 0) throw new AppError('النوع ده اتستخدم في سندات — مينفعش تغيّر الجدول المرتبط بيه');
   }
   if (name === 'receipt_types') {
     const cur = id ? await get('SELECT * FROM receipt_types WHERE id=?', id) : {};
     const m = { ...cur, ...o };
-    if (['client', 'employee'].includes(m.link) && !m.account_id) throw new AppError('نوع المقبوض المرتبط بالعملاء أو العاملين لازم يتحدد له الحساب الدائن');
-    if (!['client', 'employee'].includes(m.link)) o.account_id = null;
     if (id && cur.link !== m.link && await val(`SELECT COUNT(*) FROM voucher_lines l JOIN vouchers v ON v.id=l.voucher_id WHERE v.kind='collection' AND l.payment_type_id=?`, id) > 0) throw new AppError('النوع ده اتستخدم في سندات — مينفعش تغيّر الجدول المرتبط بيه');
   }
-  if (name === 'treasuries' || name === 'stages' || name === 'payment_types' || name === 'receipt_types') {
+  if (name === 'treasuries' || name === 'stages') {
     const a = o.account_id && await get('SELECT postable FROM accounts WHERE id=?', o.account_id);
     if (o.account_id && (!a || !a.postable)) throw new AppError('اختر حساب فرعي (يقبل قيود)');
   }

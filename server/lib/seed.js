@@ -40,6 +40,10 @@ export async function ensureBaseData() {
   if (!Number(await getSetting('acc_employee_advances'))) {
     const a = await get(`SELECT id FROM accounts WHERE code='1232'`); if (a) await setSetting('acc_employee_advances', a.id);
   }
+  // ربط تلقائي لحساب العملاء (مدينون) لو في حساب فرعي اسمه فيه «عملاء» أو «مدينون»
+  if (!Number(await getSetting('acc_ar'))) {
+    const a = await get(`SELECT id FROM accounts WHERE postable=1 AND active=1 AND (name LIKE '%عملاء%' OR name LIKE '%مدينو%') ORDER BY code LIMIT 1`); if (a) await setSetting('acc_ar', a.id);
+  }
   for (const [key, label, prefix, padding] of DEFAULT_SEQUENCES)
     await run('INSERT INTO sequences(key,label,prefix,padding) VALUES(?,?,?,?) ON CONFLICT DO NOTHING', key, label, prefix, padding);
   if (!Number(await val('SELECT COUNT(*) FROM payment_types'))) {

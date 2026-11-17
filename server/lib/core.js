@@ -12,6 +12,7 @@ export const ACC_KEYS = {
   acc_wages_payable: 'أجور ومرتبات مستحقة',
   acc_deductions_payable: 'استقطاعات العاملين',
   acc_employee_advances: 'سلف العاملين',
+  acc_ar: 'العملاء (مدينون)',
   acc_custody: 'العهد',
   acc_opening_equity: 'أرصدة افتتاحية (حقوق ملكية)',
   acc_site_transfer: 'خامات محولة للمواقع',
