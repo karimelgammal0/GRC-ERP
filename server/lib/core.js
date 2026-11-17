@@ -22,7 +22,9 @@ export const ACC_KEYS = {
 };
 export async function acc(key) {
   const id = Number(await getSetting(key));
-  if (!id) throw new AppError(`حساب «${ACC_KEYS[key] || key}» غير مربوط — اربطه من الإعدادات ← ربط الحسابات`);
+  if (!id) throw new AppError(`حساب «${ACC_KEYS[key] || key}» غير مربوط — اربطه من الحسابات ← ربط الحسابات`);
+  const a = await get('SELECT name, postable FROM accounts WHERE id=?', id);
+  if (a && !a.postable) throw new AppError(`ربط «${ACC_KEYS[key] || key}» بيشاور على الحساب «${a.name}» وهو حساب رئيسي لا يقبل قيود — غيّره من الحسابات ← ربط الحسابات واختار حساب فرعي`);
   return id;
 }
 
