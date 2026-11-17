@@ -25,23 +25,24 @@ const payFields = (ctx) => {
 // ---- سند الصرف متعدد الأسطر: مكان الصرف (خزينة / بنك / عهدة) + أسطر (نوع الدفع ← الاسم ← القيمة ...)
 const SRC_OPTS = [['treasury', 'خزينة'], ['bank', 'بنك'], ['custody', 'عهدة']];
 function disbursementHeader(ctx) {
+  const dep = ctx.header.kind === 'collection';
   const h0 = ctx.header;
   if (!h0.src_kind) h0.src_kind = h0.custodian_id ? 'custody' : isBank(h0.treasury_id) ? 'bank' : 'treasury';
   const sk = h0.src_kind;
   const pick = sk === 'custody' ? { k: 'custodian_id', l: 'صاحب العهدة', t: 'fk', ref: 'custodians', combo: true, req: 1 }
     : { k: 'treasury_id', l: sk === 'bank' ? 'البنك' : 'الخزينة', t: 'fk', ref: 'treasuries', combo: true, req: 1, filter: (x) => (sk === 'bank' ? x.type === 'bank' : x.type !== 'bank') };
-  return [dateF, { k: 'src_kind', l: 'مكان الصرف', t: 'select', req: 1, options: SRC_OPTS, onChange: (v, c) => { c.setHeader('treasury_id', null); c.setHeader('custodian_id', null); } }, pick,
+  return [dateF, { k: 'src_kind', l: dep ? 'مكان الإيداع' : 'مكان الصرف', t: 'select', req: 1, options: SRC_OPTS, onChange: (v, c) => { c.setHeader('treasury_id', null); c.setHeader('custodian_id', null); } }, pick,
     { k: 'description', l: 'البيان', t: 'text', wide: true }];
 }
 const PAY_REF = { supplier: 'suppliers', expense: 'expense_categories', client: 'clients', employee: 'employees', custodian: 'custodians', account: 'accounts' };
-const disbLines = {
-  title: 'المصروفات والمدفوعات — أضف أكتر من سطر في نفس السند', addLabel: '＋ سطر جديد', show: (hd) => hd.kind === 'disbursement',
+const mkLines = ({ typeList, typeLabel, kind, title, withStage }) => ({
+  title, addLabel: '＋ سطر جديد', show: (hd) => hd.kind === kind,
   blank: () => ({ payment_type_id: null, party_id: null, amount: null, project_id: null, item_id: null, stage_id: null, notes: '' }),
   cols: [
-    { k: 'payment_type_id', l: 'نوع الدفع', t: 'fk', ref: 'payment_types', w: '14%', onChange: (v, l, c) => { l.party_id = null; c.setLines(c.lines); } },
+    { k: 'payment_type_id', l: typeLabel, t: 'fk', ref: typeList, w: '14%', onChange: (v, l, c) => { l.party_id = null; c.setLines(c.lines); } },
     { k: 'party_id', l: 'الاسم', w: '20%', render: (l, ctx, readonly) => {
-      const t = byId('payment_types', l.payment_type_id);
-      if (!t) return h('small.muted', 'اختر نوع الدفع أولاً');
+      const t = byId(typeList, l.payment_type_id);
+      if (!t) return h('small.muted', 'اختر ' + typeLabel + ' أولاً');
       const ref = PAY_REF[t.link];
       const c = combo({ list: ref, value: l.party_id, filter: ref === 'accounts' ? ACC_F : undefined, onChange: (v) => { l.party_id = v; } });
       if (readonly) c.querySelector('input').disabled = true;
@@ -50,9 +51,11 @@ const disbLines = {
     { k: 'amount', l: 'القيمة', t: 'number', w: '110px' },
     { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, w: '15%', onChange: (v, l, c) => { const it = byId('project_items', l.item_id); if (it && it.project_id !== v) { l.item_id = null; c.setLines(c.lines); } } },
     { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, w: '15%', filter: (x, l) => !l.project_id || x.project_id === l.project_id },
-    { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', w: '11%' },
+    ...(withStage ? [{ k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', w: '11%' }] : []),
     { k: 'notes', l: 'ملاحظات', t: 'text' }],
-};
+});
+const disbLines = mkLines({ typeList: 'payment_types', typeLabel: 'نوع الدفع', kind: 'disbursement', title: 'المصروفات والمدفوعات — أضف أكتر من سطر في نفس السند', withStage: true });
+const collLines = mkLines({ typeList: 'receipt_types', typeLabel: 'نوع المقبوض', kind: 'collection', title: 'المقبوضات — أضف أكتر من سطر في نفس السند', withStage: false });
 
 function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind, srcLabel }) {
   const listMulti = kinds.length > 1; const multi = listMulti && !newKind; const kindOpts = () => kinds.map((k) => [k, META.voucher_kinds[k]]);
@@ -65,10 +68,10 @@ function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind
       { k: 'src', l: srcLabel || 'من/إلى', text: (r) => [r.treasury_name, r.custodian_name && `عهدة ${r.custodian_name}`].filter(Boolean).join(' / ') }, amountCol, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
     listFoot: (c, rows) => (c.k === 'amount' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.amount)) : c.k === 'no' ? 'الإجمالي' : ''),
     editor: {
-      cols: 3, rebuildOn: ['kind', 'pay_method', 'src_kind'], defaults: () => ({ kind: newKind || kinds[0], amount: null, treasury_id: (L.treasuries.find((x) => x.active !== 0 && ((newKind || kinds[0]) !== 'disbursement' || x.type !== 'bank')) || {}).id }),
-      ...(newKind === 'disbursement' ? { lines: disbLines } : {}),
+      cols: 3, rebuildOn: ['kind', 'pay_method', 'src_kind'], defaults: () => ({ kind: newKind || kinds[0], amount: null, treasury_id: (L.treasuries.find((x) => x.active !== 0 && (!['disbursement', 'collection'].includes(newKind || kinds[0]) || x.type !== 'bank')) || {}).id }),
+      ...(newKind === 'disbursement' ? { lines: disbLines } : newKind === 'collection' ? { lines: collLines } : {}),
       header: (ctx) => {
-        const k = ctx.header.kind; if (k === 'disbursement') return disbursementHeader(ctx); const f = [dateF];
+        const k = ctx.header.kind; if (k === 'disbursement' || k === 'collection') return disbursementHeader(ctx); const f = [dateF];
         if (multi || (newKind && k !== newKind)) f.push({ k: 'kind', l: 'نوع السند', t: 'select', options: kindOpts(), lockOnEdit: true, req: 1 });
         if (k === 'supplier_payment') f.push({ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true, req: 1, lockOnEdit: true, onChange: () => loadInvoices(ctx) }, ...payFields(ctx));
         if (k === 'expense') f.push({ k: 'category_id', l: 'فئة المصروف', t: 'fk', ref: 'expense_categories', req: 1 }, ...srcFields(ctx),
@@ -84,7 +87,7 @@ function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind
       },
       extraTitle: null,
       extra: (ctx) => extraPanel(ctx),
-      totals: (ctx) => (ctx.header.kind === 'disbursement' ? [[`إجمالي السند (${ctx.lines.filter((l) => l.payment_type_id || l.amount).length} سطر)`, fmt(total(ctx.lines, (l) => l.amount))]] : [['المبلغ', fmt(ctx.header.amount || 0)], ...(ctx.header.kind === 'supplier_payment' ? [['موزّع على فواتير', fmt(total(Object.values(ctx.alloc || {}), (x) => x))], ['دفعة مقدمة / غير موزعة', fmt((ctx.header.amount || 0) - total(Object.values(ctx.alloc || {}), (x) => x))]] : []),
+      totals: (ctx) => (['disbursement', 'collection'].includes(ctx.header.kind) ? [[`إجمالي السند (${ctx.lines.filter((l) => l.payment_type_id || l.amount).length} سطر)`, fmt(total(ctx.lines, (l) => l.amount))]] : [['المبلغ', fmt(ctx.header.amount || 0)], ...(ctx.header.kind === 'supplier_payment' ? [['موزّع على فواتير', fmt(total(Object.values(ctx.alloc || {}), (x) => x))], ['دفعة مقدمة / غير موزعة', fmt((ctx.header.amount || 0) - total(Object.values(ctx.alloc || {}), (x) => x))]] : []),
         ...(ctx.header.kind === 'wage_payment' ? [['موزّع على كشوف', fmt(total(Object.values(ctx.wl || {}), (x) => x))]] : [])]),
       onOpen: async (ctx) => {
         ctx.alloc = {}; ctx.wl = {};
@@ -92,7 +95,7 @@ function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind
         await loadInvoices(ctx); await loadWages(ctx);
       },
       prepare: (p, ctx) => {
-        if (p.kind === 'disbursement') { if (p.src_kind === 'custody') p.treasury_id = null; else p.custodian_id = null; return; }
+        if (p.kind === 'disbursement' || p.kind === 'collection') { if (p.src_kind === 'custody') p.treasury_id = null; else p.custodian_id = null; return; }
         if (p.kind === 'supplier_payment' && p.pay_method === 'bank') { p.treasury_id = p.bank_id || null; p.custodian_id = null; }
         p.allocations = Object.entries(ctx.alloc || {}).filter(([, a]) => a > 0).map(([invoice_id, amount]) => ({ invoice_id: Number(invoice_id), amount }));
         p.wage_links = Object.entries(ctx.wl || {}).filter(([, a]) => a > 0).map(([k, amount]) => (k[0] === 's' ? { sheet_id: Number(k.slice(1)), amount } : { run_id: Number(k.slice(1)), amount }));
@@ -139,7 +142,8 @@ export const expensesVoucherPage = voucherScreen({ perm: 'finance.expenses', tit
 export const wagePaymentsPage = voucherScreen({ perm: 'finance.wages', title: 'صرف الأجور والمرتبات', noun: 'سند صرف أجور', kinds: ['wage_payment'], newLabel: 'صرف أجور', note: 'اصرف مستحقات كشوف اليوميات والمرتبات الشهرية من خزينة أو عهدة.' });
 export const custodyVouchersPage = voucherScreen({ perm: 'finance.custody', title: 'سندات العهد والتحويلات', noun: 'سند', kinds: ['custody_issue', 'custody_return', 'transfer'], only: 'custody', newLabel: 'سند جديد',
   note: 'صرف عهدة لموظف، أو رد باقي العهدة للخزينة، أو تحويل بين خزينتين/بنكين. مصروفات العهدة بتتسجل من «سندات المصروفات» باختيار مكان الصرف: عهدة.' });
-export const otherVouchersPage = voucherScreen({ perm: 'finance.other', title: 'سندات قبض وصرف أخرى', noun: 'سند', kinds: ['receipt', 'payment_other'], newLabel: 'سند جديد', note: 'للإيرادات والمصروفات اللي ليها حساب محدد من دليل الحسابات.' });
+export const otherVouchersPage = voucherScreen({ perm: 'finance.other', title: 'سندات المقبوضات', noun: 'سند', kinds: ['collection', 'receipt', 'payment_other'], newKind: 'collection', only: 'receipts', srcLabel: 'مكان الإيداع', newLabel: 'سند مقبوضات جديد',
+  note: 'سند واحد تستلم بيه أكتر من مقبوض. اختر مكان الإيداع (خزينة / بنك / عهدة) وبعدين أضف الأسطر: نوع المقبوض ثم الاسم والقيمة. أنواع المقبوضات بتتكوّد من الإعدادات (عميل / مورد / عامل / عهدة / حساب).' });
 
 // ---------------- أرصدة الخزن والعهد + كشوف الحساب ----------------
 export async function treasuriesPage(root) {

@@ -307,6 +307,21 @@ const clAcc = await val(`SELECT id FROM accounts WHERE postable=1 ORDER BY code 
 const ptCl = await insertRow('payment_types', { code: 'PT-T', name: 'عملاء', link: 'client', account_id: clAcc }, ['code', 'name', 'link', 'account_id']);
 if (cl1) { const vc = await saveDoc('voucher', { date: '2026-11-13', kind: 'disbursement', treasury_id: treasury, lines: [{ payment_type_id: ptCl, party_id: cl1, amount: 75 }] }, null, U); near(vc.amount, 75, 'سداد لعميل على الحساب المربوط بالنوع'); }
 
+section('18) سند مقبوضات متعدد الأسطر');
+const rtSup = await val(`SELECT id FROM receipt_types WHERE link='supplier'`), rtCus = await val(`SELECT id FROM receipt_types WHERE link='custodian'`);
+ok(rtSup && rtCus, 'أنواع المقبوضات الافتراضية موجودة');
+const apB = await apOf(sup);
+const col = await saveDoc('voucher', { date: '2026-11-14', kind: 'collection', treasury_id: treasury, description: 'مقبوضات', lines: [{ payment_type_id: rtSup, party_id: sup, amount: 40 }, { payment_type_id: rtCus, party_id: cust, amount: 60, notes: 'رد عهدة' }] }, null, U);
+near(col.amount, 100, 'إجمالي سند المقبوضات');
+const cJl = await all(`SELECT jl.debit, jl.credit FROM journal_entries je JOIN journal_lines jl ON jl.entry_id=je.id WHERE je.source_type='voucher' AND je.source_id=?`, col.id);
+near(cJl.reduce((x, r) => x + r.debit, 0), 100, 'مدين القيد'); near(cJl.reduce((x, r) => x + r.credit, 0), 100, 'دائن القيد');
+near(await apOf(sup) - apB, 40, 'المقبوض من مورد اتسجل على حسابه');
+await throws(async () => await saveDoc('voucher', { date: '2026-11-14', kind: 'collection', treasury_id: treasury, lines: [{ payment_type_id: rtSup, amount: 5 }] }, null, U), /الاسم/, 'سطر بدون اسم');
+const rtCl = await insertRow('receipt_types', { code: 'RT-T', name: 'عملاء', link: 'client', account_id: clAcc }, ['code', 'name', 'link', 'account_id']);
+if (cl1) near((await saveDoc('voucher', { date: '2026-11-14', kind: 'collection', custodian_id: cust, lines: [{ payment_type_id: rtCl, party_id: cl1, amount: 25, project_id: prj }] }, null, U)).amount, 25, 'مقبوض من عميل على حساب النوع (إيداع في عهدة)');
+await voidDoc('voucher', col.id, U);
+near(await apOf(sup) - apB, 0, 'إلغاء سند المقبوضات رجّع الرصيد');
+
 section('16) الصلاحيات التفصيلية');
 const { userPerms: UP } = await import('../server/lib/perms.js');
 const adm = await ckOf('admin');
@@ -346,6 +361,8 @@ const lkp = await (await fetch(base + "/api/lookups", { headers: { cookie: adm }
 ok(Array.isArray(lkp.payment_types) && lkp.payment_types.length >= 2, 'أنواع المدفوعات في القوائم المرجعية');
 const lstE = await (await fetch(base + '/api/doc/voucher?only=expenses', { headers: { cookie: adm } })).json();
 ok(lstE.some((r) => r.kind === 'disbursement' && r.party_text) && lstE.every((r) => ['disbursement', 'expense', 'supplier_payment'].includes(r.kind)), 'قائمة سندات المصروفات: النوع + أسماء الأطراف');
+const lstR = await (await fetch(base + '/api/doc/voucher?only=receipts', { headers: { cookie: adm } })).json();
+ok(lstR.some((r) => r.kind === 'collection' && r.party_text), 'قائمة سندات المقبوضات + أسماء الأطراف');
 const lstC = await (await fetch(base + '/api/doc/voucher?only=custody', { headers: { cookie: adm } })).json();
 ok(lstC.length && lstC.every((r) => ['custody_issue', 'custody_return', 'transfer'].includes(r.kind)), 'قائمة العهد والتحويلات مدموجة');
 const lp = UP({ role: 'user', perms: JSON.stringify(['finance.supplier-payments', 'finance.transfers']) });

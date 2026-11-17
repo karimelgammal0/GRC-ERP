@@ -21,7 +21,7 @@ const NAV = [
   { id: 'hr', ico: '☺', title: 'الموارد البشرية', items: [['labor', 'يوميات العمالة', hr.laborSheetsPage], ['labor-advances', 'سلف عمال يومية', hr.laborAdvancesPage], ['payroll', 'الرواتب الشهرية', hr.payrollPage]] },
   { id: 'finance', ico: '$', title: 'الإدارة المالية', items: [
     ['treasuries', 'الخزن والعهد (الأرصدة)', fin.treasuriesPage], ['expenses', 'سندات المصروفات', fin.expensesVoucherPage], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
-    ['custody', 'سندات العهد والتحويلات', fin.custodyVouchersPage], ['other', 'سندات قبض/صرف أخرى', fin.otherVouchersPage],
+    ['custody', 'سندات العهد والتحويلات', fin.custodyVouchersPage], ['other', 'سندات المقبوضات', fin.otherVouchersPage],
     ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage, true], ['custody-statement', 'كشف حساب عهدة', fin.custodyStatementPage]] },
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
   { id: 'reports', ico: '◔', title: 'التقارير', direct: true, items: [
@@ -33,7 +33,7 @@ const NAV = [
     ['materials', 'الخامات', M('materials')], ['categories', 'فئات الخامات', M('material_categories')], ['units', 'وحدات القياس', M('units')], ['warehouses', 'المخازن', M('warehouses')],
     ['clients', 'العملاء', M('clients')], ['projects', 'المشروعات', M('projects')], ['project-items', 'بنود المشروعات', M('project_items')], ['stages', 'مراحل التصنيع', M('stages')], ['sites', 'المواقع', M('sites')],
     ['suppliers', 'الموردين', M('suppliers')], ['treasuries', 'الخزن والبنوك', M('treasuries')], ['custodians', 'العهد', M('custodians')],
-    ['expense-cats', 'المصروفات', M('expense_categories')], ['payment-types', 'أنواع المدفوعات', M('payment_types')], ['employees', 'العاملين', M('employees')]] },
+    ['expense-cats', 'المصروفات', M('expense_categories')], ['payment-types', 'أنواع المدفوعات', M('payment_types')], ['receipt-types', 'أنواع المقبوضات', M('receipt_types')], ['employees', 'العاملين', M('employees')]] },
   { id: 'permissions', ico: '⚿', title: 'الصلاحيات', admin: true, items: [['users', 'المستخدمون والصلاحيات', usersPage], ['audit', 'سجل العمليات', auditPage]] }
 ];
 // صلاحية الصفحة: الموديول 'dashboard' للكل، 'permissions' للمدير بس، والباقي بمفتاح module.page

@@ -361,7 +361,14 @@ CREATE TABLE IF NOT EXISTS payment_types (       -- أنواع المدفوعا�
   account_id INTEGER,                            -- الحساب المدين لأنواع العملاء/العاملين
   active INTEGER NOT NULL DEFAULT 1
 );
-CREATE TABLE IF NOT EXISTS voucher_lines (       -- أسطر سند الصرف (أكتر من مصروف/مورد في سند واحد)
+CREATE TABLE IF NOT EXISTS receipt_types (       -- أنواع المقبوضات: كل نوع مربوط بجدول (عملاء/موردين/عاملين/عهد/حسابات)
+  id SERIAL PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+  link TEXT NOT NULL DEFAULT 'client',           -- client | supplier | employee | custodian | account
+  account_id INTEGER,                            -- الحساب الدائن لأنواع العملاء/العاملين
+  active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS voucher_lines (       -- أسطر سند الصرف/المقبوضات (payment_type_id = نوع الدفع أو نوع القبض حسب نوع السند)       -- أسطر سند الصرف (أكتر من مصروف/مورد في سند واحد)
   id SERIAL PRIMARY KEY,
   voucher_id INTEGER NOT NULL REFERENCES vouchers(id) ON DELETE CASCADE,
   payment_type_id INTEGER NOT NULL, party_id INTEGER NOT NULL,
