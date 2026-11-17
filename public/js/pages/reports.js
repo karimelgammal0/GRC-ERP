@@ -13,7 +13,7 @@ export async function hub(root) {
     ['المصروفات', 'حسب الفئة/التصنيف/المشروع/الشهر', '#/reports/expenses'],
     ['العمالة', 'حسب العامل/المرحلة/المشروع/التصنيف', '#/reports/labor'],
     ['ميزان المراجعة', 'أرصدة الحسابات بالفترة', '#/reports/trial-balance'],
-    ['أستاذ الحساب', 'حركة أي حساب بالتفصيل', '#/reports/ledger'],
+    ['كشف حساب أستاذ', 'حركة أي حساب بالتفصيل', '#/reports/ledger'],
     ['قائمة الدخل المبسطة', 'الإيرادات والمصروفات', '#/reports/income'],
     ['أرصدة المخزون', 'كميات وقيم الخامات بالمتوسط المرجح', '#/inventory/balances'], ['أرصدة الموردين', 'المستحق مع أعمار الديون', '#/purchases/supplier-balances'], ['الخزن والعهد', 'أرصدة الخزن والبنوك والعهد', '#/finance/treasuries'],
   ];
@@ -94,9 +94,9 @@ export async function ledgerPage(root, params) {
     if (!v.account_id) { host.replaceChildren(h('div.empty-state', 'اختر الحساب')); return; }
     const d = await GET('/reports/ledger', v);
     host.replaceChildren(h('div.kpis', kpi('رصيد أول', fmt(d.opening)), kpi('الرصيد الختامي', fmt(d.closing))),
-      table({ name: 'أستاذ ' + d.account.name, compact: true, rows: [{ date: v.from || '', description: 'رصيد أول المدة', balance: d.opening }, ...d.rows], cols: [{ k: 'date', l: 'التاريخ' }, { k: 'no', l: 'القيد' }, { k: 'description', l: 'البيان', text: (r) => r.line_desc || r.description }, { k: 'debit', l: 'مدين', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'credit', l: 'دائن', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'balance', l: 'الرصيد', num: true, fmt: (n) => fmt(n) }] }));
+      table({ name: 'كشف حساب أستاذ ' + d.account.name, compact: true, rows: [{ date: v.from || '', description: 'رصيد أول المدة', balance: d.opening }, ...d.rows], cols: [{ k: 'date', l: 'التاريخ' }, { k: 'no', l: 'القيد' }, { k: 'description', l: 'البيان', text: (r) => r.line_desc || r.description }, { k: 'debit', l: 'مدين', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'credit', l: 'دائن', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'balance', l: 'الرصيد', num: true, fmt: (n) => fmt(n) }] }));
   }, { account_id: params.account_id ? Number(params.account_id) : null, from: params.from || monthStart(), to: params.to || '' });
-  root.replaceChildren(pageHead('أستاذ الحساب'), fb, host); if (params.account_id) fb.run();
+  root.replaceChildren(pageHead('كشف حساب أستاذ'), fb, host); if (params.account_id) fb.run();
 }
 export async function incomePage(root) {
   const host = h('div');
