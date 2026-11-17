@@ -150,9 +150,23 @@ export async function factoryCostPage(root) {
       chartsGrid(chartCard('توزيع التكاليف حسب التصنيف', donutChart(ORD.map((k) => ({ label: CL[k], value: tot[k] || 0 })))), chartCard(by === 'month' ? 'التكلفة شهرياً (مقسمة حسب التصنيف)' : 'التكلفة حسب النوع (مقسمة حسب التصنيف)', barChart(colItems, { max: 12 }))),
       table({ name: 'تكاليف المصنع', cols, rows, foot }), h('div.hint', 'التحويلات للمواقع غير محسوبة هنا. اضغط على أي رقم لعرض السطور اللي كوّنته.'));
   };
+  // كارت «التكلفة حسب المشروع»: المشروعات اللي عليها تكلفة في الفترة بس (بدون التحويلات للمواقع)
+  const projectCard = async (v) => {
+    const d = await GET('/reports/factory-cost', { from: v.from, to: v.to, project_id: v.project_id, stage_id: v.stage_id });
+    const m = new Map();
+    for (const r of d.rows) { if (!r.project_id) continue; const x = m.get(r.project_id) || { project_id: r.project_id, name: r.project_name, direct: 0, indirect: 0, admin: 0, total: 0 }; for (const k of ['direct', 'indirect', 'admin', 'total']) x[k] += r[k] || 0; m.set(r.project_id, x); }
+    const rows = [...m.values()].filter((x) => Math.abs(x.total) > 0.004).sort((a, b) => b.total - a.total);
+    const sum = rows.reduce((s2, x) => s2 + x.total, 0);
+    const dr = (r, cls) => () => openDrill({ from: v.from, to: v.to, scope: 'manufacturing', project_id: r.project_id, stage_id: v.stage_id, cost_class: cls }, `${r.name}${cls ? ' — ' + labelOf(REP_CLASS, cls).split(' (')[0] : ''}`);
+    const cell = (k) => ({ k, l: labelOf(REP_CLASS, k).split(' (')[0], num: true, render: (r) => link(r[k], dr(r, k)) });
+    return card('التكلفة حسب المشروع', rows.length ? table({ name: 'التكلفة حسب المشروع', compact: true, search: false, rows,
+      cols: [{ k: 'name', l: 'المشروع', render: (r) => h('b', r.name) }, ...ORD.map(cell), { k: 'total', l: 'الإجمالي', num: true, render: (r) => h('b', link(r.total, dr(r, null)) || '') }, { k: 'pct', l: 'النسبة', num: true, text: (r) => (sum ? (r.total / sum * 100).toFixed(1) + '%' : '') }],
+      foot: (c) => (c.k === 'name' ? `الإجمالي (${rows.length} مشروع)` : ORD.includes(c.k) ? fmt(rows.reduce((s2, x) => s2 + x[c.k], 0)) : c.k === 'total' ? fmt(sum) : c.k === 'pct' ? '100%' : '') })
+      : h('div.empty-state', 'لا توجد مشروعات عليها تكلفة في الفترة المحددة'));
+  };
   const fb = fbar([{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' },
     { k: 'by', l: 'العرض', t: 'select', options: [['detail', 'مفصل: مشروع × مرحلة × تصنيف'], ['month', 'ملخص: التصنيف × الشهر'], ['type', 'ملخص: التصنيف × نوع التكلفة']] }],
-  async (v) => { const by = v.by || 'detail'; await (by === 'detail' ? detail(v) : summary(v, by)); }, { from: monthStart(), by: 'detail' });
+  async (v) => { const by = v.by || 'detail'; await (by === 'detail' ? detail(v) : summary(v, by)); const pc = await projectCard(v); (host.querySelector('.chart-grid') || host.querySelector('.kpis'))?.after(pc); }, { from: monthStart(), by: 'detail' });
   root.replaceChildren(...rhead('تكاليف المصنع'), fb, host); fb.run();
 }
 function groupReport(title, endpoint, groups, cols, extraFilters = []) {
