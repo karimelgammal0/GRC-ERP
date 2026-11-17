@@ -15,7 +15,34 @@ async function pullAdvances(ctx, overwrite = true) {
   const { period_from: f, period_to: t } = ctx.header; if (!f || !t || f > t) return;
   let r; try { r = await GET(`/helpers/labor-advances?from=${f}&to=${t}`); } catch { return; }
   ctx.advMap = Object.fromEntries(r.rows.map((x) => [x.employee_id, x.amount]));
-  if (overwrite) { ctx.lines.forEach((l) => { if (l.employee_id) l.advance = ctx.advMap[l.employee_id] || 0; }); ctx.setLines(ctx.lines); }
+  if (overwrite && !ctx.advManual) { ctx.lines.forEach((l) => { if (l.employee_id) l.advance = ctx.advMap[l.employee_id] || 0; }); ctx.setLines(ctx.lines); }
+}
+// زرار «استيراد العمال والسلف من كشوف السلف»: اختيار كشوف سلف سابقة → إضافة عمالها للكشف (لو مش موجودين) وتحديث «سلفة المدة» بمجموع سلفهم
+async function importAdvanceSheets(ctx) {
+  const sheets = await GET('/helpers/labor-advance-sheets');
+  if (!sheets.length) { toast('لا توجد كشوف سلف معتمدة', 'err'); return; }
+  const { period_from: f, period_to: t } = ctx.header;
+  const inPeriod = (s) => f && t && s.date >= f && s.date <= t;
+  const checks = sheets.map((s) => ({ s, cb: h('input', { type: 'checkbox', checked: inPeriod(s) }) }));
+  const body = h('div', h('p.muted', f && t ? `الكشوف المحددة تلقائياً: اللي تاريخها داخل مدة الكشف (${f} → ${t}). تقدر تغيّر الاختيار.` : 'اختر كشوف السلف اللي عايز تستورد منها.'),
+    h('table.lines', h('thead', h('tr', ['', 'الرقم', 'التاريخ', 'عدد العاملين', 'الإجمالي'].map((x) => h('th', x)))),
+      h('tbody', checks.map(({ s, cb }) => h('tr', h('td', cb), h('td', h('b', s.no)), h('td', s.date), h('td.num', fq(s.lines.length)), h('td.num', fmt(s.total)))))));
+  modal({ title: 'استيراد العمال والسلف من كشوف السلف', body, wide: true, buttons: [
+    { label: 'استيراد', cls: 'primary', onClick: () => {
+      const chosen = checks.filter((x) => x.cb.checked).map((x) => x.s);
+      if (!chosen.length) { toast('اختر كشف سلف واحد على الأقل', 'err'); return false; }
+      const adv = {}; chosen.forEach((s) => s.lines.forEach((l) => { adv[l.employee_id] = Math.round(((adv[l.employee_id] || 0) + l.amount) * 100) / 100; }));
+      let lines = ctx.lines.filter((l) => l.employee_id || Number(l.days) || Number(l.ot_days)); let added = 0, updated = 0;
+      for (const [empId, amount] of Object.entries(adv)) {
+        const id = Number(empId); const ex = lines.find((l) => Number(l.employee_id) === id);
+        if (ex) { ex.advance = amount; updated++; continue; }
+        const e = byId('employees', id); if (!e) continue;
+        lines.push({ days: 1, employee_id: id, rate: e.daily_rate, stage_id: e.cost_class === 'direct' ? e.default_stage_id : null, advance: amount }); added++;
+      }
+      lines.forEach((l) => { if (l.employee_id && !(Number(l.employee_id) in adv)) l.advance = 0; });
+      ctx.advMap = adv; ctx.advManual = true; ctx.setLines(lines);
+      toast(`تم الاستيراد من ${chosen.length} كشف: ${added} عامل جديد، ${updated} عامل موجود اتحدثت سلفته`);
+    } }, { label: 'إلغاء' }] });
 }
 export const laborSheetsPage = docScreen({ perm: 'hr.labor',
   type: 'labor_sheet', title: 'يوميات العمالة', noun: 'كشف يومية', newLabel: 'كشف يومية جديد',
@@ -30,6 +57,7 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
     },
     onHeader: (k, v, ctx) => { if (k === 'period_from' || k === 'period_to') pullAdvances(ctx); },
     cols: 3, header: [dateF, { k: 'period_from', l: 'مدة الأجور: من تاريخ', t: 'date', req: 1 }, { k: 'period_to', l: 'إلى تاريخ', t: 'date', req: 1 }, { k: 'period_name', l: 'اسم المدة', t: 'text', readonly: true, ph: 'يتولّد تلقائياً عند الحفظ (YYYY/01)' }, { ...notesF, wide: false }],
+    tools: [{ label: '⇩ استيراد العمال والسلف من كشوف السلف', run: importAdvanceSheets }],
     lines: { addLabel: '＋ جديد', blank: () => ({ days: 1 }), cols: [
       { ...empCol, filter: (x) => x.emp_type === 'daily', onChange: (v, l, ctx) => { const e = byId('employees', v); if (!e) return; l.rate = e.daily_rate; l.stage_id = e.cost_class === 'direct' ? e.default_stage_id : null; if (ctx.advMap) l.advance = ctx.advMap[v] || 0; else pullAdvances(ctx); ctx.setLines(ctx.lines); } },
       { k: 'days', l: 'أيام أساسي', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'ot_days', l: 'أيام سهرات', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'rate', l: 'أجر اليوم', t: 'number', w: '90px' },

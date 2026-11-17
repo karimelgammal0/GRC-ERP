@@ -154,6 +154,12 @@ export function helperRouter() {
     let next_from = null; if (last) { const d = new Date(last + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); next_from = d.toISOString().slice(0, 10); }
     res.json({ rows: rows.map((r) => ({ employee_id: r.employee_id, amount: r2(r.amount) })), next_from });
   });
+  // كشوف سلف العمال المعتمدة (بعمالها ومبالغهم) — لزرار «استيراد من كشوف السلف» في كشف اليومية
+  r.get('/labor-advance-sheets', async (req, res) => {
+    const sheets = await all(`SELECT id, no, date, total FROM labor_advances WHERE status='posted' ORDER BY date DESC, id DESC LIMIT 200`);
+    const lines = sheets.length ? await all(`SELECT advance_id, employee_id, amount FROM labor_advance_lines WHERE advance_id IN (${sheets.map(() => '?').join(',')})`, ...sheets.map((s) => s.id)) : [];
+    res.json(sheets.map((s) => ({ ...s, lines: lines.filter((l) => l.advance_id === s.id).map((l) => ({ employee_id: l.employee_id, amount: r2(l.amount) })) })));
+  });
   r.get('/unpaid-wages', async (req, res) => res.json({
     sheets: await all(`SELECT id,no,date,total,paid_amount, total-paid_amount remaining FROM labor_sheets WHERE status='posted' AND total-paid_amount>0.004 ORDER BY date`),
     runs: await all(`SELECT id,no,month,net total,paid_amount, net-paid_amount remaining FROM payroll_runs WHERE status='posted' AND net-paid_amount>0.004 ORDER BY month`),
