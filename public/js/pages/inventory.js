@@ -33,8 +33,9 @@ const issueLines = { blank: () => ({ material_id: null, qty: null }), cols: [
   { l: 'متوسط التكلفة', calc: (l, c) => c.stock?.[l.material_id]?.avg_cost ?? 0, fmt: (v) => fmt(v, 4), w: '110px' },
   { l: 'التكلفة', calc: (l, c) => (l.total ?? (Number(l.qty) || 0) * (c.stock?.[l.material_id]?.avg_cost ?? 0)), fmt: (v) => fmt(v), w: '110px' }] };
 const itemCol = { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', req: 1, combo: true, w: '24%', filter: (x, l, c) => !c.header.project_id || x.project_id === Number(c.header.project_id) };
-const issueLinesItems = { ...issueLines, blank: () => ({ material_id: null, item_id: null, qty: null }),
-  cols: (ctx) => (ctx.header.kind === 'production' ? [issueLines.cols[0], itemCol, ...issueLines.cols.slice(1)].map((c) => (c === issueLines.cols[0] ? { ...c, w: '28%' } : c)) : issueLines.cols) };
+const stageCol = (req) => ({ k: 'stage_id', l: req ? 'المرحلة' : 'المرحلة (اختياري)', t: 'fk', ref: 'stages', req, w: '16%' });
+const issueLinesItems = { ...issueLines, blank: () => ({ material_id: null, item_id: null, stage_id: null, qty: null }),
+  cols: (ctx) => (ctx.header.kind === 'production' ? [{ ...issueLines.cols[0], w: '22%' }, { ...itemCol, w: '18%' }, stageCol(true), ...issueLines.cols.slice(1)] : [issueLines.cols[0], stageCol(false), ...issueLines.cols.slice(1)]) };
 const issueTotals = (ctx) => { const t = total(ctx.lines, (l) => l.total ?? (Number(l.qty) || 0) * (ctx.stock?.[l.material_id]?.avg_cost ?? 0)); return [[ctx.doc ? 'إجمالي تكلفة الصرف' : 'تكلفة تقديرية (الفعلية تُحسب عند الحفظ)', fmt(t)]]; };
 const whF = (ctx) => ({ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw', onChange: (v) => {
   const ok = whAllows(v); let n = 0;
@@ -47,7 +48,7 @@ const receivedF = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'emp
 // ---------------- إذن صرف (إنتاج / تشغيل غير مباشر) ----------------
 export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true,
   type: 'stock_issue', title: 'أذون الصرف', noun: 'إذن صرف', newLabel: 'إذن صرف جديد', fixed: { only: 'issues' }, defaultFrom: monthStart, defaultTo: today,
-  note: 'كل صرف من المخزن بيتحدد له: المشروع + المرحلة، والبند بيتحدد لكل خامة في سطرها (إذن واحد يخدم أكتر من بند) — ومنها بتتجمّع تكلفة كل مشروع وكل مرحلة تلقائياً بالمتوسط المرجح. (تحويل الخامات لمواقع المشاريع له شاشة منفصلة.)',
+  note: 'كل صرف من المخزن بيتحدد له: المشروع، والبند والمرحلة بيتحددوا لكل خامة في سطرها (إذن واحد يخدم أكتر من بند ومرحلة) — ومنها بتتجمّع تكلفة كل مشروع وكل مرحلة تلقائياً بالمتوسط المرجح. (تحويل الخامات لمواقع المشاريع له شاشة منفصلة.)',
   filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...ISSUE_KINDS] }],
   listCols: [
     { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'kind', l: 'النوع', text: (r) => labelOf(KINDS, r.kind).split(' (')[0] },
@@ -61,7 +62,6 @@ export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true,
       return [dateF, { k: 'kind', l: 'نوع الصرف', t: 'select', options: ISSUE_KINDS, lockOnEdit: true, req: 1, onChange: (v, c) => c.setLines(c.lines), help: k === 'overhead' ? 'مواد تشغيل عامة للمصنع (زيوت، أدوات، نظافة…) مش تابعة لمشروع: تتحمّل كتكلفة غير مباشرة ومبتدخلش في تكلفة أي مشروع.' : 'مواد داخلة في تصنيع بند معين: تتحمّل على المشروع + البند + المرحلة وتدخل في تكلفة الإنتاج.' }, whF(ctx),
         k !== 'overhead' && { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', req: 1, combo: true, onChange: (v, c) => { c.lines.forEach((l) => { const it = byId('project_items', l.item_id); if (it && it.project_id !== v) l.item_id = null; }); c.setLines(c.lines); c.header.site_id = null; } },
         k !== 'overhead' && sitesOf(p).length > 0 && { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, filter: (x) => x.project_id === Number(p) },
-        { k: 'stage_id', l: k === 'overhead' ? 'المرحلة (اختياري)' : 'مرحلة التصنيع', t: 'fk', ref: 'stages', req: k === 'production' },
         receivedF, { ...notesF, wide: false }].filter(Boolean);
     },
     lines: issueLinesItems, totals: issueTotals,

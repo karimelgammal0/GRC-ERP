@@ -45,7 +45,7 @@ export const MASTERS = {
   stages: {
     title: 'مراحل التصنيع', table: 'stages', seq: 'stage',
     fields: [T('name', 'اسم المرحلة', 'text', { req: 1 }), T('seq', 'الترتيب', 'number', { def: 1 }), T('account_id', 'حساب إنتاج تحت التشغيل', 'fk', { ref: 'accounts', req: 1 })],
-    cols: ['code', 'name', 'seq', 'account_id'], used: [['stock_issues', 'stage_id'], ['cost_lines', 'stage_id'], ['employees', 'default_stage_id'], ['labor_sheet_lines', 'stage_id']],
+    cols: ['code', 'name', 'seq', 'account_id'], used: [['stock_issues', 'stage_id'], ['stock_issue_lines', 'stage_id'], ['cost_lines', 'stage_id'], ['employees', 'default_stage_id'], ['labor_sheet_lines', 'stage_id']],
   },
   sites: {
     title: 'المواقع', table: 'sites', seq: 'site',

@@ -85,17 +85,17 @@ const st0 = await get('SELECT qty,value,avg_cost FROM material_stock WHERE mater
 near(st0.qty, 210, 'رصيد 210'); near(st0.value, 3470, 'قيمة 3470');
 
 section('5) الصرف على مشروع + بند + مرحلة');
-await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, qty: 1 }] }, null, U), /المشروع والمرحلة/, 'الصرف بدون مرحلة');
-await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, stage_id: stage.cast, lines: [{ material_id: T1, qty: 1 }] }, null, U), /حدد البند/, 'سطر الصرف بدون بند');
-await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, stage_id: stage.cast, lines: [{ material_id: T1, item_id: itemOther, qty: 1 }] }, null, U), /لا يتبع المشروع/, 'بند من مشروع آخر');
-await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, stage_id: stage.cast, lines: [{ material_id: T1, item_id: item1, qty: 999 }] }, null, U), /لا يكفي/, 'صرف أكبر من الرصيد');
-const iss1 = await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, stage_id: stage.cast, lines: [{ material_id: T1, item_id: item1, qty: 50 }] }, null, U);
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, qty: 1 }] }, null, U), /حدد المرحلة/, 'الصرف بدون مرحلة');
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, qty: 1 }] }, null, U), /حدد البند/, 'سطر الصرف بدون بند');
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: itemOther, stage_id: stage.cast, qty: 1 }] }, null, U), /لا يتبع المشروع/, 'بند من مشروع آخر');
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 999 }] }, null, U), /لا يكفي/, 'صرف أكبر من الرصيد');
+const iss1 = await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 50 }] }, null, U);
 near(iss1.lines[0].unit_cost, 16.5238, 'تكلفة الصرف = المتوسط', 0.001); near(iss1.lines[0].total, r2(50 * 3470 / 210), 'قيمة الصرف');
-const iss2 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, stage_id: stage.mold, lines: [{ material_id: T1, item_id: item2, qty: 20 }] }, null, U);
-const issM = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, stage_id: stage.cast, lines: [{ material_id: T1, item_id: item1, qty: 3 }, { material_id: T1, item_id: item2, qty: 2 }] }, null, U);
+const iss2 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item2, stage_id: stage.mold, qty: 20 }] }, null, U);
+const issM = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 3 }, { material_id: T1, item_id: item2, stage_id: stage.cast, qty: 2 }] }, null, U);
 near(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE source_type='issue' AND source_id=${issM.id} AND item_id=${item1}`), issM.lines[0].total, 'إذن واحد: تكلفة البند الأول');
 near(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE source_type='issue' AND source_id=${issM.id} AND item_id=${item2}`), issM.lines[1].total, 'إذن واحد: تكلفة البند الثاني');
-await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, stage_id: stage.cast, lines: [{ material_id: T1, item_id: item1, qty: 1 }, { material_id: T1, item_id: item1, qty: 1 }] }, null, U), /مكررة/, 'نفس الخامة على نفس البند');
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 1 }, { material_id: T1, item_id: item1, stage_id: stage.cast, qty: 1 }] }, null, U), /مكررة/, 'نفس الخامة على نفس البند');
 await voidDoc('stock_issue', issM.id, U);
 const iss3 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'site', warehouse_id: wh, project_id: prj, site_id: site, lines: [{ material_id: T1, qty: 10 }] }, null, U);
 // التحويل لموقع: الموقع مطلوب بس لو المشروع متكود له مواقع
@@ -145,9 +145,9 @@ await voidDoc('stock_issue', ret.id, U);
 await voidDoc('stock_issue', iss2.id, U);
 near(await cl(`stage_id=${stage.mold}`), 0, 'تكلفة القوالب صفر بعد الإلغاء');
 // تعديل إذن صرف (كمية)
-await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, stage_id: stage.cast, lines: [{ material_id: T1, item_id: item1, qty: 30 }] }, iss1.id, U), /مقفول/, 'الإذن المعتمد مقفول للتعديل');
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 30 }] }, iss1.id, U), /مقفول/, 'الإذن المعتمد مقفول للتعديل');
 await run('UPDATE stock_issues SET reopened=1 WHERE id=?', iss1.id);   // إعادة فتح بصلاحية
-const iss1e = await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, stage_id: stage.cast, lines: [{ material_id: T1, item_id: item1, qty: 30 }] }, iss1.id, U);
+const iss1e = await saveDoc('stock_issue', { date: '2026-11-06', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 30 }] }, iss1.id, U);
 near(iss1e.lines[0].qty, 30, 'تعديل الكمية'); ok(!(await get('SELECT reopened FROM stock_issues WHERE id=?', iss1.id)).reopened, 'الإذن اتقفل تاني بعد التعديل'); near((await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty, 165, 'الرصيد بعد التعديل (إلغاء 20 + تخفيض 20)');
 near(await stockTotal(), await glBal('1221'), 'الاتساق بعد التعديل');
 
