@@ -312,27 +312,29 @@ async function buildIssue(id) {
   if (!h || h.status === 'void') return;
   const sign = h.kind === 'return' ? -1 : 1; const kind = await effectiveKind(h);
   const lines = await all('SELECT * FROM stock_issue_lines WHERE issue_id=? ORDER BY id', id);
-  let total = 0;
+  let total = 0; const byItem = new Map();
   await run(`DELETE FROM cost_lines WHERE source_type='issue' AND source_id=?`, id);
   for (const l of lines) {
     const mv = await get(`SELECT value, unit_cost FROM stock_moves WHERE doc_type='issue' AND doc_id=? AND line_id=?`, id, l.id);
     const value = mv.value;
     await run('UPDATE stock_issue_lines SET unit_cost=?, total=? WHERE id=?', mv.unit_cost, value, l.id);
-    total += value;
+    total += value; byItem.set(l.item_id ?? h.item_id ?? null, r2((byItem.get(l.item_id ?? h.item_id ?? null) || 0) + value));
     await insertRow('cost_lines', {
       date: h.date, source_type: 'issue', source_id: id, source_line_id: l.id, cost_type: 'material',
-      cost_class: kind === 'overhead' ? 'indirect' : 'direct', project_id: h.project_id, item_id: h.item_id, stage_id: h.stage_id, site_id: h.site_id,
+      cost_class: kind === 'overhead' ? 'indirect' : 'direct', project_id: h.project_id, item_id: l.item_id ?? h.item_id, stage_id: h.stage_id, site_id: h.site_id,
       material_id: l.material_id, qty: sign * l.qty, amount: sign * value, description: h.no,
     }, ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'project_id', 'item_id', 'stage_id', 'site_id', 'material_id', 'qty', 'amount', 'description']);
   }
   total = r2(total);
-  const dims = { project_id: h.project_id, item_id: h.item_id, stage_id: h.stage_id };
   const costAcc = await issueAccount(kind, h.stage_id);
   const inv = await acc('acc_inventory_raw');
   const label = { production: 'إنتاج', site: 'تحويل لموقع', overhead: 'تشغيل غير مباشر' }[kind];
   await replaceJournal({
     date: h.date, source_type: 'issue', source_id: id, description: `${h.kind === 'return' ? 'مرتجع صرف' : 'صرف'} ${h.no} — ${label}`,
-    lines: sign === 1 ? [dc(costAcc, total, dims), cr(inv, total)] : [dc(inv, total), cr(costAcc, total, dims)],
+    lines: [...byItem].flatMap(([item_id, amt]) => {
+      const dims = { project_id: h.project_id, item_id, stage_id: h.stage_id };
+      return sign === 1 ? [dc(costAcc, amt, dims), cr(inv, amt)] : [dc(inv, amt), cr(costAcc, amt, dims)];
+    }),
   });
 }
 onRecost.issue = buildIssue;
@@ -343,7 +345,7 @@ DOCS.stock_issue = {
   locked: (cur) => cur.status === 'posted' && cur.kind !== 'return' && !cur.reopened,
   relock: async (id) => { await run('UPDATE stock_issues SET reopened=0 WHERE id=?', id); },
   cols: ['date', 'kind', 'warehouse_id', 'project_id', 'item_id', 'stage_id', 'site_id', 'ref_issue_id', 'received_by_id', 'notes'],
-  lineCols: ['material_id', 'qty', 'ref_line_id', 'notes'],
+  lineCols: ['material_id', 'item_id', 'qty', 'ref_line_id', 'notes'],
   blank: (l) => !l.material_id && !l.ref_line_id,
   async validate(p, lines) {
     if (!['production', 'site', 'overhead', 'return'].includes(p.kind)) throw new AppError('نوع الصرف غير معروف');
@@ -356,14 +358,15 @@ DOCS.stock_issue = {
         posQty(l);
         const rl = await get('SELECT * FROM stock_issue_lines WHERE id=?', l.ref_line_id);
         if (!rl || rl.issue_id !== ref.id) throw new AppError('بند المرتجع لا يخص إذن الصرف المختار');
-        l.material_id = rl.material_id;
+        l.material_id = rl.material_id; l.item_id = rl.item_id ?? ref.item_id ?? null;
         const returned = await val(`SELECT COALESCE(SUM(l.qty),0) FROM stock_issue_lines l JOIN stock_issues i ON i.id=l.issue_id WHERE l.ref_line_id=? AND i.status='posted'`, rl.id);
         if (num(l.qty) > rl.qty - returned + 1e-6) throw new AppError(`كمية المرتجع أكبر من المتاح إرجاعه لبند «${await nm('materials', rl.material_id)}» (${r4(rl.qty - returned)})`);
       }
       return;
     }
     if (p.kind === 'production') {
-      if (!p.project_id || !p.item_id || !p.stage_id) throw new AppError('صرف الإنتاج لازم يتحدد له: المشروع والبند والمرحلة');
+      if (!p.project_id || !p.stage_id) throw new AppError('صرف الإنتاج لازم يتحدد له: المشروع والمرحلة');
+      for (const l of lines) if (!l.item_id) throw new AppError(`حدد البند للخامة «${await nm('materials', l.material_id)}»`);
       // الموقع اختياري هنا، ومسموح بس لو المشروع متكود له مواقع نشطة وتابع له
       if (p.site_id) {
         const ok = await get('SELECT 1 x FROM sites WHERE id=? AND project_id=? AND active=1', p.site_id, p.project_id);
@@ -380,10 +383,11 @@ DOCS.stock_issue = {
       } else p.site_id = null;
       p.stage_id = null;
     }
-    if (p.kind === 'overhead') { p.project_id = null; p.item_id = null; p.site_id = null; }
+    if (p.kind === 'overhead') { p.project_id = null; p.site_id = null; for (const l of lines) l.item_id = null; }
+    if (p.kind !== 'return') { p.item_id = null; if (p.kind === 'site') for (const l of lines) l.item_id = null; }
     if (p.project_id) await must('projects', p.project_id, 'المشروع');
-    if (p.item_id) {
-      const it = await get('SELECT project_id FROM project_items WHERE id=?', p.item_id);
+    for (const l of lines) if (l.item_id) {
+      const it = await get('SELECT project_id FROM project_items WHERE id=?', l.item_id);
       if (!it) throw new AppError('البند غير موجود');
       if (it.project_id !== Number(p.project_id)) throw new AppError('البند لا يتبع المشروع المختار');
     }
@@ -392,8 +396,9 @@ DOCS.stock_issue = {
     const seen = new Set();
     for (const l of lines) {
       await must('materials', l.material_id, 'الخامة'); posQty(l);
-      if (seen.has(Number(l.material_id))) throw new AppError(`الخامة «${await nm('materials', l.material_id)}» مكررة في الإذن`);
-      seen.add(Number(l.material_id));
+      const key = `${l.material_id}:${l.item_id || 0}`;
+      if (seen.has(key)) throw new AppError(`الخامة «${await nm('materials', l.material_id)}» مكررة${l.item_id ? ' على نفس البند' : ''} في الإذن`);
+      seen.add(key);
     }
   },
   async post(doc) {

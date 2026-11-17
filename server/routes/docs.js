@@ -60,9 +60,9 @@ const LISTS = {
   purchase_return: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, s.name supplier_name FROM purchase_returns d JOIN suppliers s ON s.id=d.supplier_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   stock_issue: async (q) => {
     const base = []; if (q.only === 'issues') base.push(`d.kind IN ('production','overhead')`); if (q.only === 'site_transfers') base.push(`d.kind='site'`); if (q.only === 'returns') base.push(`d.kind='return'`);
-    if (q.stage_id) base.push(`d.stage_id=${Number(q.stage_id)}`); if (q.item_id) base.push(`d.item_id=${Number(q.item_id)}`);
+    if (q.stage_id) base.push(`d.stage_id=${Number(q.stage_id)}`); if (q.item_id) base.push(`(d.item_id=${Number(q.item_id)} OR EXISTS (SELECT 1 FROM stock_issue_lines x WHERE x.issue_id=d.id AND x.item_id=${Number(q.item_id)}))`);
     const { sql, p } = where(q, base);
-    return await all(`SELECT d.*, pr.name project_name, it.name item_name, st.name stage_name, si.name site_name, COALESCE(rc.name, d.received_by) received_by,
+    return await all(`SELECT d.*, pr.name project_name, COALESCE(it.name, (SELECT string_agg(DISTINCT pi.name, '، ') FROM stock_issue_lines x JOIN project_items pi ON pi.id=x.item_id WHERE x.issue_id=d.id)) item_name, st.name stage_name, si.name site_name, COALESCE(rc.name, d.received_by) received_by,
       (SELECT COALESCE(SUM(total),0) FROM stock_issue_lines WHERE issue_id=d.id) total
       FROM stock_issues d LEFT JOIN employees rc ON rc.id=d.received_by_id LEFT JOIN projects pr ON pr.id=d.project_id LEFT JOIN project_items it ON it.id=d.item_id
       LEFT JOIN stages st ON st.id=d.stage_id LEFT JOIN sites si ON si.id=d.site_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },

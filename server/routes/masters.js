@@ -40,7 +40,7 @@ export const MASTERS = {
   project_items: {
     title: 'بنود المشروعات', table: 'project_items', seq: 'project_item',
     fields: [T('project_id', 'المشروع', 'fk', { ref: 'projects', req: 1 }), T('name', 'اسم البند', 'text', { req: 1 }), T('qty', 'الكمية', 'number'), T('unit_id', 'الوحدة', 'fk', { ref: 'units' }), T('notes', 'ملاحظات', 'textarea')],
-    cols: ['code', 'name', 'project_id', 'qty', 'unit_id'], used: [['stock_issues', 'item_id'], ['cost_lines', 'item_id'], ['labor_sheet_lines', 'item_id']],
+    cols: ['code', 'name', 'project_id', 'qty', 'unit_id'], used: [['stock_issues', 'item_id'], ['stock_issue_lines', 'item_id'], ['cost_lines', 'item_id'], ['labor_sheet_lines', 'item_id']],
   },
   stages: {
     title: 'مراحل التصنيع', table: 'stages', seq: 'stage',
