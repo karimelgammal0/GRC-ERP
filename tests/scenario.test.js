@@ -239,6 +239,10 @@ const scT = await api('/api/reports/cost-lines?scope=transfer'); ok(scT.length >
 const scA = await api('/api/reports/cost-lines?scope=all'); ok(scA.length === scT.length + (await api('/api/reports/cost-lines')).length, 'نطاق الكل = تصنيع + تحويلات');
 const fc = await api('/api/reports/cost-pivot?row=class&col=month'); near(fc.totals.total, await cl("cost_class<>'transfer'"), 'تكاليف المصنع = كل التكاليف بدون التحويلات');
 ok(fc.rows.every((x) => ['direct', 'indirect', 'admin'].includes(x.key)), 'تكاليف المصنع مصنفة مباشرة/غير مباشرة/إدارية');
+const fcd = await api('/api/reports/factory-cost'); near(fcd.totals.total, await cl("cost_class<>'transfer'"), 'تكاليف المصنع المفصلة = كل التكاليف بدون التحويلات');
+near(fcd.totals.direct + fcd.totals.indirect + fcd.totals.admin, fcd.totals.total, 'مباشرة + غير مباشرة + إدارية = الإجمالي');
+ok(fcd.rows.some((x) => x.project_id && x.stage_id), 'تفصيل المشروع والمرحلة');
+const noProj = await api('/api/reports/cost-lines?project_id=none'); ok(noProj.every((x) => x.project_id === null), 'فلتر بدون مشروع');
 const lastP = await api(`/api/helpers/last-price?material_id=${T1}`); ok(lastP && Number(lastP.unit_price) > 0, 'آخر سعر شراء للخامة');
 const piv = await api('/api/reports/cost-pivot?row=project&col=stage');
 const pname = await val('SELECT name FROM projects WHERE id=?', prj); const prow = piv.rows.find((x) => x.name === pname);

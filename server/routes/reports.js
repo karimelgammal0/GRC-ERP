@@ -11,7 +11,7 @@ function costWhere(q) {
   const w = ['1=1']; const p = [];
   if (q.from) { w.push('c.date>=?'); p.push(q.from); }
   if (q.to) { w.push('c.date<=?'); p.push(q.to); }
-  for (const k of ['project_id', 'stage_id', 'item_id', 'site_id', 'material_id', 'employee_id', 'category_id']) if (q[k]) { w.push(`c.${k}=?`); p.push(q[k]); }
+  for (const k of ['project_id', 'stage_id', 'item_id', 'site_id', 'material_id', 'employee_id', 'category_id']) if (q[k] === 'none') w.push(`c.${k} IS NULL`); else if (q[k]) { w.push(`c.${k}=?`); p.push(q[k]); }
   if (q.cost_type) { w.push('c.cost_type=?'); p.push(q.cost_type); }
   if (q.cost_class) { w.push('c.cost_class=?'); p.push(q.cost_class); }
   // النطاق: تصنيع (الافتراضي، بدون التحويلات للمواقع) | تحويلات للمواقع | الكل
@@ -37,7 +37,7 @@ const nameOf = (names, k) => (k === 0 || k === '0' ? 'غير محدد' : names[k
 
 // كل تقرير ليه صفحة (أو أكتر) بتستخدمه — المستخدم لازم يكون له صلاحية على واحدة منهم
 const REPORT_PAGES = {
-  'cost-pivot': ['reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.factory-cost'], 'cost-lines': ['reports.cost-detail', 'reports.material-usage', 'reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.factory-cost'],
+  'cost-pivot': ['reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.factory-cost'], 'factory-cost': ['reports.factory-cost'], 'cost-lines': ['reports.cost-detail', 'reports.material-usage', 'reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.factory-cost'],
   'stock-card': ['inventory.stock-card'], 'stock-balances': ['inventory.balances'], 'stock-moves': ['inventory.moves'],
   'supplier-statement': ['purchases.supplier-statement'], 'supplier-balances': ['purchases.supplier-balances'],
   'treasury-statement': ['finance.treasury-statement'], 'treasury-balances': ['finance.treasuries'], 'custody-statement': ['finance.custody-statement'], 'custody-balances': ['finance.treasuries'],
@@ -79,6 +79,23 @@ export function reportRouter() {
       for (const f of ['total', 'material', 'labor', 'expense']) totals[f] = r2(totals[f] + row[f]);
     }
     res.json({ rows: rowList, cols: colList, totals });
+  });
+
+  // تكاليف المصنع بالتفصيل: مشروع × مرحلة × تصنيف (مباشرة / غير مباشرة / إدارية) — بدون التحويلات للمواقع
+  r.get('/factory-cost', async (req, res) => {
+    const { sql, p } = costWhere({ ...req.query, cost_class: undefined, scope: 'manufacturing' });
+    const cells = await all(`SELECT c.project_id, c.stage_id, c.cost_class cls, ROUND(SUM(c.amount),2) amt FROM cost_lines c WHERE ${sql} GROUP BY 1, 2, 3`, ...p);
+    const pn = await dict('projects'), sn = await dict('stages'); const ord = Object.fromEntries((await all('SELECT id, seq FROM stages')).map((s) => [s.id, s.seq]));
+    const rows = new Map();
+    for (const c of cells) {
+      const key = `${c.project_id ?? 'none'}|${c.stage_id ?? 'none'}`;
+      if (!rows.has(key)) rows.set(key, { project_id: c.project_id, stage_id: c.stage_id, project_name: c.project_id ? pn[c.project_id] : 'تكاليف عامة (بدون مشروع)', stage_name: c.stage_id ? sn[c.stage_id] : 'بدون مرحلة', direct: 0, indirect: 0, admin: 0, total: 0 });
+      const row = rows.get(key); row[c.cls] = r2((row[c.cls] || 0) + c.amt); row.total = r2(row.total + c.amt);
+    }
+    const list = [...rows.values()].sort((a, b) => (a.project_id ? 0 : 1) - (b.project_id ? 0 : 1) || String(a.project_name).localeCompare(String(b.project_name), 'ar') || (ord[a.stage_id] ?? 99) - (ord[b.stage_id] ?? 99));
+    const totals = { direct: 0, indirect: 0, admin: 0, total: 0 };
+    for (const x of list) for (const k of Object.keys(totals)) totals[k] = r2(totals[k] + (x[k] || 0));
+    res.json({ rows: list, totals });
   });
 
   r.get('/cost-lines', async (req, res) => {
