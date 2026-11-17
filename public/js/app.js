@@ -20,9 +20,9 @@ const NAV = [
     ['returns', 'مرتجعات الشراء', pur.preturnsPage], ['supplier-statement', 'كشف حساب مورد', pur.supplierStatementPage], ['supplier-balances', 'أرصدة الموردين', pur.supplierBalancesPage]] },
   { id: 'hr', ico: '☺', title: 'الموارد البشرية', items: [['labor', 'يوميات العمالة', hr.laborSheetsPage], ['labor-advances', 'سلف عمال يومية', hr.laborAdvancesPage], ['payroll', 'الرواتب الشهرية', hr.payrollPage]] },
   { id: 'finance', ico: '$', title: 'الإدارة المالية', items: [
-    ['treasuries', 'الخزن والعهد (الأرصدة)', fin.treasuriesPage], ['expenses', 'سندات المصروفات', fin.expensesVoucherPage], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
-    ['custody', 'سندات العهد والتحويلات', fin.custodyVouchersPage], ['other', 'سندات المقبوضات', fin.otherVouchersPage],
-    ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage, true], ['custody-statement', 'كشف حساب عهدة', fin.custodyStatementPage]] },
+    ['treasuries', 'أرصدة الخزن والعهد', fin.treasuriesPage], ['custody', 'سندات العهد والتحويلات', fin.custodyVouchersPage], ['expenses', 'سندات المدفوعات', fin.expensesVoucherPage],
+    ['other', 'سندات المقبوضات', fin.otherVouchersPage], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
+    ['custody-statement', 'كشف حساب عهد', fin.custodyStatementPage], ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage, true]] },
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
   { id: 'reports', ico: '◔', title: 'التقارير', direct: true, items: [
     ['hub', 'كل التقارير', rep.hub], ['project-stage', 'تكلفة المشاريع × المراحل', rep.projectStagePage], ['stage-project', 'تكلفة المراحل × المشاريع', rep.stageProjectPage], ['project-analysis', 'تحليل مشروع (بنود)', rep.projectAnalysisPage],

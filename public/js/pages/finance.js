@@ -137,18 +137,18 @@ function extraPanel(ctx) {
   return null;
 }
 
-export const expensesVoucherPage = voucherScreen({ perm: 'finance.expenses', title: 'سندات المصروفات', noun: 'سند', kinds: ['disbursement', 'expense', 'supplier_payment'], newKind: 'disbursement', only: 'expenses', srcLabel: 'مكان الصرف', newLabel: 'سند صرف جديد',
+export const expensesVoucherPage = voucherScreen({ perm: 'finance.expenses', title: 'سندات المدفوعات', noun: 'سند', kinds: ['disbursement', 'expense', 'supplier_payment'], newKind: 'disbursement', only: 'expenses', srcLabel: 'مكان الصرف', newLabel: 'سند صرف جديد',
   note: 'سند واحد تصرف بيه أكتر من مصروف وتسدد أكتر من مورد. اختر مكان الصرف (خزينة / بنك / عهدة) وبعدين أضف الأسطر. المصروف المباشر لازم له مشروع ومرحلة تصنيع، وسداد المورد بيتوزع تلقائياً على أقدم فواتيره المفتوحة والباقي بيفضل دفعة مقدمة. أنواع المدفوعات بتتكوّد من الإعدادات.' });
 export const wagePaymentsPage = voucherScreen({ perm: 'finance.wages', title: 'صرف الأجور والمرتبات', noun: 'سند صرف أجور', kinds: ['wage_payment'], newLabel: 'صرف أجور', note: 'اصرف مستحقات كشوف اليوميات والمرتبات الشهرية من خزينة أو عهدة.' });
 export const custodyVouchersPage = voucherScreen({ perm: 'finance.custody', title: 'سندات العهد والتحويلات', noun: 'سند', kinds: ['custody_issue', 'custody_return', 'transfer'], only: 'custody', newLabel: 'سند جديد',
-  note: 'صرف عهدة لموظف، أو رد باقي العهدة للخزينة، أو تحويل بين خزينتين/بنكين. مصروفات العهدة بتتسجل من «سندات المصروفات» باختيار مكان الصرف: عهدة.' });
+  note: 'صرف عهدة لموظف، أو رد باقي العهدة للخزينة، أو تحويل بين خزينتين/بنكين. مصروفات العهدة بتتسجل من «سندات المدفوعات» باختيار مكان الصرف: عهدة.' });
 export const otherVouchersPage = voucherScreen({ perm: 'finance.other', title: 'سندات المقبوضات', noun: 'سند', kinds: ['collection', 'receipt', 'payment_other'], newKind: 'collection', only: 'receipts', srcLabel: 'مكان الإيداع', newLabel: 'سند مقبوضات جديد',
   note: 'سند واحد تستلم بيه أكتر من مقبوض. اختر مكان الإيداع (خزينة / بنك / عهدة) وبعدين أضف الأسطر: نوع المقبوض ثم الاسم والقيمة. أنواع المقبوضات بتتكوّد من الإعدادات (عميل / مورد / عامل / عهدة / حساب).' });
 
 // ---------------- أرصدة الخزن والعهد + كشوف الحساب ----------------
 export async function treasuriesPage(root) {
   const [tr, cu] = await Promise.all([GET('/reports/treasury-balances'), GET('/reports/custody-balances')]);
-  root.replaceChildren(pageHead('الخزن والبنوك والعهد'),
+  root.replaceChildren(pageHead('أرصدة الخزن والعهد'),
     h('div.kpis', kpi('إجمالي النقدية والبنوك', fmt(tr.reduce((s, x) => s + x.balance, 0)), `${tr.length} خزينة/حساب`), kpi('إجمالي العهد بذمة أصحابها', fmt(cu.reduce((s, x) => s + x.balance, 0)), `${cu.length} عهدة`, 'warn')),
     h('div.grid2', card('الخزن والبنوك', table({ search: false, name: 'الخزن', rows: tr, onRow: (r) => { location.hash = `#/finance/treasury-statement?treasury_id=${r.id}`; }, cols: [{ k: 'code', l: 'الكود' }, { k: 'name', l: 'الخزينة', render: (r) => h('b', r.name) }, { k: 'type', l: 'النوع', text: (r) => (r.type === 'bank' ? 'بنك' : 'نقدية') }, { k: 'balance', l: 'الرصيد', num: true, fmt: (v) => fmt(v) }] })),
       card('العهد', table({ search: false, name: 'العهد', rows: cu, onRow: (r) => { location.hash = `#/finance/custody-statement?custodian_id=${r.id}`; }, cols: [{ k: 'code', l: 'الكود' }, { k: 'name', l: 'صاحب العهدة', render: (r) => h('b', r.name) }, { k: 'balance', l: 'الرصيد بذمته', num: true, fmt: (v) => fmt(v) }] }))));
@@ -168,4 +168,4 @@ function statementPage(title, dimKey, dimRef, endpoint, backHref) {
   };
 }
 export const treasuryStatementPage = statementPage('كشف حساب خزينة', 'treasury_id', { ref: 'treasuries', label: 'الخزينة/البنك' }, '/reports/treasury-statement', '#/finance/treasuries');
-export const custodyStatementPage = statementPage('كشف حساب عهدة', 'custodian_id', { ref: 'custodians', label: 'صاحب العهدة' }, '/reports/custody-statement', '#/finance/treasuries');
+export const custodyStatementPage = statementPage('كشف حساب عهد', 'custodian_id', { ref: 'custodians', label: 'صاحب العهدة' }, '/reports/custody-statement', '#/finance/treasuries');
