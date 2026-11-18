@@ -35,13 +35,13 @@ export function docScreen(cfg) {
       const readonly = voided || noEdit || locked;
       const ctx = {
         st, get header() { return st.header; }, get lines() { return st.lines; }, doc,
-        setHeader(k, v) { st.header[k] = v; hf?.set(k, v); },
+        setHeader(k, v) { st.header[k] = v; hf?.set(k, v); ff?.set(k, v); },
         setLines(arr) { st.lines = arr; drawLines(); updateTotals(); },
         rebuildHeader() { drawHeader(); }, refresh() { refreshComputed(); updateTotals(); }, redrawExtra() { drawExtra(); }, toast,
       };
       st.ctx = ctx;
-      const headerHost = h('div'); const linesHost = h('div'); const totalsHost = h('div.totals'); const extraHost = h('div');
-      let hf = null; let calcCells = [];
+      const headerHost = h('div'); const footerHost = h('div'); const linesHost = h('div'); const totalsHost = h('div.totals'); const extraHost = h('div');
+      let hf = null; let ff = null; let calcCells = [];
 
       const drawHeader = () => {
         const defs = (typeof E.header === 'function' ? E.header(ctx) : E.header).map((f) => ({
@@ -50,6 +50,17 @@ export function docScreen(cfg) {
         }));
         hf = formGrid(defs, st.header, E.cols || 3);
         headerHost.replaceChildren(hf.el);
+      };
+
+      // حقول تحت البنود (مثلاً المستلم) — بتتحفظ مع الهيدر في نفس الـ payload
+      const drawFooter = () => {
+        if (!E.footer) return;
+        const defs = (typeof E.footer === 'function' ? E.footer(ctx) : E.footer).filter(Boolean).map((f) => ({
+          ...f, readonly: f.readonly || readonly || (doc && f.lockOnEdit),
+          onChange: (v) => { st.header[f.k] = v; f.onChange?.(v, ctx); E.onHeader?.(f.k, v, ctx); updateTotals(); },
+        }));
+        ff = formGrid(defs, st.header, E.footerCols || E.cols || 3);
+        footerHost.replaceChildren(ff.el);
       };
 
       const refreshComputed = () => calcCells.forEach(({ td, c, l }) => { const v = c.calc(l, ctx); td.textContent = c.fmt ? c.fmt(v) : (v ?? ''); td.className = 'ro' + (v < 0 ? ' neg' : ''); });
@@ -78,7 +89,7 @@ export function docScreen(cfg) {
       const drawExtra = () => { if (!E.extra) return; const v = E.extra(ctx); extraHost.replaceChildren(...(v ? [v] : [])); extraCard.style.display = v ? '' : 'none'; };
 
       const save = guard(async () => {
-        const v = hf.values(); const payload = { ...st.header, ...v, lines: st.lines.map(({ ...l }) => l) };
+        const v = { ...hf.values(), ...(ff ? ff.values() : {}) }; const payload = { ...st.header, ...v, lines: st.lines.map(({ ...l }) => l) };
         E.prepare?.(payload, ctx);
         const saved = id ? await PUT(`/doc/${cfg.type}/${id}`, payload) : await POST(`/doc/${cfg.type}`, payload);
         toast(`تم الحفظ — ${saved.no}`); E.afterSave?.(saved); showList();
@@ -92,7 +103,7 @@ export function docScreen(cfg) {
         await POST(`/doc/${cfg.type}/${id}/void`); toast('تم الإلغاء'); showList();
       });
 
-      drawHeader(); drawLines(); updateTotals(); drawExtra();
+      drawHeader(); drawFooter(); drawLines(); updateTotals(); drawExtra();
       host.replaceChildren(
         h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); showList(); } }, '← ' + cfg.title)),
         h('div.doc-head', h('span.doc-no', doc ? doc.no : `${cfg.noun} جديد`), doc ? statusBadge(doc.status) : null, h('span.grow'),
@@ -104,7 +115,7 @@ export function docScreen(cfg) {
         voided ? h('div.note.bad', 'هذا المستند ملغي — للعرض فقط.') : noEdit ? h('div.note', 'عرض فقط — ليس لديك صلاحية التعديل على هذا المستند.') : null,
         doc && !readonly ? h('div.note', 'تعديل المستند يعكس أثره القديم ويرحّل الجديد تلقائياً (المخزون والتكلفة والقيود).') : null,
         E.intro ? h('div.note', E.intro) : null,
-        card(null, headerHost), hasLines ? card(E.lines.title || 'البنود', linesHost) : null, extraCard,
+        card(null, headerHost), hasLines ? card(E.lines.title || 'البنود', linesHost) : null, E.footer ? card(null, footerHost) : null, extraCard,
         h('div.card', totalsHost),
         readonly ? (E.buttons ? h('div.actions', E.buttons(ctx)) : null) : h('div.actions', h('button.btn.primary', { onclick: save }, doc ? 'حفظ التعديل' : 'حفظ واعتماد'), h('button.btn', { onclick: showList }, 'رجوع'), ...(E.buttons?.(ctx) || [])));
       if (E.onOpen) await E.onOpen(ctx);

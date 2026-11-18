@@ -62,8 +62,9 @@ export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true,
       return [dateF, { k: 'kind', l: 'نوع الصرف', t: 'select', options: ISSUE_KINDS, lockOnEdit: true, req: 1, onChange: (v, c) => c.setLines(c.lines), help: k === 'overhead' ? 'مواد تشغيل عامة للمصنع (زيوت، أدوات، نظافة…) مش تابعة لمشروع: تتحمّل كتكلفة غير مباشرة ومبتدخلش في تكلفة أي مشروع.' : 'مواد داخلة في تصنيع بند معين: تتحمّل على المشروع + البند + المرحلة وتدخل في تكلفة الإنتاج.' }, whF(ctx),
         k !== 'overhead' && { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', req: 1, combo: true, onChange: (v, c) => { c.lines.forEach((l) => { const it = byId('project_items', l.item_id); if (it && it.project_id !== v) l.item_id = null; }); c.setLines(c.lines); c.header.site_id = null; } },
         k !== 'overhead' && sitesOf(p).length > 0 && { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, filter: (x) => x.project_id === Number(p) },
-        receivedF, { ...notesF, wide: false }].filter(Boolean);
+        { ...notesF, wide: false }].filter(Boolean);
     },
+    footer: [receivedF], // المستلم تحت مع البنود
     lines: issueLinesItems, totals: issueTotals,
     tools: [{ label: '＋ بند جديد في المشروع', run: async (ctx) => { if (ctx.header.kind === 'production' && canAddItems()) addItemDialog(ctx); } }],
     onOpen: (ctx) => mapStock(ctx),
