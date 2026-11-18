@@ -40,7 +40,7 @@ export function docScreen(cfg) {
         rebuildHeader() { drawHeader(); }, refresh() { refreshComputed(); updateTotals(); }, redrawExtra() { drawExtra(); }, toast,
       };
       st.ctx = ctx;
-      const headerHost = h('div'); const footerHost = h('div'); const linesHost = h('div'); const totalsHost = h('div.totals'); const extraHost = h('div');
+      const headerHost = h('div'); const footerHost = h('div.lines-foot'); const linesHost = h('div'); const totalsHost = h('div.totals'); const extraHost = h('div');
       let hf = null; let ff = null; let calcCells = [];
 
       const drawHeader = () => {
@@ -115,7 +115,7 @@ export function docScreen(cfg) {
         voided ? h('div.note.bad', 'هذا المستند ملغي — للعرض فقط.') : noEdit ? h('div.note', 'عرض فقط — ليس لديك صلاحية التعديل على هذا المستند.') : null,
         doc && !readonly ? h('div.note', 'تعديل المستند يعكس أثره القديم ويرحّل الجديد تلقائياً (المخزون والتكلفة والقيود).') : null,
         E.intro ? h('div.note', E.intro) : null,
-        card(null, headerHost), hasLines ? card(E.lines.title || 'البنود', linesHost) : null, E.footer ? card(null, footerHost) : null, extraCard,
+        card(null, headerHost), hasLines ? card(E.lines.title || 'البنود', linesHost, E.footer ? footerHost : null) : (E.footer ? card(null, footerHost) : null), extraCard,
         h('div.card', totalsHost),
         readonly ? (E.buttons ? h('div.actions', E.buttons(ctx)) : null) : h('div.actions', h('button.btn.primary', { onclick: save }, doc ? 'حفظ التعديل' : 'حفظ واعتماد'), h('button.btn', { onclick: showList }, 'رجوع'), ...(E.buttons?.(ctx) || [])));
       if (E.onOpen) await E.onOpen(ctx);
