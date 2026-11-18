@@ -65,7 +65,7 @@ export const DEFAULT_SEQUENCES = [
   ['project_item', 'بنود المشروعات', 'BND-', 4], ['stage', 'المراحل', 'STG-', 2], ['site', 'المواقع', 'SITE-', 3],
   ['treasury', 'الخزن والبنوك', 'TR-', 2], ['custodian', 'العهد', 'CUS-', 3], ['client', 'العملاء', 'CL-', 3], ['expense_category', 'المصروفات', 'EXC-', 3],
   ['employee', 'العاملين', 'EMP-', 4], ['payment_type', 'أنواع المدفوعات', 'PT-', 3], ['receipt_type', 'أنواع المقبوضات', 'RT-', 3],
-  ['purchase_request', 'طلبات الشراء', 'PR-', 5], ['purchase_order', 'أوامر الشراء', 'PO-', 5], ['goods_receipt', 'إذون الاستلام', 'GRN-', 5],
+  ['purchase_request', 'طلبات الشراء', 'PR-', 5], ['purchase_order', 'أوامر التوريد', 'PO-', 5], ['goods_receipt', 'إذون الاستلام', 'GRN-', 5],
   ['purchase_invoice', 'فواتير الشراء', 'PINV-', 5], ['purchase_return', 'مرتجعات المشتريات', 'PRT-', 5],
   ['stock_issue', 'إذون الصرف', 'ISS-', 5], ['stock_return', 'مرتجعات الصرف', 'RTN-', 5], ['stock_adjustment', 'جرد وتسوية', 'ADJ-', 5],
   ['labor_sheet', 'كشوف اليوميات', 'LAB-', 5], ['labor_advance', 'سلف عمال يومية', 'LADV-', 5], ['payroll', 'كشوف الرواتب', 'PAYR-', 5], ['journal', 'قيود اليومية', 'JE-', 6],

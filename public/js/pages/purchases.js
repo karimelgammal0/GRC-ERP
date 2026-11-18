@@ -29,14 +29,14 @@ export const requestsPage = docScreen({ perm: 'purchases.requests',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'requested_by', l: 'مقدم الطلب' }, { k: 'supplier_name', l: 'المورد' }, { k: 'project_name', l: 'المشروع' }, { k: 'n_lines', l: 'البنود', num: true }, { k: 'needed_date', l: 'مطلوب في' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
     cols: 3, header: [dateF, { k: 'requested_by_id', l: 'مقدم الطلب', t: 'fk', ref: 'employees', combo: true }, { k: 'supplier_id', l: 'المورد (اختياري)', t: 'fk', ref: 'suppliers', combo: true }, { k: 'project_id', l: 'المشروع (اختياري)', t: 'fk', ref: 'projects', combo: true }, { k: 'needed_date', l: 'مطلوب في تاريخ', t: 'date' }, { ...notesF, wide: false }],
-    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المطلوبة', w: '170px' }), unitCol, { l: 'تم أمر شراء بـ', calc: (l) => l.ordered_qty ?? 0, fmt: fq }, { k: 'notes', l: 'ملاحظة', t: 'text' }] },
+    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المطلوبة', w: '170px' }), unitCol, { l: 'تم أمر توريد بـ', calc: (l) => l.ordered_qty ?? 0, fmt: fq }, { k: 'notes', l: 'ملاحظة', t: 'text' }] },
     totals: (ctx) => [['عدد البنود', String(ctx.lines.filter((l) => l.material_id).length)]],
   },
 });
 
-// ---------------- أوامر الشراء ----------------
+// ---------------- أوامر التوريد ----------------
 export const ordersPage = docScreen({ perm: 'purchases.orders',
-  type: 'purchase_order', title: 'أوامر الشراء', noun: 'أمر شراء', newLabel: 'أمر شراء جديد', statuses: [['open', 'مفتوح'], ['partial', 'استلام جزئي'], ['received', 'تم الاستلام'], ['closed', 'مغلق']],
+  type: 'purchase_order', title: 'أوامر التوريد', noun: 'أمر توريد', newLabel: 'أمر توريد جديد', statuses: [['open', 'مفتوح'], ['partial', 'استلام جزئي'], ['received', 'تم الاستلام'], ['closed', 'مغلق']],
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'payment_type', l: 'الدفع', text: (r) => labelOf(PAY, r.payment_type).split(' (')[0] }, { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'expected_date', l: 'التسليم المتوقع' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
@@ -62,7 +62,7 @@ export const receiptsPage = docScreen({ perm: 'purchases.receipts',
     meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['المخزن', nameOf('warehouses', doc.warehouse_id)], ['مرجع المورد', doc.supplier_ref], ['نوع الشراء', doc.payment_type === 'cash' ? 'نقدي' : 'آجل']],
     cols: ['الخامة', 'الوحدة', 'الكمية المستلمة', 'السعر', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true), totals: [['إجمالي قيمة الاستلام', fmt((doc.lines || []).reduce((s, l) => s + l.qty * l.unit_price, 0))]], notes: doc.notes, sign: ['أمين المخزن', 'المورد / المندوب', 'مدير المشتريات'] }),
   type: 'goods_receipt', title: 'إذون الاستلام', noun: 'إذن استلام', newLabel: 'إذن استلام جديد',
-  note: 'الاستلام بيدخّل الخامة للمخزن فوراً بسعر أمر الشراء، وبيسجّل القيد دائن مباشرة على المورد (آجل) أو على الخزينة/العهدة (نقدي). فاتورة المورد بعد كده بتسجّل الفروق والضريبة والخصم بس.',
+  note: 'الاستلام بيدخّل الخامة للمخزن فوراً بسعر أمر التوريد، وبيسجّل القيد دائن مباشرة على المورد (آجل) أو على الخزينة/العهدة (نقدي). فاتورة المورد بعد كده بتسجّل الفروق والضريبة والخصم بس.',
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'supplier_ref', l: 'مرجع المورد' }, { k: 'payment_type', l: 'الدفع', render: (r) => (r.payment_type === 'cash' ? badge('نقدي', 'info') : badge('آجل', 'warn')) },
     { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -70,14 +70,14 @@ export const receiptsPage = docScreen({ perm: 'purchases.receipts',
     cols: 3, rebuildOn: ['payment_type'], defaults: () => ({ warehouse_id: defaultWh(), payment_type: 'credit' }),
     header: (ctx) => { const cash = ctx.header.payment_type === 'cash'; return [dateF, { ...supF, lockOnEdit: true, onChange: async (v, c) => { c.setHeader('order_id', null); await loadOrders(c); } },
       { k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw' },
-      { k: 'order_id', l: 'أمر الشراء (اختياري)', t: 'select', lockOnEdit: true, options: [['', '— استلام بدون أمر —'], ...(ctx.ordOpts || [])] },
+      { k: 'order_id', l: 'أمر التوريد (اختياري)', t: 'select', lockOnEdit: true, options: [['', '— استلام بدون أمر —'], ...(ctx.ordOpts || [])] },
       { k: 'payment_type', l: 'نوع الشراء', t: 'select', options: PAY, req: 1 },
       cash && { k: 'treasury_id', l: 'الدفع من خزينة/بنك', t: 'fk', ref: 'treasuries', help: 'اختر خزينة أو عهدة (واحد فقط)', onChange: (v, c) => { if (v) c.setHeader('custodian_id', null); } },
       cash && { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } },
       { k: 'supplier_ref', l: 'رقم إذن/فاتورة المورد', t: 'text' }, { ...notesF, wide: false }].filter(Boolean); },
     lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المستلمة', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal] },
-    tools: [{ label: 'سحب المتبقي من أمر الشراء', run: async (ctx) => {
-      const id = Number(ctx.header.order_id); if (!id) throw new Error('اختر أمر الشراء أولاً');
+    tools: [{ label: 'سحب المتبقي من أمر التوريد', run: async (ctx) => {
+      const id = Number(ctx.header.order_id); if (!id) throw new Error('اختر أمر التوريد أولاً');
       const rows = await GET('/helpers/order-lines', { order_id: id });
       ctx.setLines(rows.map((r) => ({ material_id: r.material_id, qty: r.remaining, unit_price: r.unit_price, order_line_id: r.id }))); toast('تم سحب المتبقي من الأمر — عدّل الكميات المستلمة فعلاً');
     } }],

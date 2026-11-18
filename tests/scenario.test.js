@@ -49,11 +49,11 @@ const treasury = (await get(`SELECT id FROM treasuries LIMIT 1`)).id; const cust
 // خامة جديدة صفر الرصيد لاختبار المتوسط المرجح بدقة
 await run(`INSERT INTO materials(code,name,unit_id) VALUES('RM-T1','خامة اختبار',(SELECT id FROM units LIMIT 1))`); const T1 = await mat('خامة اختبار');
 
-section('3) طلب شراء → أمر شراء → استلام جزئي → فاتورة مطابقة');
+section('3) طلب شراء → أمر توريد → استلام جزئي → فاتورة مطابقة');
 const pr = await saveDoc('purchase_request', { date: '2026-11-02', requested_by: 'المخزن', lines: [{ material_id: T1, qty: 100 }] }, null, U);
 const po = await saveDoc('purchase_order', { date: '2026-11-02', supplier_id: sup, request_id: pr.id, payment_type: 'credit', lines: [{ material_id: T1, qty: 100, unit_price: 10, request_line_id: pr.lines[0].id }] }, null, U);
 ok((await get('SELECT status FROM purchase_requests WHERE id=?', pr.id)).status === 'ordered', 'حالة الطلب بقت «تم الأمر»');
-await throws(async () => await saveDoc('purchase_order', { date: '2026-11-02', supplier_id: sup, request_id: pr.id, lines: [{ material_id: T1, qty: 5, unit_price: 10, request_line_id: pr.lines[0].id }] }, null, U), /المتبقي/, 'أمر شراء زيادة عن الطلب');
+await throws(async () => await saveDoc('purchase_order', { date: '2026-11-02', supplier_id: sup, request_id: pr.id, lines: [{ material_id: T1, qty: 5, unit_price: 10, request_line_id: pr.lines[0].id }] }, null, U), /المتبقي/, 'أمر توريد زيادة عن الطلب');
 const grn1 = await saveDoc('goods_receipt', { date: '2026-11-03', supplier_id: sup, warehouse_id: wh, order_id: po.id, lines: [{ material_id: T1, qty: 40, order_line_id: po.lines[0].id }] }, null, U);
 near(grn1.lines[0].unit_price, 10, 'سعر الاستلام اتسحب من الأمر');
 ok((await get('SELECT status FROM purchase_orders WHERE id=?', po.id)).status === 'partial', 'الأمر «استلام جزئي»');

@@ -79,7 +79,7 @@ DOCS.purchase_request = {
   async validate(p, lines) { if (p.supplier_id) await must('suppliers', p.supplier_id, 'المورد'); else p.supplier_id = null; for (const l of lines) { await must('materials', l.material_id, 'الخامة'); posQty(l); } },
   async unpost(cur) {
     if (await val('SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=? AND ordered_qty>0', cur.id))
-      throw new AppError('تم إصدار أمر شراء على هذا الطلب — ألغِ أمر الشراء أولاً');
+      throw new AppError('تم إصدار أمر توريد على هذا الطلب — ألغِ أمر التوريد أولاً');
   },
 };
 async function refreshRequestStatus(request_id) {
@@ -91,7 +91,7 @@ async function refreshRequestStatus(request_id) {
 }
 
 // ============================================================
-//  أوامر الشراء
+//  أوامر التوريد
 // ============================================================
 DOCS.purchase_order = {
   table: 'purchase_orders', lines: 'purchase_order_lines', fk: 'order_id', seq: 'purchase_order',
@@ -150,16 +150,16 @@ DOCS.goods_receipt = {
     if (p.payment_type === 'cash') { p.treasury_id = p.treasury_id || null; p.custodian_id = p.custodian_id || null; await sourceCheck(p); } else { p.treasury_id = null; p.custodian_id = null; }
     if (p.order_id) {
       const o = await get('SELECT * FROM purchase_orders WHERE id=?', p.order_id);
-      if (!o || o.status === 'void' || o.status === 'closed') throw new AppError('أمر الشراء غير متاح للاستلام');
-      if (o.supplier_id !== Number(p.supplier_id)) throw new AppError('أمر الشراء لمورد مختلف');
+      if (!o || o.status === 'void' || o.status === 'closed') throw new AppError('أمر التوريد غير متاح للاستلام');
+      if (o.supplier_id !== Number(p.supplier_id)) throw new AppError('أمر التوريد لمورد مختلف');
     }
     for (const l of lines) {
       await must('materials', l.material_id, 'الخامة'); posQty(l);
       if (l.order_line_id) {
         const ol = await get('SELECT * FROM purchase_order_lines WHERE id=?', l.order_line_id);
-        if (!ol || ol.order_id !== Number(p.order_id)) throw new AppError('بند أمر الشراء لا يخص الأمر المختار');
-        if (ol.material_id !== Number(l.material_id)) throw new AppError('الخامة لا تطابق بند أمر الشراء');
-        if (num(l.qty) > ol.qty - ol.received_qty + 1e-6) throw new AppError(`كمية الاستلام أكبر من المتبقي في أمر الشراء (${r4(ol.qty - ol.received_qty)})`);
+        if (!ol || ol.order_id !== Number(p.order_id)) throw new AppError('بند أمر التوريد لا يخص الأمر المختار');
+        if (ol.material_id !== Number(l.material_id)) throw new AppError('الخامة لا تطابق بند أمر التوريد');
+        if (num(l.qty) > ol.qty - ol.received_qty + 1e-6) throw new AppError(`كمية الاستلام أكبر من المتبقي في أمر التوريد (${r4(ol.qty - ol.received_qty)})`);
         if (l.unit_price === undefined || l.unit_price === null || l.unit_price === '') l.unit_price = ol.unit_price;
       }
       if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً');

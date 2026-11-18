@@ -16,7 +16,7 @@ export const CATALOG = [
     P('issues', 'صرف للإنتاج والتشغيل', [...DOC, ['add_item', 'إضافة بند مشروع من الشاشة'], ['reopen', 'إعادة فتح إذن معتمد للتعديل']]), P('site-transfers', 'التحويل للمواقع', [...DOC, ['reopen', 'إعادة فتح إذن معتمد للتعديل']]), P('returns', 'مرتجع للمخزن', DOC), P('adjustments', 'جرد وتسويات', DOC),
     P('balances', 'أرصدة المخزون'), P('stock-card', 'كارت الصنف'), P('moves', 'حركة المخزون')] },
   { id: 'purchases', title: 'المشتريات', pages: [
-    P('requests', 'طلبات الشراء', [...DOC, ['close', 'إغلاق']]), P('orders', 'أوامر الشراء', [...DOC, ['close', 'إغلاق الأمر']]), P('receipts', 'إذونات الاستلام', DOC), P('invoices', 'فواتير الشراء', DOC),
+    P('requests', 'طلبات الشراء', [...DOC, ['close', 'إغلاق']]), P('orders', 'أوامر التوريد', [...DOC, ['close', 'إغلاق الأمر']]), P('receipts', 'إذونات الاستلام', DOC), P('invoices', 'فواتير الشراء', DOC),
     P('returns', 'مرتجعات الشراء', DOC), P('supplier-statement', 'كشف حساب مورد'), P('supplier-balances', 'أرصدة الموردين')] },
   { id: 'hr', title: 'الموارد البشرية', pages: [P('labor', 'يوميات العمالة', DOC), P('labor-advances', 'سلف عمال يومية', DOC), P('payroll', 'الرواتب الشهرية', DOC)] },
   { id: 'finance', title: 'الإدارة المالية', pages: [
