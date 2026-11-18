@@ -219,7 +219,7 @@ export function reportRouter() {
   r.get('/labor', async (req, res) => {
     const g = { employee: 'e.name', stage: 'st.name', project: 'pr.name', class: 'c.cost_class', month: `substr(c.date,1,7)` }[req.query.group || 'employee'];
     const { sql, p } = costWhere({ ...req.query, cost_type: 'labor' });
-    res.json(await all(`SELECT COALESCE(${g},'غير محدد') name, ROUND(SUM(c.qty),2) units, ROUND(SUM(c.amount),2) amount
+    res.json(await all(`SELECT COALESCE(${g},'غير محدد') name, ROUND(SUM(c.qty),4) units, ROUND(SUM(c.amount),2) amount
       FROM cost_lines c LEFT JOIN employees e ON e.id=c.employee_id LEFT JOIN stages st ON st.id=c.stage_id LEFT JOIN projects pr ON pr.id=c.project_id
       WHERE ${sql} GROUP BY 1 ORDER BY amount DESC`, ...p));
   });

@@ -1,4 +1,4 @@
-import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, modal, can, printSheet } from '../core.js';
+import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, modal, can, printSheet, confirmBox } from '../core.js';
 import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) || {}).id;
@@ -35,7 +35,15 @@ export const requestsPage = docScreen({ perm: 'purchases.requests',
 });
 
 // ---------------- أوامر التوريد ----------------
+// إغلاق يدوي للأمر (مثلاً بعد استلام جزئي والباقي مش هيتوّرد): بعد الإغلاق مفيش استلام جديد على الأمر
+const closeOrder = (o, done) => guard(async (ev) => {
+  ev?.stopPropagation?.();
+  const partial = o.status === 'partial';
+  if (!(await confirmBox(`إغلاق أمر التوريد ${o.no}؟ ${partial ? 'اللي اتستلم فعلاً هيفضل زي ما هو، وباقي الكمية مش هيتستلم على الأمر ده.' : ''} بعد الإغلاق مش هينفع تسجّل إذن استلام جديد عليه.`, 'إغلاق الأمر'))) return;
+  await POST(`/doc/purchase_order/${o.id}/close`); toast('تم إغلاق الأمر'); done();
+});
 export const ordersPage = docScreen({ perm: 'purchases.orders',
+  rowActions: (r, reload) => (can('purchases.orders.close') && ['open', 'partial'].includes(r.status) ? h('button.btn.sm', { title: 'إغلاق الأمر يدوياً', onclick: closeOrder(r, reload) }, 'إغلاق') : null),
   type: 'purchase_order', title: 'أوامر التوريد', noun: 'أمر توريد', newLabel: 'أمر توريد جديد', statuses: [['open', 'مفتوح'], ['partial', 'استلام جزئي'], ['received', 'تم الاستلام'], ['closed', 'مغلق']],
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'payment_type', l: 'الدفع', text: (r) => labelOf(PAY, r.payment_type).split(' (')[0] }, { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'expected_date', l: 'التسليم المتوقع' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -52,7 +60,7 @@ export const ordersPage = docScreen({ perm: 'purchases.orders',
     totals: (ctx) => [['إجمالي الأمر', fmt(total(ctx.lines, (l) => (Number(l.qty) || 0) * (Number(l.unit_price) || 0)))]],
     onOpen: async (ctx) => { const r = await GET('/helpers/open-requests'); ctx.reqOpts = r.map((x) => [String(x.id), `${x.no} — ${x.date}`]); if (ctx.doc?.request_id && !r.find((x) => x.id === ctx.doc.request_id)) ctx.reqOpts.push([String(ctx.doc.request_id), `#${ctx.doc.request_id}`]); ctx.rebuildHeader(); },
     prepare: (p) => { p.request_id = p.request_id ? Number(p.request_id) : null; },
-    buttons: (ctx) => (ctx.doc && can('purchases.orders.close') && ['open', 'partial', 'received'].includes(ctx.doc.status) ? [h('button.btn', { onclick: guard(async () => { await POST(`/doc/purchase_order/${ctx.doc.id}/close`); toast('تم إغلاق الأمر'); location.reload(); }) }, 'إغلاق الأمر')] : []),
+    buttons: (ctx) => (ctx.doc && can('purchases.orders.close') && ['open', 'partial', 'received'].includes(ctx.doc.status) ? [h('button.btn', { onclick: closeOrder(ctx.doc, () => location.reload()) }, 'إغلاق الأمر')] : []),
   },
 });
 

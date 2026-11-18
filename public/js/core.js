@@ -27,7 +27,7 @@ export function h(tag, props, ...kids) {
 
 // ---------- تنسيق ----------
 export const fmt = (n, d = 2) => (n === null || n === undefined || n === '' || Number.isNaN(Number(n))) ? '' : Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-export const fq = (n) => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 3 });
+export const fq = (n) => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 4 });
 // التاريخ المحلي لجهاز المستخدم (toISOString كان بيرجّع تاريخ UTC — يعني بعد منتصف الليل بتوقيت القاهرة يطلع تاريخ امبارح)
 export const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 export const monthStart = () => today().slice(0, 8) + '01';

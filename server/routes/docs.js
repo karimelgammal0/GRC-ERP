@@ -121,7 +121,9 @@ export async function docRouter() {
     known(req.params.type); allow(req, req.params.type, null, 'close');
     const t = { purchase_order: 'purchase_orders', purchase_request: 'purchase_requests' }[req.params.type];
     if (!t) throw new AppError('غير مدعوم');
-    await run(`UPDATE ${t} SET status='closed' WHERE id=? AND status<>'void'`, Number(req.params.id)); res.json({ ok: true });
+    const cur = await get(`SELECT no, status FROM ${t} WHERE id=?`, Number(req.params.id)); if (!cur) throw new AppError('المستند غير موجود', 404);
+    if (cur.status === 'void') throw new AppError('المستند ملغي');
+    await run(`UPDATE ${t} SET status='closed' WHERE id=? AND status<>'void'`, Number(req.params.id)); await audit(req.user, 'close', req.params.type, Number(req.params.id), { no: cur.no, from: cur.status }); res.json({ ok: true });
   });
   return r;
 }

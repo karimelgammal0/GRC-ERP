@@ -14,7 +14,8 @@ export function docScreen(cfg) {
       const load = async (v) => {
         const rows = await GET(`/doc/${cfg.type}`, { ...cfg.fixed, ...v });
         const pcol = cfg.print ? [{ k: '_p', l: '', render: (r) => h('button.btn.sm', { title: 'طباعة', onclick: guard(async (ev) => { ev.stopPropagation(); cfg.print(await GET(`/doc/${cfg.type}/${r.id}`)); }) }, '🖨') }] : [];
-        const t = table({ cols: [...cfg.listCols, ...pcol], rows, onRow: (r) => showEditor(r.id), rowClass: (r) => (r.status === 'void' ? 'void' : ''), name: cfg.title, foot: cfg.listFoot, empty: `لا توجد ${cfg.title}` });
+        const acol = cfg.rowActions ? [{ k: '_a', l: '', render: (r) => h('span', cfg.rowActions(r, () => fb.run())) }] : [];
+        const t = table({ cols: [...cfg.listCols, ...pcol, ...acol], rows, onRow: (r) => showEditor(r.id), rowClass: (r) => (r.status === 'void' ? 'void' : ''), name: cfg.title, foot: cfg.listFoot, empty: `لا توجد ${cfg.title}` });
         tableHost.replaceChildren(t);
       };
       const dv = (v) => (typeof v === 'function' ? v() : v);
