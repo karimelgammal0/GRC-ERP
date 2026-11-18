@@ -197,7 +197,7 @@ function permEditor(initial) {
 export async function usersPage(root) {
   const users = await GET('/users'); const modName = (id) => META.catalog.find((m) => m.id === id)?.title || id;
   const open = (u) => {
-    const fg = formGrid([{ k: 'username', l: 'اسم المستخدم', t: 'text', readonly: !!u, req: 1 }, { k: 'name', l: 'الاسم', t: 'text', req: 1 }, { k: 'job', l: 'الوظيفة (اسمه بيظهر في توقيع الطباعة)', t: 'select', options: [['', '— بدون —'], ...(META.sign_jobs || []).map((j) => [j, j])] }, { k: 'password', l: u ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور', t: 'password' },
+    const fg = formGrid([{ k: 'username', l: 'اسم المستخدم', t: 'text', readonly: !!u, req: 1 }, { k: 'name', l: 'الاسم', t: 'text', req: 1 }, { k: 'password', l: u ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور', t: 'password' },
       { k: 'role', l: 'الدور', t: 'select', options: [['user', 'مستخدم (حسب الصلاحيات)'], ['admin', 'مدير (كل الصلاحيات)']], onChange: (v) => { pe.el.style.display = pe.bar.style.display = v === 'admin' ? 'none' : ''; } }], u || {}, 2);
     const pe = permEditor(u?.perms);
     modal({ title: u ? `تعديل ${u.name}` : 'مستخدم جديد', wide: true, body: h('div', fg.el, h('h4', { style: { margin: '14px 0 4px' } }, 'الصلاحيات (صفحة ← زرار)'),
@@ -209,8 +209,29 @@ export async function usersPage(root) {
     if (u?.role === 'admin') pe.el.style.display = pe.bar.style.display = 'none';
   };
   root.replaceChildren(pageHead('المستخدمون والصلاحيات', h('button.btn.primary', { onclick: () => open(null) }, '＋ مستخدم')),
-    table({ cols: [{ k: 'username', l: 'المستخدم' }, { k: 'name', l: 'الاسم' }, { k: 'job', l: 'الوظيفة' }, { k: 'role', l: 'الدور', text: (r) => (r.role === 'admin' ? 'مدير' : 'مستخدم') },
+    table({ cols: [{ k: 'username', l: 'المستخدم' }, { k: 'name', l: 'الاسم' }, { k: 'jobs', l: 'الوظائف', text: (r) => (r.jobs || []).join(' — ') }, { k: 'role', l: 'الدور', text: (r) => (r.role === 'admin' ? 'مدير' : 'مستخدم') },
       { k: 'perms', l: 'الصلاحيات', text: (r) => (r.role === 'admin' ? 'الكل' : `${r.perms.length} صلاحية — ${[...new Set(r.perms.map((k) => k.split('.')[0]))].map(modName).join('، ') || 'بدون'}`) }, { k: 'active', l: 'الحالة', render: (r) => (r.active ? badge('نشط', 'ok') : badge('معطّل', 'bad')) }], rows: users, onRow: open }));
+}
+
+// ---------------- وظائف الموديولات (بتظهر في خانات التوقيع بالطباعة) ----------------
+export async function jobsPage(root) {
+  const [data, users] = await Promise.all([GET('/jobs'), GET('/users')]);
+  const active = users.filter((u) => u.active);
+  const names = (ids) => ids.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean);
+  const open = (module, j) => {
+    const sel = new Set(j?.user_ids || []);
+    const fg = formGrid([{ k: 'name', l: 'اسم الوظيفة', t: 'text', req: 1, help: 'لازم يكون نفس عنوان خانة التوقيع في المستند المطبوع (مثلاً: أمين المخزن، المحاسب)' }], j || {}, 1);
+    const boxes = active.map((u) => { const c = h('input', { type: 'checkbox', checked: sel.has(u.id), onchange: () => { c.checked ? sel.add(u.id) : sel.delete(u.id); } }); return h('label.chk', c, ' ' + u.name); });
+    modal({ title: j ? `تعديل وظيفة ${j.name}` : `وظيفة جديدة — ${data.modules.find((m) => m.id === module)?.title}`, body: h('div', fg.el, h('h4', { style: { margin: '14px 0 4px' } }, 'المستخدمون اللي بيشغلوا الوظيفة دي في الموديول'), h('div.multi', boxes.length ? boxes : h('div.muted', 'لا يوجد مستخدمون نشطون'))),
+      buttons: [{ label: 'حفظ', cls: 'primary', onClick: async () => {
+        const v = fg.values(); const body = { name: v.name, user_ids: [...sel] };
+        if (j) await PUT(`/jobs/${j.id}`, body); else await POST('/jobs', { ...body, module });
+        await loadMeta(); toast('تم'); jobsPage(root); } },
+      j ? { label: 'حذف الوظيفة', close: true, onClick: async () => { if (!(await confirmBox(`حذف وظيفة ${j.name} من الموديول؟`, 'حذف', true))) return; await DEL(`/jobs/${j.id}`); await loadMeta(); toast('تم الحذف'); jobsPage(root); } } : null].filter(Boolean) });
+  };
+  root.replaceChildren(pageHead('الوظائف'), h('div.note', 'كل موديول ليه وظائفه (أمين المخزن، المحاسب، مدير المشتريات…). اختار مين بيشغل كل وظيفة، وبعدها اسمه بيظهر فوق خانة التوقيع بنفس اسم الوظيفة في المستندات المطبوعة بتاعة الموديول ده. المستخدم الواحد ممكن يكون ليه وظيفة مختلفة في كل موديول.'),
+    ...data.modules.map((m) => card(m.title, table({ cols: [{ k: 'name', l: 'الوظيفة', render: (r) => h('b', r.name) }, { k: 'user_ids', l: 'المستخدمون', text: (r) => names(r.user_ids).join('، ') || '—' }],
+      rows: data.jobs.filter((j) => j.module === m.id), onRow: (r) => open(m.id, r), search: false, empty: 'لا توجد وظائف' }), h('div.actions', h('button.btn.sm', { onclick: () => open(m.id, null) }, '＋ وظيفة')))));
 }
 
 export async function auditPage(root) {

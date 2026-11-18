@@ -27,7 +27,7 @@ const issuePrint = (doc) => printSheet({ title: doc.kind === 'site' ? 'تحوي�
   meta: [['المخزن', nameOf('warehouses', doc.warehouse_id)], ['المشروع', nameOf('projects', doc.project_id)], ['الموقع', nameOf('sites', doc.site_id)], ['النوع', doc.kind === 'return' ? '' : labelOf(KINDS, doc.kind).split(' (')[0]]],
   cols: ['الخامة', 'الوحدة', 'الكمية', 'البند', 'المرحلة', 'المستلم', 'التكلفة'],
   rows: (doc.lines || []).map((l) => [nameOf('materials', l.material_id), unitOf(l.material_id), fq(l.qty), nameOf('project_items', l.item_id), nameOf('stages', l.stage_id), nameOf('employees', l.received_by_id) || nameOf('employees', doc.received_by_id), fmt(l.total)]),
-  totals: [['إجمالي التكلفة', fmt((doc.lines || []).reduce((s, l) => s + (Number(l.total) || 0), 0))]], notes: doc.notes, by: doc.created_by_name, sign: ['أمين المخزن', 'المستلم', 'الاعتماد'] });
+  totals: [['إجمالي التكلفة', fmt((doc.lines || []).reduce((s, l) => s + (Number(l.total) || 0), 0))]], notes: doc.notes, module: 'inventory', by: doc.created_by_name, sign: ['أمين المخزن', 'المستلم', 'الاعتماد'] });
 
 // ---------------- إذن صرف ----------------
 // المواقع المكوّدة لمشروع (نشطة فقط)

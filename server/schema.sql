@@ -437,7 +437,15 @@ ALTER TABLE stock_issues ADD COLUMN IF NOT EXISTS received_by_id INTEGER REFEREN
 -- أذون الصرف/التحويل المعتمدة بتتقفل؛ reopened=1 معناها اتفتحت بصلاحية للتعديل مرة واحدة
 ALTER TABLE stock_issues ADD COLUMN IF NOT EXISTS reopened INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS shortcuts TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS job TEXT;   -- الوظيفة: بتظهر اسم المستخدم فوق خانة التوقيع المطابقة في الطباعة
+-- وظائف كل موديول (بتظهر في خانات التوقيع بالطباعة) وتخصيصها على المستخدمين
+CREATE TABLE IF NOT EXISTS module_jobs (
+  id SERIAL PRIMARY KEY, module TEXT NOT NULL, name TEXT NOT NULL, UNIQUE (module, name)
+);
+CREATE TABLE IF NOT EXISTS user_jobs (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  job_id INTEGER NOT NULL REFERENCES module_jobs(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, job_id)
+);
 UPDATE cost_lines SET cost_class='transfer' WHERE source_type='issue' AND cost_class<>'transfer' AND source_id IN (SELECT id FROM stock_issues WHERE kind='site' OR (kind='return' AND ref_issue_id IN (SELECT id FROM stock_issues WHERE kind='site')));
 ALTER TABLE stock_issue_lines ADD COLUMN IF NOT EXISTS item_id INTEGER REFERENCES project_items(id);
 ALTER TABLE stock_issue_lines ADD COLUMN IF NOT EXISTS stage_id INTEGER REFERENCES stages(id);

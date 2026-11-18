@@ -1,5 +1,5 @@
 import { h, GET, POST, META, APP, can, loadLookups, loadMeta, toast, modal, formGrid } from './core.js';
-import { masterPage, generalPage, sequencesPage, openingPage, usersPage, auditPage } from './pages/settings.js';
+import { masterPage, generalPage, sequencesPage, openingPage, usersPage, jobsPage, auditPage } from './pages/settings.js';
 import * as inv from './pages/inventory.js';
 import * as pur from './pages/purchases.js';
 import * as hr from './pages/hr.js';
@@ -34,7 +34,7 @@ const NAV = [
     ['clients', 'العملاء', M('clients')], ['projects', 'المشروعات', M('projects')], ['project-items', 'بنود المشروعات', M('project_items')], ['stages', 'مراحل التصنيع', M('stages')], ['sites', 'المواقع', M('sites')],
     ['suppliers', 'الموردين', M('suppliers')], ['treasuries', 'الخزن والبنوك', M('treasuries')], ['custodians', 'العهد', M('custodians')],
     ['expense-cats', 'المصروفات', M('expense_categories')], ['payment-types', 'أنواع المدفوعات', M('payment_types')], ['receipt-types', 'أنواع المقبوضات', M('receipt_types')], ['employees', 'العاملين', M('employees')]] },
-  { id: 'permissions', ico: '⚿', title: 'الصلاحيات', admin: true, items: [['users', 'المستخدمون والصلاحيات', usersPage], ['audit', 'سجل العمليات', auditPage]] }
+  { id: 'permissions', ico: '⚿', title: 'الصلاحيات', admin: true, items: [['users', 'المستخدمون والصلاحيات', usersPage], ['jobs', 'الوظائف', jobsPage], ['audit', 'سجل العمليات', auditPage]] }
 ];
 // صلاحية الصفحة: الموديول 'dashboard' للكل، 'permissions' للمدير بس، والباقي بمفتاح module.page
 const pageOk = (g, k) => g.id === 'dashboard' || (g.admin ? META.me.role === 'admin' : can(`${g.id}.${k}`));

@@ -6,9 +6,6 @@ import { applyOpening, lockOpening, unlockOpening, openingLocked } from '../lib/
 import { MASTERS, withLinks } from './masters.js';
 import { hashPassword, checkPassword } from '../lib/seed.js';
 import { COST_CLASS, VOUCHER_KINDS } from '../lib/docs.js';
-
-// وظائف خانات التوقيع في المستندات المطبوعة (لازم تطابق عناوين الإمضاءات في الواجهة)
-const SIGN_JOBS = ['مدير المشتريات', 'أمين المخزن', 'المحاسب', 'الاعتماد'];
 import { CATALOG, userPerms, can, need, cleanPerms, modulesOf } from '../lib/perms.js';
 
 export const MODULES = [
@@ -52,8 +49,8 @@ export async function systemRouter() {
   r.get('/meta', async (req, res) => res.json({
     masters: MASTERS, modules: MODULES, catalog: CATALOG, cost_class: COST_CLASS, voucher_kinds: VOUCHER_KINDS, acc_keys: ACC_KEYS,
     settings: await allSettings(), opening_locked: await openingLocked(),
-    sign_jobs: SIGN_JOBS,
-    signers: (await all(`SELECT job, name FROM users WHERE active=1 AND job IS NOT NULL AND job<>'' ORDER BY id`)).reduce((m, u) => { (m[u.job] ||= []).push(u.name); return m; }, {}),
+    // أسماء أصحاب كل وظيفة في كل موديول (للتوقيعات في الطباعة): { module: { job: [names] } }
+    signers: (await all(`SELECT m.module, m.name job, u.name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id JOIN users u ON u.id=uj.user_id WHERE u.active=1 ORDER BY u.id`)).reduce((o, x) => { ((o[x.module] ||= {})[x.job] ||= []).push(x.name); return o; }, {}),
   }));
   r.get('/lookups', async (req, res) => {
     // بالتوازي: ~25 استعلام ورا بعض كانوا بيضربوا زمن الذهاب والإياب لقاعدة البيانات في كل مرة
@@ -125,22 +122,58 @@ export async function systemRouter() {
   await r.post('/opening/unlock', async (req, res) => { need(req.user, 'settings.opening.unlock'); await unlockOpening(req.user); res.json({ ok: true }); });
 
   // ----- المستخدمون -----
-  r.get('/users', async (req, res) => { adminOnly(req); res.json((await all('SELECT id,username,name,role,modules,perms,active,job FROM users ORDER BY id')).map((u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, active: u.active, job: u.job || '', modules: JSON.parse(u.modules), legacy: !u.perms, perms: [...userPerms(u)] }))); });
+  r.get('/users', async (req, res) => {
+    adminOnly(req);
+    const jl = await all('SELECT uj.user_id, m.module, m.name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id ORDER BY m.module, m.name');
+    const mt = (id) => CATALOG.find((m) => m.id === id)?.title || id;
+    res.json((await all('SELECT id,username,name,role,modules,perms,active FROM users ORDER BY id')).map((u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, active: u.active, jobs: jl.filter((x) => x.user_id === u.id).map((x) => `${mt(x.module)}: ${x.name}`), modules: JSON.parse(u.modules), legacy: !u.perms, perms: [...userPerms(u)] })));
+  });
   await r.post('/users', async (req, res) => {
     adminOnly(req); const b = req.body;
     if (!b.username || !b.name || String(b.password || '').length < 6) throw new AppError('الاسم واسم المستخدم وكلمة مرور (6 أحرف+) مطلوبين');
     if (await get('SELECT 1 FROM users WHERE username=?', b.username)) throw new AppError('اسم المستخدم مستخدم');
-    const id = await insertRow('users', { username: b.username.trim(), name: b.name, pass_hash: hashPassword(b.password), role: b.role === 'admin' ? 'admin' : 'user', modules: JSON.stringify(modulesOf(cleanPerms(b.perms))), perms: JSON.stringify(cleanPerms(b.perms)), must_change: 1, job: SIGN_JOBS.includes(b.job) ? b.job : null }, ['username', 'name', 'pass_hash', 'role', 'modules', 'perms', 'must_change', 'job']);
+    const id = await insertRow('users', { username: b.username.trim(), name: b.name, pass_hash: hashPassword(b.password), role: b.role === 'admin' ? 'admin' : 'user', modules: JSON.stringify(modulesOf(cleanPerms(b.perms))), perms: JSON.stringify(cleanPerms(b.perms)), must_change: 1 }, ['username', 'name', 'pass_hash', 'role', 'modules', 'perms', 'must_change']);
     res.json({ id });
   });
   r.put('/users/:id', async (req, res) => {
     adminOnly(req); const b = req.body; const id = Number(req.params.id);
-    const o = { name: b.name, role: b.role, job: b.job === undefined ? undefined : (SIGN_JOBS.includes(b.job) ? b.job : null), active: b.active === undefined ? undefined : (b.active ? 1 : 0), modules: undefined, perms: undefined };
+    const o = { name: b.name, role: b.role, active: b.active === undefined ? undefined : (b.active ? 1 : 0), modules: undefined, perms: undefined };
     if (Array.isArray(b.perms)) { const cp = cleanPerms(b.perms); o.perms = JSON.stringify(cp); o.modules = JSON.stringify(modulesOf(cp)); }
     if (id === req.user.id && (o.active === 0 || (o.role && o.role !== 'admin'))) throw new AppError('لا يمكنك تعطيل نفسك أو سحب صلاحيات المدير منك');
     if (b.password) { if (String(b.password).length < 6) throw new AppError('كلمة المرور قصيرة'); o.pass_hash = hashPassword(b.password); o.must_change = 1; }
-    await updateRow('users', id, o, ['name', 'role', 'job', 'active', 'modules', 'perms', 'pass_hash', 'must_change']); res.json({ ok: true });
+    await updateRow('users', id, o, ['name', 'role', 'active', 'modules', 'perms', 'pass_hash', 'must_change']); res.json({ ok: true });
   });
+  // ----- وظائف الموديولات وتخصيصها على المستخدمين -----
+  const JOB_MODULES = () => CATALOG.filter((m) => !['settings', 'reports'].includes(m.id)).map((m) => m.id);
+  const jobModule = (m) => { if (!JOB_MODULES().includes(m)) throw new AppError('موديول غير صحيح'); return m; };
+  const setJobUsers = async (jobId, ids) => {
+    await run('DELETE FROM user_jobs WHERE job_id=?', jobId);
+    for (const uid of [...new Set((ids || []).map(Number))]) if (await get('SELECT 1 FROM users WHERE id=?', uid)) await run('INSERT INTO user_jobs(user_id,job_id) VALUES(?,?) ON CONFLICT DO NOTHING', uid, jobId);
+  };
+  r.get('/jobs', async (req, res) => {
+    adminOnly(req);
+    const jobs = await all('SELECT id, module, name FROM module_jobs ORDER BY module, id');
+    const links = await all('SELECT user_id, job_id FROM user_jobs');
+    res.json({ modules: CATALOG.filter((m) => JOB_MODULES().includes(m.id)).map((m) => ({ id: m.id, title: m.title })), jobs: jobs.map((j) => ({ ...j, user_ids: links.filter((l) => l.job_id === j.id).map((l) => l.user_id) })) });
+  });
+  r.post('/jobs', async (req, res) => {
+    adminOnly(req); const b = req.body; const name = String(b.name || '').trim(); const module = jobModule(b.module);
+    if (!name) throw new AppError('اسم الوظيفة مطلوب');
+    if (await get('SELECT 1 FROM module_jobs WHERE module=? AND name=?', module, name)) throw new AppError('الوظيفة موجودة بالفعل في الموديول ده');
+    const id = await insertRow('module_jobs', { module, name }, ['module', 'name']); await setJobUsers(id, b.user_ids); res.json({ id });
+  });
+  r.put('/jobs/:id', async (req, res) => {
+    adminOnly(req); const id = Number(req.params.id); const b = req.body; const cur = await get('SELECT * FROM module_jobs WHERE id=?', id);
+    if (!cur) throw new AppError('الوظيفة غير موجودة', 404);
+    if (b.name !== undefined) {
+      const name = String(b.name).trim(); if (!name) throw new AppError('اسم الوظيفة مطلوب');
+      if (await get('SELECT 1 FROM module_jobs WHERE module=? AND name=? AND id<>?', cur.module, name, id)) throw new AppError('الوظيفة موجودة بالفعل في الموديول ده');
+      await run('UPDATE module_jobs SET name=? WHERE id=?', name, id);
+    }
+    if (Array.isArray(b.user_ids)) await setJobUsers(id, b.user_ids);
+    res.json({ ok: true });
+  });
+  r.delete('/jobs/:id', async (req, res) => { adminOnly(req); await run('DELETE FROM module_jobs WHERE id=?', Number(req.params.id)); res.json({ ok: true }); });
   r.get('/audit', async (req, res) => { adminOnly(req); res.json(await all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 500')); });
   return r;
 }

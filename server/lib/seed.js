@@ -46,6 +46,11 @@ export async function ensureBaseData() {
   }
   for (const [key, label, prefix, padding] of DEFAULT_SEQUENCES)
     await run('INSERT INTO sequences(key,label,prefix,padding) VALUES(?,?,?,?) ON CONFLICT DO NOTHING', key, label, prefix, padding);
+  if (!await getSetting('jobs_seeded') && !Number(await val('SELECT COUNT(*) FROM module_jobs'))) {
+    for (const [module, names] of [['purchases', ['مدير المشتريات', 'أمين المخزن', 'المحاسب', 'الاعتماد']], ['inventory', ['أمين المخزن', 'الاعتماد']]])
+      for (const name of names) await run('INSERT INTO module_jobs(module,name) VALUES(?,?) ON CONFLICT DO NOTHING', module, name);
+    await setSetting('jobs_seeded', '1');
+  }
   if (!Number(await val('SELECT COUNT(*) FROM payment_types'))) {
     for (const [name, link] of [['موردين', 'supplier'], ['مصروفات', 'expense']]) await run('INSERT INTO payment_types(code,name,link) VALUES(?,?,?)', await nextNo('payment_type'), name, link);
   }
