@@ -6,6 +6,9 @@ import { applyOpening, lockOpening, unlockOpening, openingLocked } from '../lib/
 import { MASTERS, withLinks } from './masters.js';
 import { hashPassword, checkPassword } from '../lib/seed.js';
 import { COST_CLASS, VOUCHER_KINDS } from '../lib/docs.js';
+
+// وظائف خانات التوقيع في المستندات المطبوعة (لازم تطابق عناوين الإمضاءات في الواجهة)
+const SIGN_JOBS = ['مدير المشتريات', 'أمين المخزن', 'المحاسب', 'الاعتماد'];
 import { CATALOG, userPerms, can, need, cleanPerms, modulesOf } from '../lib/perms.js';
 
 export const MODULES = [
@@ -49,6 +52,8 @@ export async function systemRouter() {
   r.get('/meta', async (req, res) => res.json({
     masters: MASTERS, modules: MODULES, catalog: CATALOG, cost_class: COST_CLASS, voucher_kinds: VOUCHER_KINDS, acc_keys: ACC_KEYS,
     settings: await allSettings(), opening_locked: await openingLocked(),
+    sign_jobs: SIGN_JOBS,
+    signers: (await all(`SELECT job, name FROM users WHERE active=1 AND job IS NOT NULL AND job<>'' ORDER BY id`)).reduce((m, u) => { (m[u.job] ||= []).push(u.name); return m; }, {}),
   }));
   r.get('/lookups', async (req, res) => {
     // بالتوازي: ~25 استعلام ورا بعض كانوا بيضربوا زمن الذهاب والإياب لقاعدة البيانات في كل مرة
@@ -120,21 +125,21 @@ export async function systemRouter() {
   await r.post('/opening/unlock', async (req, res) => { need(req.user, 'settings.opening.unlock'); await unlockOpening(req.user); res.json({ ok: true }); });
 
   // ----- المستخدمون -----
-  r.get('/users', async (req, res) => { adminOnly(req); res.json((await all('SELECT id,username,name,role,modules,perms,active FROM users ORDER BY id')).map((u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, active: u.active, modules: JSON.parse(u.modules), legacy: !u.perms, perms: [...userPerms(u)] }))); });
+  r.get('/users', async (req, res) => { adminOnly(req); res.json((await all('SELECT id,username,name,role,modules,perms,active,job FROM users ORDER BY id')).map((u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, active: u.active, job: u.job || '', modules: JSON.parse(u.modules), legacy: !u.perms, perms: [...userPerms(u)] }))); });
   await r.post('/users', async (req, res) => {
     adminOnly(req); const b = req.body;
     if (!b.username || !b.name || String(b.password || '').length < 6) throw new AppError('الاسم واسم المستخدم وكلمة مرور (6 أحرف+) مطلوبين');
     if (await get('SELECT 1 FROM users WHERE username=?', b.username)) throw new AppError('اسم المستخدم مستخدم');
-    const id = await insertRow('users', { username: b.username.trim(), name: b.name, pass_hash: hashPassword(b.password), role: b.role === 'admin' ? 'admin' : 'user', modules: JSON.stringify(modulesOf(cleanPerms(b.perms))), perms: JSON.stringify(cleanPerms(b.perms)), must_change: 1 }, ['username', 'name', 'pass_hash', 'role', 'modules', 'perms', 'must_change']);
+    const id = await insertRow('users', { username: b.username.trim(), name: b.name, pass_hash: hashPassword(b.password), role: b.role === 'admin' ? 'admin' : 'user', modules: JSON.stringify(modulesOf(cleanPerms(b.perms))), perms: JSON.stringify(cleanPerms(b.perms)), must_change: 1, job: SIGN_JOBS.includes(b.job) ? b.job : null }, ['username', 'name', 'pass_hash', 'role', 'modules', 'perms', 'must_change', 'job']);
     res.json({ id });
   });
   r.put('/users/:id', async (req, res) => {
     adminOnly(req); const b = req.body; const id = Number(req.params.id);
-    const o = { name: b.name, role: b.role, active: b.active === undefined ? undefined : (b.active ? 1 : 0), modules: undefined, perms: undefined };
+    const o = { name: b.name, role: b.role, job: b.job === undefined ? undefined : (SIGN_JOBS.includes(b.job) ? b.job : null), active: b.active === undefined ? undefined : (b.active ? 1 : 0), modules: undefined, perms: undefined };
     if (Array.isArray(b.perms)) { const cp = cleanPerms(b.perms); o.perms = JSON.stringify(cp); o.modules = JSON.stringify(modulesOf(cp)); }
     if (id === req.user.id && (o.active === 0 || (o.role && o.role !== 'admin'))) throw new AppError('لا يمكنك تعطيل نفسك أو سحب صلاحيات المدير منك');
     if (b.password) { if (String(b.password).length < 6) throw new AppError('كلمة المرور قصيرة'); o.pass_hash = hashPassword(b.password); o.must_change = 1; }
-    await updateRow('users', id, o, ['name', 'role', 'active', 'modules', 'perms', 'pass_hash', 'must_change']); res.json({ ok: true });
+    await updateRow('users', id, o, ['name', 'role', 'job', 'active', 'modules', 'perms', 'pass_hash', 'must_change']); res.json({ ok: true });
   });
   r.get('/audit', async (req, res) => { adminOnly(req); res.json(await all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 500')); });
   return r;

@@ -197,19 +197,19 @@ function permEditor(initial) {
 export async function usersPage(root) {
   const users = await GET('/users'); const modName = (id) => META.catalog.find((m) => m.id === id)?.title || id;
   const open = (u) => {
-    const fg = formGrid([{ k: 'username', l: 'اسم المستخدم', t: 'text', readonly: !!u, req: 1 }, { k: 'name', l: 'الاسم', t: 'text', req: 1 }, { k: 'password', l: u ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور', t: 'password' },
+    const fg = formGrid([{ k: 'username', l: 'اسم المستخدم', t: 'text', readonly: !!u, req: 1 }, { k: 'name', l: 'الاسم', t: 'text', req: 1 }, { k: 'job', l: 'الوظيفة (اسمه بيظهر في توقيع الطباعة)', t: 'select', options: [['', '— بدون —'], ...(META.sign_jobs || []).map((j) => [j, j])] }, { k: 'password', l: u ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور', t: 'password' },
       { k: 'role', l: 'الدور', t: 'select', options: [['user', 'مستخدم (حسب الصلاحيات)'], ['admin', 'مدير (كل الصلاحيات)']], onChange: (v) => { pe.el.style.display = pe.bar.style.display = v === 'admin' ? 'none' : ''; } }], u || {}, 2);
     const pe = permEditor(u?.perms);
     modal({ title: u ? `تعديل ${u.name}` : 'مستخدم جديد', wide: true, body: h('div', fg.el, h('h4', { style: { margin: '14px 0 4px' } }, 'الصلاحيات (صفحة ← زرار)'),
       u?.legacy && u.role !== 'admin' ? h('div.note', 'المستخدم ده على النظام القديم (موديولات)، وصلاحياته الحالية اتحوّلت تلقائياً للقائمة دي. اضغط حفظ لتثبيتها وتعديلها.') : null,
       h('div.note', 'تفعيل الصفحة = يشوفها. كل زرار (إنشاء / تعديل / إلغاء / حذف …) له صلاحية منفصلة. المدير ليه كل الصلاحيات دايماً.'), pe.bar, pe.el), buttons: [{ label: 'حفظ', cls: 'primary', onClick: async () => {
       const v = fg.values(); v.perms = pe.get(); if (!v.password) delete v.password;
-      if (u) await PUT(`/users/${u.id}`, v); else await POST('/users', v); toast('تم'); usersPage(root); } },
+      if (u) await PUT(`/users/${u.id}`, v); else await POST('/users', v); await loadMeta(); toast('تم'); usersPage(root); } },
     u ? { label: u.active ? 'تعطيل' : 'تفعيل', close: true, onClick: async () => { await PUT(`/users/${u.id}`, { active: !u.active }); usersPage(root); } } : null].filter(Boolean) });
     if (u?.role === 'admin') pe.el.style.display = pe.bar.style.display = 'none';
   };
   root.replaceChildren(pageHead('المستخدمون والصلاحيات', h('button.btn.primary', { onclick: () => open(null) }, '＋ مستخدم')),
-    table({ cols: [{ k: 'username', l: 'المستخدم' }, { k: 'name', l: 'الاسم' }, { k: 'role', l: 'الدور', text: (r) => (r.role === 'admin' ? 'مدير' : 'مستخدم') },
+    table({ cols: [{ k: 'username', l: 'المستخدم' }, { k: 'name', l: 'الاسم' }, { k: 'job', l: 'الوظيفة' }, { k: 'role', l: 'الدور', text: (r) => (r.role === 'admin' ? 'مدير' : 'مستخدم') },
       { k: 'perms', l: 'الصلاحيات', text: (r) => (r.role === 'admin' ? 'الكل' : `${r.perms.length} صلاحية — ${[...new Set(r.perms.map((k) => k.split('.')[0]))].map(modName).join('، ') || 'بدون'}`) }, { k: 'active', l: 'الحالة', render: (r) => (r.active ? badge('نشط', 'ok') : badge('معطّل', 'bad')) }], rows: users, onRow: open }));
 }
 
