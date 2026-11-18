@@ -344,7 +344,7 @@ DOCS.stock_issue = {
   locked: (cur) => cur.status === 'posted' && cur.kind !== 'return' && !cur.reopened,
   relock: async (id) => { await run('UPDATE stock_issues SET reopened=0 WHERE id=?', id); },
   cols: ['date', 'kind', 'warehouse_id', 'project_id', 'item_id', 'stage_id', 'site_id', 'ref_issue_id', 'received_by_id', 'notes'],
-  lineCols: ['material_id', 'item_id', 'stage_id', 'qty', 'ref_line_id', 'notes'],
+  lineCols: ['material_id', 'item_id', 'stage_id', 'received_by_id', 'qty', 'ref_line_id', 'notes'],
   blank: (l) => !l.material_id && !l.ref_line_id,
   async validate(p, lines) {
     if (!['production', 'site', 'overhead', 'return'].includes(p.kind)) throw new AppError('نوع الصرف غير معروف');

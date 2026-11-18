@@ -32,10 +32,11 @@ const issueLines = { blank: () => ({ material_id: null, qty: null }), cols: [
   { l: 'الرصيد المتاح', calc: (l, c) => c.stock?.[l.material_id]?.qty ?? 0, fmt: fq, w: '110px' },
   { l: 'متوسط التكلفة', calc: (l, c) => c.stock?.[l.material_id]?.avg_cost ?? 0, fmt: (v) => fmt(v, 4), w: '110px' },
   { l: 'التكلفة', calc: (l, c) => (l.total ?? (Number(l.qty) || 0) * (c.stock?.[l.material_id]?.avg_cost ?? 0)), fmt: (v) => fmt(v), w: '110px' }] };
+const recvCol = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true, w: '15%' };
 const itemCol = { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', req: 1, combo: true, w: '24%', filter: (x, l, c) => !c.header.project_id || x.project_id === Number(c.header.project_id) };
 const stageCol = (req) => ({ k: 'stage_id', l: req ? 'المرحلة' : 'المرحلة (اختياري)', t: 'fk', ref: 'stages', req, w: '16%' });
-const issueLinesItems = { ...issueLines, blank: () => ({ material_id: null, item_id: null, stage_id: null, qty: null }),
-  cols: (ctx) => (ctx.header.kind === 'production' ? [{ ...issueLines.cols[0], w: '22%' }, { ...itemCol, w: '18%' }, stageCol(true), ...issueLines.cols.slice(1)] : [issueLines.cols[0], stageCol(false), ...issueLines.cols.slice(1)]) };
+const issueLinesItems = { ...issueLines, blank: () => ({ material_id: null, item_id: null, stage_id: null, received_by_id: null, qty: null }),
+  cols: (ctx) => (ctx.header.kind === 'production' ? [{ ...issueLines.cols[0], w: '18%' }, { ...itemCol, w: '15%' }, stageCol(true), recvCol, ...issueLines.cols.slice(1)] : [issueLines.cols[0], stageCol(false), recvCol, ...issueLines.cols.slice(1)]) };
 const issueTotals = (ctx) => { const t = total(ctx.lines, (l) => l.total ?? (Number(l.qty) || 0) * (ctx.stock?.[l.material_id]?.avg_cost ?? 0)); return [[ctx.doc ? 'إجمالي تكلفة الصرف' : 'تكلفة تقديرية (الفعلية تُحسب عند الحفظ)', fmt(t)]]; };
 const whF = (ctx) => ({ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw', onChange: (v) => {
   const ok = whAllows(v); let n = 0;
@@ -64,7 +65,6 @@ export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true,
         k !== 'overhead' && sitesOf(p).length > 0 && { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, filter: (x) => x.project_id === Number(p) },
         { ...notesF, wide: false }].filter(Boolean);
     },
-    footer: [receivedF], // المستلم تحت مع البنود
     lines: issueLinesItems, totals: issueTotals,
     tools: [{ label: '＋ بند جديد في المشروع', run: async (ctx) => { if (ctx.header.kind === 'production' && canAddItems()) addItemDialog(ctx); } }],
     onOpen: (ctx) => mapStock(ctx),
