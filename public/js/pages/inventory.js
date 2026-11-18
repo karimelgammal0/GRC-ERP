@@ -1,4 +1,4 @@
-import { h, GET, POST, L, META, can, loadLookups, modal, formGrid, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard } from '../core.js';
+import { h, GET, POST, L, META, can, loadLookups, modal, formGrid, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, printSheet } from '../core.js';
 import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 export const KINDS = [['production', 'صرف إنتاج (مشروع + بند + مرحلة)'], ['site', 'تحويل لموقع'], ['overhead', 'تشغيل غير مباشر (بدون مشروع)']];
@@ -21,6 +21,13 @@ const addItemDialog = (ctx) => {
   } }] });
 };
 const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) || {}).id;
+
+// ---------------- طباعة إذن صرف / تحويل / مرتجع ----------------
+const issuePrint = (doc) => printSheet({ title: doc.kind === 'site' ? 'تحويل لموقع' : doc.kind === 'return' ? 'مرتجع صرف' : 'إذن صرف', no: doc.no, date: doc.date,
+  meta: [['المخزن', nameOf('warehouses', doc.warehouse_id)], ['المشروع', nameOf('projects', doc.project_id)], ['الموقع', nameOf('sites', doc.site_id)], ['النوع', doc.kind === 'return' ? '' : labelOf(KINDS, doc.kind).split(' (')[0]]],
+  cols: ['الخامة', 'الوحدة', 'الكمية', 'البند', 'المرحلة', 'المستلم', 'التكلفة'],
+  rows: (doc.lines || []).map((l) => [nameOf('materials', l.material_id), unitOf(l.material_id), fq(l.qty), nameOf('project_items', l.item_id), nameOf('stages', l.stage_id), nameOf('employees', l.received_by_id) || nameOf('employees', doc.received_by_id), fmt(l.total)]),
+  totals: [['إجمالي التكلفة', fmt((doc.lines || []).reduce((s, l) => s + (Number(l.total) || 0), 0))]], notes: doc.notes, by: doc.created_by_name, sign: ['أمين المخزن', 'المستلم', 'الاعتماد'] });
 
 // ---------------- إذن صرف ----------------
 // المواقع المكوّدة لمشروع (نشطة فقط)
@@ -47,7 +54,7 @@ const whF = (ctx) => ({ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'war
 const receivedF = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true };
 
 // ---------------- إذن صرف (إنتاج / تشغيل غير مباشر) ----------------
-export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true,
+export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true, print: issuePrint,
   type: 'stock_issue', title: 'أذون الصرف', noun: 'إذن صرف', newLabel: 'إذن صرف جديد', fixed: { only: 'issues' }, defaultFrom: monthStart, defaultTo: today,
   note: 'كل صرف من المخزن بيتحدد له: المشروع، والبند والمرحلة بيتحددوا لكل خامة في سطرها (إذن واحد يخدم أكتر من بند ومرحلة) — ومنها بتتجمّع تكلفة كل مشروع وكل مرحلة تلقائياً بالمتوسط المرجح. (تحويل الخامات لمواقع المشاريع له شاشة منفصلة.)',
   filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...ISSUE_KINDS] }],
@@ -72,7 +79,7 @@ export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true,
 });
 
 // ---------------- تحويل خامات لموقع (منفصل عن صرف الإنتاج) ----------------
-export const siteTransfersPage = docScreen({ perm: 'inventory.site-transfers', lockable: true,
+export const siteTransfersPage = docScreen({ perm: 'inventory.site-transfers', lockable: true, print: issuePrint,
   type: 'stock_issue', title: 'التحويل للمواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' }, defaultFrom: monthStart, defaultTo: today,
   note: 'تحويل خامات من المخزن لمشروع. لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
   filters: (() => { let fp = null; return [
@@ -98,7 +105,7 @@ export const siteTransfersPage = docScreen({ perm: 'inventory.site-transfers', l
 });
 
 // ---------------- مرتجع صرف ----------------
-export const returnsPage = docScreen({ perm: 'inventory.returns',
+export const returnsPage = docScreen({ perm: 'inventory.returns', print: issuePrint,
   type: 'stock_issue', title: 'مرتجعات للمخزن', noun: 'مرتجع صرف', newLabel: 'مرتجع جديد', fixed: { only: 'returns' }, canCreate: true,
   note: 'المرتجع بيرجع للمخزن بنفس تكلفة الصرف الأصلي (مش بمتوسط يوم الرجوع)، وبيخصم من تكلفة المشروع/البند/المرحلة.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' },

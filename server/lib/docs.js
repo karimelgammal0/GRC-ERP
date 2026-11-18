@@ -21,6 +21,7 @@ export async function getDoc(type, id) {
   const h = await get(`SELECT * FROM ${D.table} WHERE id=?`, id);
   if (!h) return null;
   if (D.lines) h.lines = await all(`SELECT * FROM ${D.lines} WHERE ${D.fk}=? ORDER BY id`, id);
+  h.created_by_name = h.created_by ? await val('SELECT name FROM users WHERE id=?', h.created_by) : null;
   await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.enrich?.(h);
   return h;
 }

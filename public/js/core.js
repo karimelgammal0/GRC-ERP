@@ -216,7 +216,7 @@ export function filterBar(fields, onRun, init = {}) {
 export const tag = (txt) => h('span.tag', txt);
 
 /** طباعة مستند بشكل رسمي (رأس الشركة + بيانات + جدول بنود + إمضاءات) عبر iframe مخفي */
-export function printSheet({ title, no, date, meta = [], cols = [], rows = [], totals = [], notes = '', sign = [] }) {
+export function printSheet({ title, no, date, meta = [], cols = [], rows = [], totals = [], notes = '', sign = [], by = '' }) {
   const e = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${e(title)} ${e(no)}</title><style>
     body{font-family:Tahoma,Arial,sans-serif;font-size:13px;color:#111;margin:24px}
@@ -226,6 +226,8 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
     table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #444;padding:5px 7px;text-align:right}th{background:#eee}
     td.n{text-align:center}.tot{display:flex;justify-content:flex-end;gap:24px;font-weight:700;margin-bottom:10px}
     .sig{display:flex;justify-content:space-around;margin-top:48px}.sig div{text-align:center;min-width:140px;border-top:1px solid #111;padding-top:6px}
+    .sig div.u{border-top:0;padding-top:0}.sig .u .nm{font-weight:700;font-size:14px;min-height:22px}.sig .u .ln{border-top:1px solid #111;padding-top:6px}
+    .pby{margin-top:28px;font-size:11px;color:#555;text-align:left;direction:rtl}
   </style></head><body>
     <div class="top"><div class="co">${e(META.settings?.company_name || '')}</div><div>رقم: <b>${e(no)}</b><br>التاريخ: <b>${e(date)}</b></div></div>
     <div class="ttl">${e(title)}</div>
@@ -233,7 +235,8 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
     <table><thead><tr><th>#</th>${cols.map((c) => `<th>${e(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r, i) => `<tr><td class="n">${i + 1}</td>${r.map((c) => `<td>${e(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>
     ${totals.length ? `<div class="tot">${totals.map(([k, v]) => `<span>${e(k)}: ${e(v)}</span>`).join('')}</div>` : ''}
     ${notes ? `<div><b>ملاحظات:</b> ${e(notes)}</div>` : ''}
-    <div class="sig">${sign.map((s) => `<div>${e(s)}</div>`).join('')}</div></body></html>`;
+    <div class="sig">${by ? `<div class="u"><div class="nm">${e(by)}</div><div class="ln">المستخدم (المُسجِّل)</div></div>` : ''}${sign.map((s) => `<div>${e(s)}</div>`).join('')}</div>
+    <div class="pby">طُبع بواسطة: ${e(META.me?.name || META.me?.username || '')} — ${e(new Date().toLocaleString('en-GB'))}</div></body></html>`;
   const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.append(f); const d = f.contentWindow.document; d.open(); d.write(html); d.close();
   setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 2000); }, 250);
