@@ -123,7 +123,7 @@ export function fieldInput(f, value) {
     const long = (L[f.ref] || []).length > 14 || f.combo;
     if (long) el = combo({ list: f.ref, value, filter: f.filter, allowEmpty: !f.req, onChange: (v) => f.onChange?.(v) });
     else {
-      el = h('select', { onchange: () => f.onChange?.(el.get()) }, f.req ? null : h('option', { value: '' }, '—'),
+      el = h('select', { onchange: () => f.onChange?.(el.get()) }, f.req ? (f.blankIfEmpty && (value === null || value === undefined || value === '') ? h('option', { value: '', selected: true }, '— اختر —') : null) : h('option', { value: '' }, '—'),
         (L[f.ref] || []).filter((x) => x.active !== 0 && (!f.filter || f.filter(x))).map((x) => h('option', { value: x.id, selected: Number(value) === x.id }, codeName(x))));
       el.get = () => (el.value === '' ? null : Number(el.value)); el.set = (v) => { el.value = v ?? ''; };
     }

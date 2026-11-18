@@ -73,7 +73,7 @@ export function docScreen(cfg) {
             const td = h('td', { style: c.w ? { width: c.w } : null });
             if (c.calc) { td.className = 'ro'; calcCells.push({ td, c, l }); td.textContent = c.fmt ? c.fmt(c.calc(l, ctx)) : (c.calc(l, ctx) ?? ''); return td; }
             if (c.render) { td.append(c.render(l, ctx, readonly)); return td; }
-            const inp = fieldInput({ ...c, filter: c.filter ? (x) => c.filter(x, l, ctx) : undefined, readonly: c.readonly || readonly, combo: c.combo ?? (c.t === 'fk' && c.ref === 'materials'), onChange: (v) => { l[c.k] = v; c.onChange?.(v, l, ctx); E.onLine?.(i, c.k, v, ctx); refreshComputed(); updateTotals(); } }, l[c.k]);
+            const inp = fieldInput({ ...c, blankIfEmpty: true, filter: c.filter ? (x) => c.filter(x, l, ctx) : undefined, readonly: c.readonly || readonly, combo: c.combo ?? (c.t === 'fk' && c.ref === 'materials'), onChange: (v) => { l[c.k] = v; c.onChange?.(v, l, ctx); E.onLine?.(i, c.k, v, ctx); refreshComputed(); updateTotals(); } }, l[c.k]);
             td.append(inp); return td;
           }), readonly || E.lines.fixed ? null : h('td', h('button.del', { title: 'حذف البند', onclick: () => { st.lines.splice(i, 1); if (!st.lines.length) st.lines.push(E.lines.blank?.() || {}); drawLines(); updateTotals(); } }, '×')));
           tb.append(tr);
