@@ -105,7 +105,7 @@ export async function computeLive(month, projectId = 0, inputs = null) {
   const unit_cost = { cast: cast?.per_m2 ?? null, finish: finish?.per_m2 ?? null, total: area > 0 ? r2((cast?.total || 0) / area + (finish?.total || 0) / area) : null };
   return { month, project_id: projectId || 0, config: cfg,
     inputs: { cement_lines: sys.lines, bags_system: sys.bags, bags, spread_rate: spread, area },
-    cast, finish, mold, unit_cost, pool_total: r2((cast?.total || 0) + (finish?.total || 0)), notes: saved?.notes ?? null };
+    cast, finish, mold, unit_cost, pool_total: r2((cast?.total || 0) + (finish?.total || 0)) };
 }
 
 /** الشيت الكامل: المعتمد بيرجع من الـ snapshot (ثابت) + تنبيه لو الأرقام الحية اختلفت بعد الاعتماد */
@@ -128,8 +128,8 @@ export async function savePeriod(b, user) {
   if (!(spread >= 0) || spread > 100) throw new AppError('معدل فرد الشيكارة غير صحيح');
   const cur = await getPeriod(month, pid);
   if (cur?.status === 'approved') throw new AppError('الشهر معتمد — أعد فتحه أولاً لتعديل المدخلات');
-  if (cur) await run('UPDATE unit_cost_periods SET spread_rate=?, notes=? WHERE id=?', spread, b.notes ?? null, cur.id);
-  else await run('INSERT INTO unit_cost_periods(month,project_id,spread_rate,notes,created_by) VALUES(?,?,?,?,?)', month, pid, spread, b.notes ?? null, user?.id ?? null);
+  if (cur) await run('UPDATE unit_cost_periods SET spread_rate=? WHERE id=?', spread, cur.id);
+  else await run('INSERT INTO unit_cost_periods(month,project_id,spread_rate,created_by) VALUES(?,?,?,?)', month, pid, spread, user?.id ?? null);
   return await getSheet(month, pid);
 }
 

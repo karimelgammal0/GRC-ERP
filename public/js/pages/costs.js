@@ -51,11 +51,8 @@ export async function unitCostPage(root, params = {}) {
 
   const draw = (s) => {
     const pv = !!s.project_view; const approved = s.status === 'approved' || pv; const i = s.inputs;
-    const f = formGrid([
-      { k: 'notes', l: 'ملاحظات', t: 'text', readonly: approved, wide: true },
-    ], { notes: s.notes }, 1);
     { const el = rateEl(); if (el) { el.value = i.spread_rate || ''; el.disabled = approved; el.onkeydown = (e) => { if (e.key === 'Enter') { e.stopPropagation(); e.preventDefault(); save(); } }; } }
-    const body = () => ({ ...q(), ...f.values(), spread_rate: rateVal() });
+    const body = () => ({ ...q(), spread_rate: rateVal() });
     const save = call(() => PUT('/costs/period', body()));
     const acts = [
       !approved && !pv && can('costs.unit-cost.save') ? h('button.btn.primary', { onclick: call(() => PUT('/costs/period', body())) }, 'حفظ وحساب') : null,
@@ -73,7 +70,7 @@ export async function unitCostPage(root, params = {}) {
       approved && s.drift ? h('div.note.bad', `تنبيه: الأرقام الحالية اختلفت عن وقت الاعتماد (السعر الحالي ${blank(s.live_unit_cost?.total)} مقابل المعتمد ${blank(u.total)}) — السعر المعتمد لسه ثابت. أعد فتح الشهر لو عايز تحدّثه.`) : null,
       h('div.kpis', kpi('شكاير الأسمنت للصب (معيارية 50 كجم)', fq(i.bags), 'من المنصرف بالنظام'), kpi('معدل فرد الشيكارة', i.spread_rate ? fq(i.spread_rate) : '—', 'م² / شيكارة'),
         kpi('المتر المسطح المنتج', i.area ? fmt(i.area) : '—', 'م²'), kpi('تكلفة الصب / م²', blank(u.cast)), kpi('تكلفة التشطيب / م²', blank(u.finish)), kpi('سعر المتر الإجمالي', blank(u.total), 'صب + تشطيب', 'ok')),
-      card('مدخلات الشهر', f.el, i.cement_lines?.length ? table({ name: 'أسمنت الصب', search: false, compact: true, rows: i.cement_lines, cols: [{ k: 'name', l: 'أسمنت مصروف للصب' }, { k: 'qty', l: 'الكمية المصروفة', num: true, fmt: (v) => fq(v) }, { k: 'kg', l: 'وزن الوحدة (كجم)', num: true, fmt: (v) => fq(v) }, { k: 'std_bags', l: 'ما يعادل شكاير 50 كجم', num: true, fmt: (v) => fq(v) }], foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'std_bags' ? fq(i.bags_system) : '') }) : null, h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' } }, acts)),
+      card('مدخلات الشهر', i.cement_lines?.length ? table({ name: 'أسمنت الصب', search: false, compact: true, rows: i.cement_lines, cols: [{ k: 'name', l: 'أسمنت مصروف للصب' }, { k: 'qty', l: 'الكمية المصروفة', num: true, fmt: (v) => fq(v) }, { k: 'kg', l: 'وزن الوحدة (كجم)', num: true, fmt: (v) => fq(v) }, { k: 'std_bags', l: 'ما يعادل شكاير 50 كجم', num: true, fmt: (v) => fq(v) }], foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'std_bags' ? fq(i.bags_system) : '') }) : null, h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' } }, acts)),
       !i.area ? h('div.note', 'أدخل معدل فرد الشيكارة (فوق جنب الشهر) واضغط «حفظ وحساب» عشان يظهر المتر المنتج وتكلفة المتر.') : null,
       h('div.chart-grid', stageTable(s.cast, { perBag: true }), stageTable(s.finish)),
       card(`مرحلة ${s.mold?.name || 'القوالب'} — محمّلة على المشروع (لا تدخل في سعر المتر)`, s.mold ? table({ name: 'القوالب', search: false, compact: true, rows: s.mold.by_project,
