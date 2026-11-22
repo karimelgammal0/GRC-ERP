@@ -234,3 +234,7 @@ table.perm td.pg { width: 34%; font-weight: 600; } table.perm label.act { displa
 /* عند التشغيل كتطبيق مثبّت */
 @media (display-mode: standalone) { body { user-select: none; } input, textarea { user-select: text; } }
 .lines-foot { margin-top: 12px; max-width: 360px; }
+
+/* موديول التكاليف: صفوف الإجماليات في جدول المرحلة */
+.tbl tr.sub td { background: #f1f5f9; font-weight: 700; }
+.tbl tr.tot td { background: #e2f0ee; font-weight: 800; }

@@ -10,6 +10,7 @@ import { masterRouter } from './routes/masters.js';
 import { docRouter, helperRouter } from './routes/docs.js';
 import { reportRouter } from './routes/reports.js';
 import { accountsRouter } from './routes/accounts.js';
+import { costsRouter } from './routes/costs.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 await initSchema();
@@ -58,6 +59,7 @@ app.use('/api/doc', await docRouter());
 app.use('/api/helpers', helperRouter());
 app.use('/api/reports', reportRouter());
 app.use('/api/acc', await accountsRouter());
+app.use('/api/costs', costsRouter());
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'غير موجود' }));
 app.use((err, req, res, next) => {

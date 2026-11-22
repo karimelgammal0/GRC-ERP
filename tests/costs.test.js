@@ -1,0 +1,61 @@
+// اختبار موديول التكاليف: نفس أرقام شيت يونيو 2026 (الصب والتشطيب) → تكلفة المتر المسطح
+process.env.DATABASE_URL = ''; process.env.PGLITE_MEMORY = '1'; process.env.NO_LISTEN = '1';
+const { all, val, run, insertRow, AppError, initSchema } = await import('../server/db.js');
+await initSchema();
+const { seedAll } = await import('../server/lib/seed.js');
+const { computeLive, getSheet, savePeriod, approvePeriod, reopenPeriod, history, getConfig } = await import('../server/lib/costing.js');
+let pass = 0, fail = 0;
+const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ FAIL:', m); } };
+const near = (a, b, m, t = 0.011) => ok(Math.abs(a - b) <= t, `${m}: got ${a}, expected ${b}`);
+const throws = async (fn, re, m) => { try { await fn(); ok(false, `${m} — expected error`); } catch (e) { ok(e instanceof AppError && re.test(e.message), `${m} — got: ${e.message}`); } };
+await seedAll();
+const st = Object.fromEntries((await all('SELECT id,name FROM stages')).map((s) => [s.name, s.id]));
+const unit = await val('SELECT id FROM units LIMIT 1'); const prj = await val('SELECT id FROM projects LIMIT 1');
+const mk = async (code, name) => { await run('INSERT INTO materials(code,name,unit_id) VALUES(?,?,?)', code, name, unit); return await val('SELECT id FROM materials WHERE code=?', code); };
+const cement = await mk('RM-X1', 'اسمنت ابيض (اختبار)'), fiber = await mk('RM-X2', 'فيبر (اختبار)'), seal = await mk('RM-X3', 'سيل كوت (اختبار)');
+const CL = ['date', 'source_type', 'source_id', 'cost_type', 'cost_class', 'project_id', 'stage_id', 'material_id', 'qty', 'amount'];
+const line = (o) => insertRow('cost_lines', { source_id: 1, cost_class: 'direct', project_id: prj, ...o }, CL);
+// الصب (يونيو 2026): أسمنت 289 شيكارة = 79,821.8 | فيبر 52,474.8 | أجور 35,710 | مرتبات 11,907
+await line({ date: '2026-06-05', source_type: 'issue', cost_type: 'material', stage_id: st['الصب'], material_id: cement, qty: 200, amount: 55000 });
+await line({ date: '2026-06-20', source_type: 'issue', cost_type: 'material', stage_id: st['الصب'], material_id: cement, qty: 89, amount: 24821.8 });
+await line({ date: '2026-06-10', source_type: 'issue', cost_type: 'material', stage_id: st['الصب'], material_id: fiber, qty: 249.88, amount: 52474.8 });
+await line({ date: '2026-06-30', source_type: 'labor', cost_type: 'labor', stage_id: st['الصب'], qty: 26, amount: 35710 });
+await line({ date: '2026-06-30', source_type: 'payroll', cost_type: 'labor', stage_id: st['الصب'], qty: 1, amount: 11907 });
+// التشطيب: سيل كوت 3,330 | أجور 18,772 | مرتبات 9,180
+await line({ date: '2026-06-12', source_type: 'issue', cost_type: 'material', stage_id: st['التشطيب'], material_id: seal, qty: 9, amount: 3330 });
+await line({ date: '2026-06-30', source_type: 'labor', cost_type: 'labor', stage_id: st['التشطيب'], qty: 20, amount: 18772 });
+await line({ date: '2026-06-30', source_type: 'payroll', cost_type: 'labor', stage_id: st['التشطيب'], qty: 1, amount: 9180 });
+// القوالب على المشروع + شهر تاني + تحويل لموقع (ما يدخلش)
+await line({ date: '2026-06-15', source_type: 'issue', cost_type: 'material', stage_id: st['القوالب'], material_id: seal, qty: 1, amount: 5000 });
+await line({ date: '2026-07-02', source_type: 'issue', cost_type: 'material', stage_id: st['الصب'], material_id: cement, qty: 999, amount: 999999 });
+await line({ date: '2026-06-18', source_type: 'issue', cost_type: 'material', cost_class: 'transfer', stage_id: st['الصب'], material_id: cement, qty: 50, amount: 77777 });
+
+console.log('▶ الحساب الحي');
+const cfg = await getConfig(); ok(cfg.cast_stage_id === st['الصب'] && cfg.finish_stage_id === st['التشطيب'] && cfg.mold_stage_id === st['القوالب'], 'ربط المراحل بالاسم افتراضياً');
+let s = await computeLive('2026-06', 0, { spread_rate: 1.5 });
+ok(s.inputs.cement_material_id === cement, 'الأسمنت اتحدد تلقائياً'); near(s.inputs.bags_system, 289, 'شكاير الصب من النظام (من غير التحويلات)');
+near(s.inputs.area, 433.5, 'المتر المسطح = 289 × 1.5');
+near(s.cast.mat_total, 79821.8 + 52474.8, 'خامات الصب'); near(s.cast.labor_daily, 35710, 'أجور الصب'); near(s.cast.labor_monthly, 11907, 'مرتبات الصب');
+near(s.cast.total, 179913.6, 'إجمالي الصب'); near(s.finish.total, 31282, 'إجمالي التشطيب');
+near(s.cast.per_m2, 415.03, 'تكلفة المتر — صب'); near(s.finish.per_m2, 72.16, 'تكلفة المتر — تشطيب'); near(s.unit_cost.total, 487.19, 'سعر المتر الإجمالي', 0.02);
+near(s.cast.materials.find((m) => m.material_id === fiber).per_bag, 249.88 / 289, 'معيار الشيكارة للفيبر', 0.0001);
+near(s.mold.total, 5000, 'القوالب على المشروع'); ok(s.mold.by_project[0].project_id === prj, 'القوالب موزعة على المشروع');
+near(s.pool_total, 179913.6 + 31282, 'تجمع الصب+التشطيب بدون القوالب');
+s = await computeLive('2026-06', 0, { spread_rate: 1.5, bags_override: 300 }); near(s.inputs.bags, 300, 'عدد شكاير يدوي'); near(s.inputs.area, 450, 'المتر بالعدد اليدوي');
+s = await computeLive('2026-06', 0, { spread_rate: 0 }); ok(s.unit_cost.total === null, 'بدون معدل فرد: لا سعر');
+
+console.log('▶ حفظ واعتماد وإعادة فتح');
+await throws(() => approvePeriod('2026-06', 0, { id: 1 }), /احفظ/, 'اعتماد قبل الحفظ');
+await savePeriod({ month: '2026-06', spread_rate: 0 }, { id: 1 }); await throws(() => approvePeriod('2026-06', 0, { id: 1 }), /معدل فرد/, 'اعتماد بدون معدل');
+await throws(() => savePeriod({ month: '2026-13', spread_rate: 1 }, { id: 1 }), /الشهر/, 'شهر غلط');
+await savePeriod({ month: '2026-06', spread_rate: 1.5 }, { id: 1 });
+let a = await approvePeriod('2026-06', 0, { id: 1 }); ok(a.status === 'approved' && !a.drift, 'اتعتمد'); near(a.unit_cost.total, 487.19, 'سعر المتر المعتمد', 0.02);
+await throws(() => savePeriod({ month: '2026-06', spread_rate: 2 }, { id: 1 }), /معتمد/, 'منع التعديل بعد الاعتماد');
+await line({ date: '2026-06-28', source_type: 'labor', cost_type: 'labor', stage_id: st['الصب'], qty: 1, amount: 1000 });
+a = await getSheet('2026-06'); near(a.unit_cost.total, 487.19, 'السعر المعتمد ثابت رغم تغيّر الأرقام', 0.02); ok(a.drift === true, 'تنبيه اختلاف الأرقام بعد الاعتماد');
+const h = await history({}); ok(h.length === 1 && h[0].status === 'approved' && h[0].month === '2026-06', 'سجل الأسعار');
+const r = await reopenPeriod('2026-06', 0); ok(r.status === 'draft', 'إعادة فتح'); near(r.unit_cost.total, (180913.6 + 31282) / 433.5, 'بعد إعادة الفتح الأرقام حية', 0.02);
+
+console.log('▶ مشروع محدد');
+const p2 = await savePeriod({ month: '2026-06', project_id: prj, spread_rate: 1.4 }, { id: 1 }); near(p2.inputs.area, 289 * 1.4, 'مساحة المشروع المحدد');
+console.log(`\n${fail ? '✗' : '✓'} costs: ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
