@@ -6,8 +6,8 @@ import { getConfig, cementCandidates, saveConfig, getSheet, savePeriod, approveP
 export function costsRouter() {
   const r = Router();
   r.use((req, res, next) => (canModule(req.user, 'costs') ? next() : res.status(403).json({ error: 'ليس لديك صلاحية على موديول التكاليف' })));
-  r.get('/config', async (req, res) => { const c = await getConfig(); res.json({ ...c, cement_candidates: await cementCandidates(c) }); });
-  r.put('/config', async (req, res) => { need(req.user, 'costs.unit-cost.config'); const c = await saveConfig(req.body); await audit(req.user, 'config', 'costs', null, c); res.json({ ...c, cement_candidates: await cementCandidates(c) }); });
+  r.get('/config', async (req, res) => { need(req.user, 'costs.config'); const c = await getConfig(); res.json({ ...c, cement_candidates: await cementCandidates(c) }); });
+  r.put('/config', async (req, res) => { need(req.user, 'costs.config.edit'); const c = await saveConfig(req.body); await audit(req.user, 'config', 'costs', null, c); res.json({ ...c, cement_candidates: await cementCandidates(c) }); });
   r.get('/sheet', async (req, res) => { need(req.user, 'costs.unit-cost'); res.json(await getSheet(String(req.query.month || ''), Number(req.query.project_id) || 0)); });
   r.put('/period', async (req, res) => {
     need(req.user, 'costs.unit-cost.save'); const s = await savePeriod(req.body, req.user);
