@@ -1,14 +1,18 @@
 // ============================================================
 //  موديول التكاليف — سعر المتر الشهري
 //   تكلفة مرحلة (صب / تشطيب) في الشهر ÷ المتر المسطح المنتج = تكلفة المتر للمرحلة
-//   المتر المنتج = عدد شكاير الأسمنت المصروفة للصب × معدل فرد الشيكارة (يدوي ومتغير شهرياً)
+//   المتر المنتج = عدد شكاير الأسمنت (معياري 50 كجم) المصروفة للصب × معدل فرد الشيكارة (يدوي ومتغير شهرياً)
 //   مرحلة القوالب بتتحمّل على المشروع مباشرة ومش بتدخل في سعر المتر
 // ============================================================
 import { all, get, run, val, AppError, r2, r4, num } from '../db.js';
 import { getSetting, setSetting } from './core.js';
 
 export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
-const CFG_KEYS = { cast: 'cost_stage_cast', finish: 'cost_stage_finish', mold: 'cost_stage_mold', cement: 'cost_cement_material_id' };
+const CFG_KEYS = { cast: 'cost_stage_cast', finish: 'cost_stage_finish', mold: 'cost_stage_mold', cement: 'cost_cement_materials', kg: 'cost_cement_kg' };
+export const STD_BAG_KG = 50;   // الوحدة المعيارية: شيكارة 50 كجم
+const json = (v, d) => { try { return v ? JSON.parse(v) : d; } catch { return d; } };
+/** وزن وحدة الصنف بالكيلو: المحدد في الإعدادات، وإلا من الاسم (مثال «*30ك»)، وإلا 50 */
+export const kgOf = (m, map = {}) => Number(map[m.id]) || Number(/(\d+(?:\.\d+)?)\s*ك(?:جم|ج)?/.exec(m.name || '')?.[1]) || STD_BAG_KG;
 
 /** ربط المراحل والأسمنت: من الإعدادات، وإلا بالاسم (صب / تشطيب / قوالب) */
 export async function getConfig() {
@@ -17,14 +21,24 @@ export async function getConfig() {
   const pick = async (k, d) => { const v = Number(await getSetting(CFG_KEYS[k])); return v || d || null; };
   return {
     cast_stage_id: await pick('cast', byName(/صب/)), finish_stage_id: await pick('finish', byName(/تشطيب/)), mold_stage_id: await pick('mold', byName(/قوالب|قالب/)),
-    cement_material_id: await pick('cement', null),
+    cement_material_ids: json(await getSetting(CFG_KEYS.cement), []).map(Number), cement_kg: json(await getSetting(CFG_KEYS.kg), {}),
   };
 }
+/** أصناف الأسمنت المرشحة (الاسم فيه «اسمنت») مع الوزن الحالي لكل وحدة */
+export async function cementCandidates(cfg) {
+  const rows = await all(`SELECT id, name FROM materials WHERE name LIKE '%اسمنت%' AND active=1 ORDER BY name`);
+  return rows.map((m) => ({ id: m.id, name: m.name, kg: kgOf(m, cfg.cement_kg), selected: !cfg.cement_material_ids.length || cfg.cement_material_ids.includes(m.id) }));
+}
 export async function saveConfig(b) {
-  for (const [k, f] of [['cast', 'cast_stage_id'], ['finish', 'finish_stage_id'], ['mold', 'mold_stage_id'], ['cement', 'cement_material_id']]) {
+  for (const [k, f] of [['cast', 'cast_stage_id'], ['finish', 'finish_stage_id'], ['mold', 'mold_stage_id']]) {
     if (b[f] === undefined) continue; const v = b[f] === '' || b[f] === null ? null : Number(b[f]);
-    if (v && !(await get(k === 'cement' ? 'SELECT 1 FROM materials WHERE id=?' : 'SELECT 1 FROM stages WHERE id=?', v))) throw new AppError('اختيار غير موجود');
+    if (v && !(await get('SELECT 1 FROM stages WHERE id=?', v))) throw new AppError('اختيار غير موجود');
     await setSetting(CFG_KEYS[k], v);
+  }
+  if (b.cement_material_ids !== undefined) await setSetting(CFG_KEYS.cement, JSON.stringify((b.cement_material_ids || []).map(Number).filter(Boolean)));
+  if (b.cement_kg !== undefined) {
+    const map = {}; for (const [id, kg] of Object.entries(b.cement_kg || {})) { const n = Number(kg); if (!(n > 0 && n <= 1000)) throw new AppError('وزن الشيكارة غير صحيح'); map[Number(id)] = n; }
+    await setSetting(CFG_KEYS.kg, JSON.stringify(map));
   }
   const c = await getConfig();
   const ids = [c.cast_stage_id, c.finish_stage_id, c.mold_stage_id].filter(Boolean);
@@ -61,16 +75,16 @@ async function moldBlock(stageId, month, projectId) {
   return { stage_id: stageId, name: await val('SELECT name FROM stages WHERE id=?', stageId), by_project, total: r2(by_project.reduce((s, r) => s + r.total, 0)) };
 }
 
-/** شكاير الأسمنت المصروفة لمرحلة الصب في الشهر (من النظام). لو الخامة مش متحددة بنختار أكبر خامة «اسمنت» صرفاً */
-async function systemBags(cast, month, projectId, cementId) {
-  if (!cast) return { material_id: cementId || null, bags: 0 };
+/** شكاير الأسمنت المصروفة للصب في الشهر محوّلة لشكاير معيارية 50 كجم (الأصناف 30 كجم وغيرها بتتحول بالوزن) */
+async function systemBags(cfg, month, projectId) {
+  if (!cfg.cast_stage_id) return { lines: [], bags: 0 };
   const pw = projectId ? ' AND c.project_id=?' : ''; const pp = projectId ? [projectId] : [];
-  let mid = cementId;
-  if (!mid) mid = (await get(`SELECT c.material_id id FROM cost_lines c JOIN materials m ON m.id=c.material_id
-      WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_type='material' AND m.name LIKE '%اسمنت%'${pw} GROUP BY c.material_id ORDER BY SUM(c.qty) DESC LIMIT 1`, month, cast, ...pp))?.id || null;
-  if (!mid) return { material_id: null, bags: 0 };
-  const bags = await val(`SELECT COALESCE(SUM(c.qty),0) FROM cost_lines c WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.material_id=? AND c.cost_type='material' AND c.cost_class<>'transfer'${pw}`, month, cast, mid, ...pp);
-  return { material_id: mid, bags: r4(bags) };
+  const ids = cfg.cement_material_ids; const iw = ids.length ? ` AND c.material_id IN (${ids.map(() => '?').join(',')})` : '';
+  const rows = await all(`SELECT m.id, m.name, SUM(c.qty) qty FROM cost_lines c JOIN materials m ON m.id=c.material_id
+    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_type='material' AND c.cost_class<>'transfer' AND m.name LIKE '%اسمنت%'${iw}${pw}
+    GROUP BY m.id, m.name ORDER BY m.name`, month, cfg.cast_stage_id, ...ids, ...pp);
+  const lines = rows.map((r) => { const kg = kgOf(r, cfg.cement_kg); return { material_id: r.id, name: r.name, qty: r4(r.qty), kg, std_bags: r4(r.qty * kg / STD_BAG_KG) }; });
+  return { lines, bags: r4(lines.reduce((t, l) => t + l.std_bags, 0)) };
 }
 
 const keyOf = (month, projectId) => [month, projectId || 0];
@@ -82,9 +96,8 @@ export async function computeLive(month, projectId = 0, inputs = null) {
   const cfg = await getConfig(); const saved = await getPeriod(month, 0);   // معدل الفرد والإعدادات شهرية واحدة لكل المشروعات
   const spread = num(inputs?.spread_rate ?? saved?.spread_rate);
   const override = projectId ? null : (inputs && 'bags_override' in inputs ? inputs.bags_override : saved?.bags_override);   // العدد اليدوي على مستوى الشهر فقط
-  const cementId = Number(inputs?.cement_material_id ?? saved?.cement_material_id ?? cfg.cement_material_id) || null;
   const [cast, finish, mold] = [await stageBlock(cfg.cast_stage_id, month, projectId), await stageBlock(cfg.finish_stage_id, month, projectId), await moldBlock(cfg.mold_stage_id, month, projectId)];
-  const sys = await systemBags(cfg.cast_stage_id, month, projectId, cementId);
+  const sys = await systemBags(cfg, month, projectId);
   const bags = override !== null && override !== undefined && override !== '' ? num(override) : sys.bags;
   const area = r2(bags * spread);
   if (cast) for (const m of cast.materials) m.per_bag = bags > 0 ? r4(m.qty / bags) : null;   // معيار الشيكارة
@@ -92,7 +105,7 @@ export async function computeLive(month, projectId = 0, inputs = null) {
   if (cast) cast.per_m2 = per(cast); if (finish) finish.per_m2 = per(finish);
   const unit_cost = { cast: cast?.per_m2 ?? null, finish: finish?.per_m2 ?? null, total: area > 0 ? r2((cast?.total || 0) / area + (finish?.total || 0) / area) : null };
   return { month, project_id: projectId || 0, config: cfg,
-    inputs: { cement_material_id: sys.material_id, bags_system: sys.bags, bags_override: override === '' ? null : override ?? null, bags, spread_rate: spread, area },
+    inputs: { cement_lines: sys.lines, bags_system: sys.bags, bags_override: override === '' ? null : override ?? null, bags, spread_rate: spread, area },
     cast, finish, mold, unit_cost, pool_total: r2((cast?.total || 0) + (finish?.total || 0)), notes: saved?.notes ?? null };
 }
 
@@ -116,11 +129,10 @@ export async function savePeriod(b, user) {
   if (!(spread >= 0) || spread > 100) throw new AppError('معدل فرد الشيكارة غير صحيح');
   const bo = b.bags_override === '' || b.bags_override === null || b.bags_override === undefined ? null : Number(b.bags_override);
   if (bo !== null && !(bo >= 0)) throw new AppError('عدد الشكاير غير صحيح');
-  const cement = b.cement_material_id ? Number(b.cement_material_id) : null;
   const cur = await getPeriod(month, pid);
   if (cur?.status === 'approved') throw new AppError('الشهر معتمد — أعد فتحه أولاً لتعديل المدخلات');
-  if (cur) await run('UPDATE unit_cost_periods SET spread_rate=?, bags_override=?, cement_material_id=?, notes=? WHERE id=?', spread, bo, cement, b.notes ?? null, cur.id);
-  else await run('INSERT INTO unit_cost_periods(month,project_id,spread_rate,bags_override,cement_material_id,notes,created_by) VALUES(?,?,?,?,?,?,?)', month, pid, spread, bo, cement, b.notes ?? null, user?.id ?? null);
+  if (cur) await run('UPDATE unit_cost_periods SET spread_rate=?, bags_override=?, notes=? WHERE id=?', spread, bo, b.notes ?? null, cur.id);
+  else await run('INSERT INTO unit_cost_periods(month,project_id,spread_rate,bags_override,notes,created_by) VALUES(?,?,?,?,?,?)', month, pid, spread, bo, b.notes ?? null, user?.id ?? null);
   return await getSheet(month, pid);
 }
 

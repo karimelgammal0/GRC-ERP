@@ -3,7 +3,7 @@ process.env.DATABASE_URL = ''; process.env.PGLITE_MEMORY = '1'; process.env.NO_L
 const { all, val, run, insertRow, AppError, initSchema } = await import('../server/db.js');
 await initSchema();
 const { seedAll } = await import('../server/lib/seed.js');
-const { computeLive, getSheet, savePeriod, approvePeriod, reopenPeriod, history, getConfig } = await import('../server/lib/costing.js');
+const { saveConfig, computeLive, getSheet, savePeriod, approvePeriod, reopenPeriod, history, getConfig } = await import('../server/lib/costing.js');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ FAIL:', m); } };
 const near = (a, b, m, t = 0.011) => ok(Math.abs(a - b) <= t, `${m}: got ${a}, expected ${b}`);
@@ -33,7 +33,7 @@ await line({ date: '2026-06-18', source_type: 'issue', cost_type: 'material', co
 console.log('▶ الحساب الحي');
 const cfg = await getConfig(); ok(cfg.cast_stage_id === st['الصب'] && cfg.finish_stage_id === st['التشطيب'] && cfg.mold_stage_id === st['القوالب'], 'ربط المراحل بالاسم افتراضياً');
 let s = await computeLive('2026-06', 0, { spread_rate: 1.5 });
-ok(s.inputs.cement_material_id === cement, 'الأسمنت اتحدد تلقائياً'); near(s.inputs.bags_system, 289, 'شكاير الصب من النظام (من غير التحويلات)');
+ok(s.inputs.cement_lines.length === 1 && s.inputs.cement_lines[0].material_id === cement && s.inputs.cement_lines[0].kg === 50, 'الأسمنت اتحدد تلقائياً بوزن 50'); near(s.inputs.bags_system, 289, 'شكاير الصب من النظام (من غير التحويلات)');
 near(s.inputs.area, 433.5, 'المتر المسطح = 289 × 1.5');
 near(s.cast.mat_total, 79821.8 + 52474.8, 'خامات الصب'); near(s.cast.labor_daily, 35710, 'أجور الصب'); near(s.cast.labor_monthly, 11907, 'مرتبات الصب');
 near(s.cast.total, 179913.6, 'إجمالي الصب'); near(s.finish.total, 31282, 'إجمالي التشطيب');
@@ -44,6 +44,15 @@ near(s.pool_total, 179913.6 + 31282, 'تجمع الصب+التشطيب بدون 
 s = await computeLive('2026-06', 0, { spread_rate: 1.5, bags_override: 300 }); near(s.inputs.bags, 300, 'عدد شكاير يدوي'); near(s.inputs.area, 450, 'المتر بالعدد اليدوي');
 s = await computeLive('2026-06', 0, { spread_rate: 0 }); ok(s.unit_cost.total === null, 'بدون معدل فرد: لا سعر');
 
+console.log('▶ تحويل شكاير 30 كجم لمعيارية 50');
+const c30 = await mk('RM-X4', 'اسمنت ابيض *30ك (اختبار)');
+await line({ date: '2026-08-03', source_type: 'issue', cost_type: 'material', stage_id: st['الصب'], material_id: cement, qty: 100, amount: 28000 });
+await line({ date: '2026-08-04', source_type: 'issue', cost_type: 'material', stage_id: st['الصب'], material_id: c30, qty: 50, amount: 9000 });
+s = await computeLive('2026-08', 0, { spread_rate: 1 }); near(s.inputs.bags_system, 130, '100 شيكارة 50ك + 50 شيكارة 30ك = 130 معيارية'); near(s.inputs.area, 130, 'المتر بعد التحويل');
+{ const l30 = s.inputs.cement_lines.find((l) => l.material_id === c30); ok(l30.kg === 30, 'وزن الصنف من الاسم'); near(l30.std_bags, 30, 'تحويل 50×30÷50'); }
+await saveConfig({ cement_kg: { [c30]: 25 } }); s = await computeLive('2026-08', 0, { spread_rate: 1 }); near(s.inputs.bags_system, 125, 'تعديل وزن الصنف من الإعدادات');
+await saveConfig({ cement_material_ids: [cement] }); s = await computeLive('2026-08', 0, { spread_rate: 1 }); near(s.inputs.bags_system, 100, 'استبعاد صنف من الحساب');
+await saveConfig({ cement_material_ids: [], cement_kg: {} });
 console.log('▶ حفظ واعتماد وإعادة فتح');
 await throws(() => approvePeriod('2026-06', 0, { id: 1 }), /احفظ/, 'اعتماد قبل الحفظ');
 await savePeriod({ month: '2026-06', spread_rate: 0 }, { id: 1 }); await throws(() => approvePeriod('2026-06', 0, { id: 1 }), /معدل فرد/, 'اعتماد بدون معدل');
