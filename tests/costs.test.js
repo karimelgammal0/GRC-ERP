@@ -41,7 +41,7 @@ near(s.cast.per_m2, 415.03, 'تكلفة المتر — صب'); near(s.finish.per
 near(s.cast.materials.find((m) => m.material_id === fiber).per_bag, 249.88 / 289, 'معيار الشيكارة للفيبر', 0.0001);
 near(s.mold.total, 5000, 'القوالب على المشروع'); ok(s.mold.by_project[0].project_id === prj, 'القوالب موزعة على المشروع');
 near(s.pool_total, 179913.6 + 31282, 'تجمع الصب+التشطيب بدون القوالب');
-s = await computeLive('2026-06', 0, { spread_rate: 1.5, bags_override: 300 }); near(s.inputs.bags, 300, 'عدد شكاير يدوي'); near(s.inputs.area, 450, 'المتر بالعدد اليدوي');
+s = await computeLive('2026-06', 0, { spread_rate: 1.5, bags_override: 300 }); near(s.inputs.bags, 289, 'الشكاير دايماً من النظام (مفيش تعديل يدوي)');
 s = await computeLive('2026-06', 0, { spread_rate: 0 }); ok(s.unit_cost.total === null, 'بدون معدل فرد: لا سعر');
 
 console.log('▶ تحويل شكاير 30 كجم لمعيارية 50');

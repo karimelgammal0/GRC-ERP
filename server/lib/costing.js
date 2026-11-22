@@ -95,17 +95,16 @@ export async function computeLive(month, projectId = 0, inputs = null) {
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح (YYYY-MM)');
   const cfg = await getConfig(); const saved = await getPeriod(month, 0);   // معدل الفرد والإعدادات شهرية واحدة لكل المشروعات
   const spread = num(inputs?.spread_rate ?? saved?.spread_rate);
-  const override = projectId ? null : (inputs && 'bags_override' in inputs ? inputs.bags_override : saved?.bags_override);   // العدد اليدوي على مستوى الشهر فقط
   const [cast, finish, mold] = [await stageBlock(cfg.cast_stage_id, month, projectId), await stageBlock(cfg.finish_stage_id, month, projectId), await moldBlock(cfg.mold_stage_id, month, projectId)];
   const sys = await systemBags(cfg, month, projectId);
-  const bags = override !== null && override !== undefined && override !== '' ? num(override) : sys.bags;
+  const bags = sys.bags;   // الشكاير دايماً من المنصرف بالنظام (مفيش إدخال يدوي)
   const area = r2(bags * spread);
   if (cast) for (const m of cast.materials) m.per_bag = bags > 0 ? r4(m.qty / bags) : null;   // معيار الشيكارة
   const per = (b) => (b && area > 0 ? r2(b.total / area) : null);
   if (cast) cast.per_m2 = per(cast); if (finish) finish.per_m2 = per(finish);
   const unit_cost = { cast: cast?.per_m2 ?? null, finish: finish?.per_m2 ?? null, total: area > 0 ? r2((cast?.total || 0) / area + (finish?.total || 0) / area) : null };
   return { month, project_id: projectId || 0, config: cfg,
-    inputs: { cement_lines: sys.lines, bags_system: sys.bags, bags_override: override === '' ? null : override ?? null, bags, spread_rate: spread, area },
+    inputs: { cement_lines: sys.lines, bags_system: sys.bags, bags, spread_rate: spread, area },
     cast, finish, mold, unit_cost, pool_total: r2((cast?.total || 0) + (finish?.total || 0)), notes: saved?.notes ?? null };
 }
 
@@ -127,12 +126,10 @@ export async function savePeriod(b, user) {
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح');
   const spread = b.spread_rate === '' || b.spread_rate === null || b.spread_rate === undefined ? 0 : Number(b.spread_rate);
   if (!(spread >= 0) || spread > 100) throw new AppError('معدل فرد الشيكارة غير صحيح');
-  const bo = b.bags_override === '' || b.bags_override === null || b.bags_override === undefined ? null : Number(b.bags_override);
-  if (bo !== null && !(bo >= 0)) throw new AppError('عدد الشكاير غير صحيح');
   const cur = await getPeriod(month, pid);
   if (cur?.status === 'approved') throw new AppError('الشهر معتمد — أعد فتحه أولاً لتعديل المدخلات');
-  if (cur) await run('UPDATE unit_cost_periods SET spread_rate=?, bags_override=?, notes=? WHERE id=?', spread, bo, b.notes ?? null, cur.id);
-  else await run('INSERT INTO unit_cost_periods(month,project_id,spread_rate,bags_override,notes,created_by) VALUES(?,?,?,?,?,?)', month, pid, spread, bo, b.notes ?? null, user?.id ?? null);
+  if (cur) await run('UPDATE unit_cost_periods SET spread_rate=?, notes=? WHERE id=?', spread, b.notes ?? null, cur.id);
+  else await run('INSERT INTO unit_cost_periods(month,project_id,spread_rate,notes,created_by) VALUES(?,?,?,?,?)', month, pid, spread, b.notes ?? null, user?.id ?? null);
   return await getSheet(month, pid);
 }
 
