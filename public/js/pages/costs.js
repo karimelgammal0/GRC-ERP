@@ -38,14 +38,14 @@ function configModal(onSaved) {
 export async function unitCostPage(root, params = {}) {
   const host = h('div');
   let cur = { month: params.month || curMonth(), project_id: params.project_id ? Number(params.project_id) : null };
-  const bar = filterBar([{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, { k: 'project_id', l: 'المشروع (اختياري — الافتراضي كل المشاريع)', t: 'fk', ref: 'projects', combo: true }],
+  const bar = filterBar([{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, { k: 'project_id', l: 'عرض مشروع محدد (اختياري — للاعتماد اتركه فاضي)', t: 'fk', ref: 'projects', combo: true }],
     async (v) => { cur = { month: v.month || curMonth(), project_id: v.project_id || null }; await load(); }, { month: cur.month, project_id: cur.project_id });
   const q = () => ({ month: cur.month, project_id: cur.project_id || 0 });
   const load = async () => draw(await GET('/costs/sheet', q()));
   const call = (fn) => guard(async () => { draw(await fn()); });
 
   const draw = (s) => {
-    const approved = s.status === 'approved'; const i = s.inputs;
+    const pv = !!s.project_view; const approved = s.status === 'approved' || pv; const i = s.inputs;
     const f = formGrid([
       { k: 'cement_material_id', l: 'خامة الأسمنت', t: 'fk', ref: 'materials', combo: true, readonly: approved },
       { k: 'bags_override', l: `عدد الشكاير (بالنظام: ${fq(i.bags_system)}) — اتركه فاضي لاستخدام رقم النظام`, t: 'number', readonly: approved },
@@ -54,16 +54,17 @@ export async function unitCostPage(root, params = {}) {
     ], { cement_material_id: i.cement_material_id, bags_override: i.bags_override, spread_rate: i.spread_rate || '', notes: s.notes }, 2);
     const body = () => ({ ...q(), ...f.values() });
     const acts = [
-      !approved && can('costs.unit-cost.save') ? h('button.btn.primary', { onclick: call(() => PUT('/costs/period', body())) }, 'حفظ وحساب') : null,
-      !approved && can('costs.unit-cost.approve') ? h('button.btn', { onclick: guard(async () => { if (!(await confirmBox(`اعتماد سعر المتر لشهر ${s.month}؟ بعد الاعتماد بيتثبّت السعر ولا يتأثر بأي تعديل لاحق.`, 'اعتماد'))) return; await PUT('/costs/period', body()); draw(await POST('/costs/approve', q())); toast('تم اعتماد سعر المتر'); }) }, '✔ اعتماد الشهر') : null,
-      approved && can('costs.unit-cost.reopen') ? h('button.btn', { onclick: guard(async () => { if (await confirmBox('إعادة فتح الشهر بتلغي السعر المعتمد وتعيد الحساب من الأرقام الحالية. متأكد؟', 'إعادة فتح', true)) draw(await POST('/costs/reopen', q())); }) }, 'إعادة فتح') : null,
+      !approved && !pv && can('costs.unit-cost.save') ? h('button.btn.primary', { onclick: call(() => PUT('/costs/period', body())) }, 'حفظ وحساب') : null,
+      !approved && !pv && can('costs.unit-cost.approve') ? h('button.btn', { onclick: guard(async () => { if (!(await confirmBox(`اعتماد سعر المتر لشهر ${s.month}؟ بعد الاعتماد بيتثبّت السعر ولا يتأثر بأي تعديل لاحق.`, 'اعتماد'))) return; await PUT('/costs/period', body()); draw(await POST('/costs/approve', q())); toast('تم اعتماد سعر المتر'); }) }, '✔ اعتماد الشهر') : null,
+      approved && !pv && can('costs.unit-cost.reopen') ? h('button.btn', { onclick: guard(async () => { if (await confirmBox('إعادة فتح الشهر بتلغي السعر المعتمد وتعيد الحساب من الأرقام الحالية. متأكد؟', 'إعادة فتح', true)) draw(await POST('/costs/reopen', q())); }) }, 'إعادة فتح') : null,
       can('costs.unit-cost.config') ? h('button.btn', { onclick: () => configModal(load) }, '⚙ ربط المراحل والأسمنت') : null,
       h('button.btn', { onclick: () => window.print() }, '🖨 طباعة'),
     ];
     const u = s.unit_cost;
     host.replaceChildren(
       h('div.row', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', margin: '8px 0' } },
-        approved ? badge(`معتمد ${s.approved_at || ''}`, 'ok') : badge(s.status === 'new' ? 'لم يُحفظ بعد' : 'مسودة', 'warn'), s.project_id ? badge(`مشروع: ${nameOf('projects', s.project_id)}`, 'info') : badge('كل المشاريع', '')),
+        pv ? badge(s.status === 'approved_view' ? 'الشهر معتمد' : s.status === 'new' ? 'الشهر لم يُحفظ بعد' : 'الشهر مسودة', 'info') : approved ? badge(`معتمد ${s.approved_at || ''}`, 'ok') : badge(s.status === 'new' ? 'لم يُحفظ بعد' : 'مسودة', 'warn'), s.project_id ? badge(`مشروع: ${nameOf('projects', s.project_id)}`, 'info') : badge('كل المشاريع', '')),
+      pv ? h('div.note', 'عرض تحليلي لمشروع واحد: معدل فرد الشيكارة هو معدل الشهر الواحد لكل المشروعات، والاعتماد يتم على مستوى الشهر (بدون اختيار مشروع).') : null,
       approved && s.drift ? h('div.note.bad', `تنبيه: الأرقام الحالية اختلفت عن وقت الاعتماد (السعر الحالي ${blank(s.live_unit_cost?.total)} مقابل المعتمد ${blank(u.total)}) — السعر المعتمد لسه ثابت. أعد فتح الشهر لو عايز تحدّثه.`) : null,
       h('div.kpis', kpi('شكاير الأسمنت للصب', fq(i.bags), i.bags_override !== null && i.bags_override !== undefined ? 'رقم يدوي' : 'من المنصرف بالنظام'), kpi('معدل فرد الشيكارة', i.spread_rate ? fq(i.spread_rate) : '—', 'م² / شيكارة'),
         kpi('المتر المسطح المنتج', i.area ? fmt(i.area) : '—', 'م²'), kpi('تكلفة الصب / م²', blank(u.cast)), kpi('تكلفة التشطيب / م²', blank(u.finish)), kpi('سعر المتر الإجمالي', blank(u.total), 'صب + تشطيب', 'ok')),

@@ -56,6 +56,9 @@ a = await getSheet('2026-06'); near(a.unit_cost.total, 487.19, 'السعر ال�
 const h = await history({}); ok(h.length === 1 && h[0].status === 'approved' && h[0].month === '2026-06', 'سجل الأسعار');
 const r = await reopenPeriod('2026-06', 0); ok(r.status === 'draft', 'إعادة فتح'); near(r.unit_cost.total, (180913.6 + 31282) / 433.5, 'بعد إعادة الفتح الأرقام حية', 0.02);
 
-console.log('▶ مشروع محدد');
-const p2 = await savePeriod({ month: '2026-06', project_id: prj, spread_rate: 1.4 }, { id: 1 }); near(p2.inputs.area, 289 * 1.4, 'مساحة المشروع المحدد');
+console.log('▶ مشروع محدد (نفس معدل الشهر)');
+await savePeriod({ month: '2026-06', spread_rate: 1.5 }, { id: 1 });
+const p2 = await getSheet('2026-06', prj); ok(p2.project_view === true, 'عرض المشروع تحليلي'); near(p2.inputs.spread_rate, 1.5, 'المشروع بياخد معدل الشهر'); near(p2.inputs.area, 289 * 1.5, 'مساحة المشروع بنفس المعدل');
+ok(!(await val('SELECT COUNT(*) FROM unit_cost_periods WHERE project_id<>0')), 'مفيش صفوف معدل لكل مشروع');
+await savePeriod({ month: '2026-06', project_id: prj, spread_rate: 1.2 }, { id: 1 }); near((await getSheet('2026-06')).inputs.spread_rate, 1.2, 'الحفظ دايماً على مستوى الشهر');
 console.log(`\n${fail ? '✗' : '✓'} costs: ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

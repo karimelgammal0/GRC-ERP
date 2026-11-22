@@ -79,9 +79,9 @@ export const getPeriod = async (month, projectId) => await get('SELECT * FROM un
 /** الحساب الحي من أسطر التكلفة + المدخلات المحفوظة (معدل الفرد). لا يقرأ الـ snapshot */
 export async function computeLive(month, projectId = 0, inputs = null) {
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح (YYYY-MM)');
-  const cfg = await getConfig(); const saved = await getPeriod(month, projectId);
+  const cfg = await getConfig(); const saved = await getPeriod(month, 0);   // معدل الفرد والإعدادات شهرية واحدة لكل المشروعات
   const spread = num(inputs?.spread_rate ?? saved?.spread_rate);
-  const override = inputs && 'bags_override' in inputs ? inputs.bags_override : saved?.bags_override;
+  const override = projectId ? null : (inputs && 'bags_override' in inputs ? inputs.bags_override : saved?.bags_override);   // العدد اليدوي على مستوى الشهر فقط
   const cementId = Number(inputs?.cement_material_id ?? saved?.cement_material_id ?? cfg.cement_material_id) || null;
   const [cast, finish, mold] = [await stageBlock(cfg.cast_stage_id, month, projectId), await stageBlock(cfg.finish_stage_id, month, projectId), await moldBlock(cfg.mold_stage_id, month, projectId)];
   const sys = await systemBags(cfg.cast_stage_id, month, projectId, cementId);
@@ -98,8 +98,9 @@ export async function computeLive(month, projectId = 0, inputs = null) {
 
 /** الشيت الكامل: المعتمد بيرجع من الـ snapshot (ثابت) + تنبيه لو الأرقام الحية اختلفت بعد الاعتماد */
 export async function getSheet(month, projectId = 0) {
-  const saved = await getPeriod(month, projectId);
+  const saved = await getPeriod(month, 0);
   const live = await computeLive(month, projectId);
+  if (projectId) return { ...live, status: saved?.status === 'approved' ? 'approved_view' : saved ? 'draft' : 'new', project_view: true };   // عرض تحليلي لمشروع بنفس معدل الشهر
   if (saved?.status === 'approved' && saved.snapshot) {
     const snap = JSON.parse(saved.snapshot);
     const drift = snap.unit_cost?.total !== live.unit_cost.total || snap.pool_total !== live.pool_total;
@@ -109,13 +110,12 @@ export async function getSheet(month, projectId = 0) {
 }
 
 export async function savePeriod(b, user) {
-  const month = b.month, pid = Number(b.project_id) || 0;
+  const month = b.month, pid = 0;   // المدخلات شهرية فقط (مش لكل مشروع)
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح');
   const spread = b.spread_rate === '' || b.spread_rate === null || b.spread_rate === undefined ? 0 : Number(b.spread_rate);
   if (!(spread >= 0) || spread > 100) throw new AppError('معدل فرد الشيكارة غير صحيح');
   const bo = b.bags_override === '' || b.bags_override === null || b.bags_override === undefined ? null : Number(b.bags_override);
   if (bo !== null && !(bo >= 0)) throw new AppError('عدد الشكاير غير صحيح');
-  if (pid && !(await get('SELECT 1 FROM projects WHERE id=?', pid))) throw new AppError('المشروع غير موجود');
   const cement = b.cement_material_id ? Number(b.cement_material_id) : null;
   const cur = await getPeriod(month, pid);
   if (cur?.status === 'approved') throw new AppError('الشهر معتمد — أعد فتحه أولاً لتعديل المدخلات');
@@ -125,7 +125,7 @@ export async function savePeriod(b, user) {
 }
 
 export async function approvePeriod(month, projectId, user) {
-  const pid = Number(projectId) || 0; const cur = await getPeriod(month, pid);
+  const pid = 0; const cur = await getPeriod(month, pid);
   if (!cur) throw new AppError('احفظ معدل فرد الشيكارة للشهر أولاً');
   if (cur.status === 'approved') throw new AppError('الشهر معتمد بالفعل');
   const live = await computeLive(month, pid);
@@ -136,15 +136,15 @@ export async function approvePeriod(month, projectId, user) {
   return await getSheet(month, pid);
 }
 export async function reopenPeriod(month, projectId) {
-  const pid = Number(projectId) || 0; const cur = await getPeriod(month, pid);
+  const pid = 0; const cur = await getPeriod(month, pid);
   if (!cur || cur.status !== 'approved') throw new AppError('الشهر غير معتمد');
   await run(`UPDATE unit_cost_periods SET status='draft', snapshot=NULL, approved_by=NULL, approved_at=NULL WHERE id=?`, cur.id);
   return await getSheet(month, pid);
 }
 
 /** سجل الأشهر المحفوظة: المعتمد من الـ snapshot، والمسودة بالحساب الحي */
-export async function history({ from, to, project_id } = {}) {
-  const rows = await all(`SELECT month, project_id FROM unit_cost_periods WHERE (?::text IS NULL OR month>=?) AND (?::text IS NULL OR month<=?) AND (?::int IS NULL OR project_id=?) ORDER BY month DESC, project_id`, from || null, from || null, to || null, to || null, project_id === undefined || project_id === '' ? null : Number(project_id), project_id === undefined || project_id === '' ? null : Number(project_id));
+export async function history({ from, to } = {}) {
+  const rows = await all(`SELECT month, project_id FROM unit_cost_periods WHERE (?::text IS NULL OR month>=?) AND (?::text IS NULL OR month<=?) AND project_id=0 ORDER BY month DESC, project_id`, from || null, from || null, to || null, to || null);
   const out = [];
   for (const r of rows) {
     const s = await getSheet(r.month, r.project_id);
