@@ -23,8 +23,8 @@ const addItemDialog = (ctx) => {
 const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) || {}).id;
 
 // ---------------- طباعة إذن صرف / تحويل / مرتجع ----------------
-const issuePrint = (doc) => printSheet({ title: doc.kind === 'site' ? 'تحويل لموقع' : doc.kind === 'return' ? 'مرتجع صرف' : 'إذن صرف', no: doc.no, date: doc.date,
-  meta: [['المخزن', nameOf('warehouses', doc.warehouse_id)], ['المشروع', nameOf('projects', doc.project_id)], ['الموقع', nameOf('sites', doc.site_id)], ['النوع', doc.kind === 'return' ? '' : labelOf(KINDS, doc.kind).split(' (')[0]]],
+const issuePrint = (doc) => printSheet({ title: doc.kind === 'site_in' ? 'تحويل وارد من موقع' : doc.kind === 'site' ? 'تحويل صادر لموقع' : doc.kind === 'return' ? 'مرتجع صرف' : 'إذن صرف', no: doc.no, date: doc.date,
+  meta: [['المخزن', nameOf('warehouses', doc.warehouse_id)], [doc.kind === 'site_in' ? 'من مشروع' : 'المشروع', nameOf('projects', doc.project_id)], [doc.kind === 'site_in' ? 'من موقع' : 'الموقع', nameOf('sites', doc.site_id)], ['النوع', doc.kind === 'return' || doc.kind === 'site_in' ? '' : labelOf(KINDS, doc.kind).split(' (')[0]]],
   cols: ['الصنف', 'الوحدة', 'الكمية', 'البند', 'المرحلة', 'المستلم', 'التكلفة'],
   rows: (doc.lines || []).map((l) => [nameOf('materials', l.material_id), unitOf(l.material_id), fq(l.qty), nameOf('project_items', l.item_id), nameOf('stages', l.stage_id), nameOf('employees', l.received_by_id) || nameOf('employees', doc.received_by_id), fmt(l.total)]),
   totals: [['إجمالي التكلفة', fmt((doc.lines || []).reduce((s, l) => s + (Number(l.total) || 0), 0))]], notes: doc.notes, module: 'inventory', by: doc.created_by_name, sign: ['أمين المخزن', 'المستلم', 'الاعتماد'] });
@@ -39,6 +39,12 @@ const issueLines = { blank: () => ({ material_id: null, qty: null }), cols: [
   { l: 'الرصيد المتاح', calc: (l, c) => c.stock?.[l.material_id]?.qty ?? 0, fmt: fq, w: '110px' },
   { l: 'متوسط التكلفة', calc: (l, c) => c.stock?.[l.material_id]?.avg_cost ?? 0, fmt: (v) => fmt(v, 4), w: '110px' },
   { l: 'التكلفة', calc: (l, c) => (l.total ?? (Number(l.qty) || 0) * (c.stock?.[l.material_id]?.avg_cost ?? 0)), fmt: (v) => fmt(v), w: '110px' }] };
+// تحويل وارد: التكلفة بتتعبّى بمتوسط تكلفة الصنف في المخزن وتتعدّل يدوياً
+const inCostFill = async (v, l, ctx) => { l._eu = null; l._ev = undefined; const a = ctx.stock?.[v]?.avg_cost; l.in_cost = a ? Math.round(a * 10000) / 10000 : null; ctx.setLines(ctx.lines); };
+const inLines = { blank: () => ({ material_id: null, qty: null, in_cost: null }), cols: [
+  { ...issueLines.cols[0], onChange: inCostFill }, qtyCol({ l: 'الكمية', w: '170px' }), issueLines.cols[2],
+  { k: 'in_cost', l: 'تكلفة الوحدة (متوسط المخزن — عدّلها لو مختلفة)', t: 'number', w: '200px' },
+  { l: 'القيمة', calc: (l) => (Number(l.qty) || 0) * (Number(l.in_cost) || 0), fmt: (v) => fmt(v), w: '110px' }] };
 const recvCol = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true, w: '15%' };
 const itemCol = { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', req: 1, combo: true, w: '24%', filter: (x, l, c) => !c.header.project_id || x.project_id === Number(c.header.project_id) };
 const stageCol = (req) => ({ k: 'stage_id', l: req ? 'المرحلة' : 'المرحلة (اختياري)', t: 'fk', ref: 'stages', filter: leafStage, req, w: '16%' });
@@ -80,27 +86,29 @@ export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true, 
 
 // ---------------- تحويل أصناف لموقع (منفصل عن صرف الإنتاج) ----------------
 export const siteTransfersPage = docScreen({ perm: 'inventory.site-transfers', lockable: true, print: issuePrint,
-  type: 'stock_issue', nextNoKey: 'stock_issue', title: 'تحويلات المواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' }, defaultFrom: monthStart, defaultTo: today,
-  note: 'تحويل أصناف من المخزن لمشروع. لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
+  type: 'stock_issue', title: 'تحويلات المواقع', noun: 'تحويل لموقع', newButtons: [{ label: 'تحويل صادر', init: { kind: 'site' } }, { label: 'تحويل وارد', init: { kind: 'site_in' } }],
+  nounOf: (hd) => (hd.kind === 'site_in' ? 'تحويل وارد' : 'تحويل صادر'), nextNoKey: (hd) => (hd.kind === 'site_in' ? 'stock_site_in' : 'stock_issue'), fixed: { only: 'site_transfers' }, defaultFrom: monthStart, defaultTo: today,
+  note: 'تحويل صادر: أصناف من المخزن لمشروع. تحويل وارد: استلام أصناف راجعة من مشروع/موقع للمخزن بتكلفة المتوسط (قابلة للتعديل). لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
   filters: (() => { let fp = null; return [
     { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, onChange: (v) => { fp = v; } },
     { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, showIf: (vals) => sitesOf(vals.project_id).length > 0, filter: (x) => !fp || x.project_id === Number(fp) }]; })(),
   listCols: [
-    { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'project_name', l: 'المشروع' }, { k: 'site_name', l: 'الموقع' },
+    { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'kind', l: 'النوع', text: (r) => (r.kind === 'site_in' ? 'وارد' : 'صادر') }, { k: 'project_name', l: 'المشروع' }, { k: 'site_name', l: 'الموقع' },
     { k: 'total', l: 'التكلفة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   listFoot: (c, rows) => (c.k === 'total' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.total)) : c.k === 'no' ? 'الإجمالي' : ''),
   editor: {
     cols: 3, rebuildOn: ['project_id'], defaults: () => ({ kind: 'site', warehouse_id: defaultWh() }),
     header: (ctx) => {
-      const p = ctx.header.project_id; const sites = sitesOf(p);
+      const p = ctx.header.project_id; const sites = sitesOf(p); const inc = ctx.header.kind === 'site_in';
       return [dateF, whF(ctx),
-        { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', req: 1, combo: true, onChange: (v, c) => { const s = sitesOf(v); c.header.site_id = s.length === 1 ? s[0].id : null; } },
-        sites.length ? { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', req: 1, readonly: sites.length === 1, filter: (x) => x.project_id === Number(p) } : null,
-        receivedF, { ...notesF, wide: false }].filter(Boolean);
+        { k: 'project_id', l: inc ? 'من مشروع' : 'المشروع', t: 'fk', ref: 'projects', req: 1, combo: true, onChange: (v, c) => { const s = sitesOf(v); c.header.site_id = s.length === 1 ? s[0].id : null; } },
+        sites.length ? { k: 'site_id', l: inc ? 'من موقع' : 'الموقع', t: 'fk', ref: 'sites', req: 1, readonly: sites.length === 1, filter: (x) => x.project_id === Number(p) } : null,
+        { ...receivedF, l: inc ? 'المستلم (أمين المخزن)' : 'المستلم' }, { ...notesF, wide: false }].filter(Boolean);
     },
-    prepare: (payload) => { payload.kind = 'site'; const ss = sitesOf(payload.project_id); if (!ss.length) payload.site_id = null; else if (ss.length === 1) payload.site_id = ss[0].id; },
-    lines: issueLines, totals: issueTotals,
-    onOpen: (ctx) => mapStock(ctx),
+    prepare: (payload) => { payload.kind = payload.kind === 'site_in' ? 'site_in' : 'site'; const ss = sitesOf(payload.project_id); if (!ss.length) payload.site_id = null; else if (ss.length === 1) payload.site_id = ss[0].id; },
+    lines: { ...issueLines, cols: (ctx) => (ctx.header.kind === 'site_in' ? inLines.cols : issueLines.cols) },
+    totals: (ctx) => (ctx.header.kind === 'site_in' ? [[ctx.doc ? 'إجمالي قيمة الوارد' : 'قيمة تقديرية', fmt(total(ctx.lines, (l) => (Number(l.qty) || 0) * (Number(l.in_cost) || 0)))]] : issueTotals(ctx)),
+    onOpen: (ctx) => { if (ctx.header.kind === 'site_in') ctx.lines.forEach((l) => { if (l.in_cost === null || l.in_cost === undefined) l.in_cost = l.unit_cost ?? null; }); return mapStock(ctx); },
   },
 });
 
@@ -173,7 +181,7 @@ export async function balancesPage(root, params) {
 
 // ---------------- كارت الصنف (بنفس شكل شيت الإكسل) ----------------
 // رقم الإذن كرابط يفتح الإذن نفسه (لو المستخدم ليه صلاحية الصفحة)
-const docPageOf = (r) => ({ issue: ['inventory', r.doc_kind === 'site' ? 'site-transfers' : r.doc_kind === 'return' ? 'returns' : 'issues'], adjustment: ['inventory', 'adjustments'],
+const docPageOf = (r) => ({ issue: ['inventory', r.doc_kind === 'site' || r.doc_kind === 'site_in' ? 'site-transfers' : r.doc_kind === 'return' ? 'returns' : 'issues'], adjustment: ['inventory', 'adjustments'],
   receipt: ['purchases', 'receipts'], invoice: ['purchases', 'invoices'], preturn: ['purchases', 'returns'] }[r.doc_type] || null);
 const docLink = (r) => { if (!r.doc_no) return ''; const pg = docPageOf(r); return pg && can(`${pg[0]}.${pg[1]}`) ? h('a', { href: `#/${pg[0]}/${pg[1]}?id=${r.doc_id}`, title: 'فتح الإذن' }, r.doc_no) : r.doc_no; };
 export async function stockCardPage(root, params) {

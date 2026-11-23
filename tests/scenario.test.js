@@ -109,6 +109,23 @@ if (prj3) {
   ok(!(await val('SELECT site_id FROM stock_issues WHERE id=?', nosite.id)), 'مشروع من غير مواقع: الموقع بيتساب فاضي');
   await voidDoc('stock_issue', nosite.id, U);
 } else ok(false, 'لازم يكون فيه مشروع تالت في البيانات الأساسية');
+// ---- تحويل وارد من موقع: بتكلفة يدوية أو بمتوسط المخزن، وأثره عكس التحويل الصادر (يخصم من تحويلات المشروع) ----
+{
+  const s0 = await get('SELECT qty,value,avg_cost FROM material_stock WHERE material_id=? AND warehouse_id=?', T1, wh);
+  const tin = await saveDoc('stock_issue', { date: '2026-11-08', kind: 'site_in', warehouse_id: wh, project_id: prj, site_id: site, lines: [{ material_id: T1, qty: 5, in_cost: 20 }] }, null, U);
+  ok(/^TIN-/.test(tin.no), 'ترقيم التحويل الوارد TIN-');
+  const s1 = await get('SELECT qty,value FROM material_stock WHERE material_id=? AND warehouse_id=?', T1, wh);
+  near(s1.qty - s0.qty, 5, 'الوارد بيزوّد الرصيد'); near(s1.value - s0.value, 100, 'الوارد بالتكلفة اليدوية 5×20');
+  near(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE source_type='issue' AND source_id=${tin.id} AND cost_class='transfer' AND project_id=${prj}`), -100, 'الوارد بيخصم من تحويلات المشروع المصدر');
+  ok(!(await val(`SELECT COUNT(*) FROM cost_lines WHERE source_type='issue' AND source_id=${tin.id} AND cost_class<>'transfer'`)), 'الوارد مش بيدخل تكلفة الإنتاج');
+  const tin2 = await saveDoc('stock_issue', { date: '2026-11-08', kind: 'site_in', warehouse_id: wh, project_id: prj, site_id: site, lines: [{ material_id: T1, qty: 3 }] }, null, U);
+  near(r2(await val('SELECT total FROM stock_issue_lines WHERE issue_id=?', tin2.id)), r2(3 * s1.value / s1.qty), 'بدون تكلفة يدوية: متوسط تكلفة الصنف في المخزن', 0.05);
+  await throws(async () => await saveDoc('stock_issue', { date: '2026-11-08', kind: 'site_in', warehouse_id: wh, lines: [{ material_id: T1, qty: 1 }] }, null, U), /المشروع/, 'تحويل وارد من غير مشروع');
+  await throws(async () => await saveDoc('stock_issue', { date: '2026-11-08', kind: 'site_in', warehouse_id: wh, project_id: prj, site_id: site, lines: [{ material_id: T1, qty: 1, in_cost: -3 }] }, null, U), /تكلفة الوحدة/, 'تكلفة وحدة سالبة');
+  await voidDoc('stock_issue', tin2.id, U); await voidDoc('stock_issue', tin.id, U);
+  const s2 = await get('SELECT qty,value FROM material_stock WHERE material_id=? AND warehouse_id=?', T1, wh);
+  near(s2.qty - s0.qty, 0, 'إلغاء الوارد بيرجع الرصيد'); near(s2.value - s0.value, 0, 'إلغاء الوارد بيرجع القيمة');
+}
 const iss4 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, qty: 5 }] }, null, U);
 const avgNow = r2(3470 / 210);
 near((await get('SELECT avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 16.5238, 'الصرف لا يغيّر المتوسط', 0.001);

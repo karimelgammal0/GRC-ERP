@@ -51,7 +51,7 @@ function openDrill(filters, title) {
 const VOUCHER_PG = { supplier_payment: 'expenses', expense: 'expenses', disbursement: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'custody', receipt: 'other', payment_other: 'other', collection: 'other' };
 const docPage = (r) => {
   const t = r.source_type;
-  if (t === 'issue') return ['inventory', r.doc_kind === 'site' ? 'site-transfers' : r.doc_kind === 'return' ? 'returns' : 'issues'];
+  if (t === 'issue') return ['inventory', r.doc_kind === 'site' || r.doc_kind === 'site_in' ? 'site-transfers' : r.doc_kind === 'return' ? 'returns' : 'issues'];
   if (t === 'voucher') return VOUCHER_PG[r.doc_kind] ? ['finance', VOUCHER_PG[r.doc_kind]] : null;
   return { receipt: ['purchases', 'receipts'], invoice: ['purchases', 'invoices'], preturn: ['purchases', 'returns'], adjustment: ['inventory', 'adjustments'],
     labor: ['hr', 'labor'], labor_advance: ['hr', 'labor-advances'], payroll: ['hr', 'payroll'] }[t] || null;

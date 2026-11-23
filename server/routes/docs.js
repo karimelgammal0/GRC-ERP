@@ -13,7 +13,7 @@ const MODULE_OF = {
 export { canModule as canUse } from '../lib/perms.js';
 const VOUCHER_PAGE = { supplier_payment: 'expenses', expense: 'expenses', disbursement: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'custody', receipt: 'other', payment_other: 'other', collection: 'other' };
 const TYPE_PAGE = { purchase_request: 'purchases.requests', purchase_order: 'purchases.orders', goods_receipt: 'purchases.receipts', purchase_invoice: 'purchases.invoices', purchase_return: 'purchases.returns', stock_adjustment: 'inventory.adjustments', labor_sheet: 'hr.labor', labor_advance: 'hr.labor-advances', payroll: 'hr.payroll' };
-const ISSUE_PAGE = { production: 'inventory.issues', overhead: 'inventory.issues', site: 'inventory.site-transfers', return: 'inventory.returns' };
+const ISSUE_PAGE = { production: 'inventory.issues', overhead: 'inventory.issues', site: 'inventory.site-transfers', site_in: 'inventory.site-transfers', return: 'inventory.returns' };
 /** مفتاح صفحة المستند (حسب نوعه وكوده لو متعدد الصفحات) */
 const pageKey = (type, kind) => (type === 'stock_issue' ? ISSUE_PAGE[kind] : type === 'voucher' ? (VOUCHER_PAGE[kind] ? `finance.${VOUCHER_PAGE[kind]}` : null) : TYPE_PAGE[type]);
 const typePages = (type) => (type === 'stock_issue' ? [...new Set(Object.values(ISSUE_PAGE))] : type === 'voucher' ? [...new Set(Object.values(VOUCHER_PAGE))].map((x) => `finance.${x}`) : [TYPE_PAGE[type]]);
@@ -59,7 +59,7 @@ const LISTS = {
     return rows.map((r) => ({ ...r, open_amount: r.payment_type === 'cash' || r.status === 'void' ? 0 : r2(r.total - r.paid) })); },
   purchase_return: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, s.name supplier_name FROM purchase_returns d JOIN suppliers s ON s.id=d.supplier_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   stock_issue: async (q) => {
-    const base = []; if (q.only === 'issues') base.push(`d.kind IN ('production','overhead')`); if (q.only === 'site_transfers') base.push(`d.kind='site'`); if (q.only === 'returns') base.push(`d.kind='return'`);
+    const base = []; if (q.only === 'issues') base.push(`d.kind IN ('production','overhead')`); if (q.only === 'site_transfers') base.push(`d.kind IN ('site','site_in')`); if (q.only === 'returns') base.push(`d.kind='return'`);
     if (q.stage_id) base.push(`(d.stage_id=${Number(q.stage_id)} OR EXISTS (SELECT 1 FROM stock_issue_lines x WHERE x.issue_id=d.id AND x.stage_id=${Number(q.stage_id)}))`); if (q.item_id) base.push(`(d.item_id=${Number(q.item_id)} OR EXISTS (SELECT 1 FROM stock_issue_lines x WHERE x.issue_id=d.id AND x.item_id=${Number(q.item_id)}))`);
     const { sql, p } = where(q, base);
     return await all(`SELECT d.*, pr.name project_name, COALESCE(st.name, (SELECT string_agg(DISTINCT sx.name, '، ') FROM stock_issue_lines x JOIN stages sx ON sx.id=x.stage_id WHERE x.issue_id=d.id)) stage_name, COALESCE(it.name, (SELECT string_agg(DISTINCT pi.name, '، ') FROM stock_issue_lines x JOIN project_items pi ON pi.id=x.item_id WHERE x.issue_id=d.id)) item_name, si.name site_name, COALESCE(rc.name, (SELECT string_agg(DISTINCT ex.name, '، ') FROM stock_issue_lines x JOIN employees ex ON ex.id=x.received_by_id WHERE x.issue_id=d.id), d.received_by) received_by,
@@ -146,7 +146,7 @@ export function helperRouter() {
       l.qty - COALESCE((SELECT SUM(x.qty) FROM stock_issue_lines x JOIN stock_issues i ON i.id=x.issue_id WHERE x.ref_line_id=l.id AND i.status='posted'),0) remaining
       FROM stock_issue_lines l JOIN materials m ON m.id=l.material_id WHERE l.issue_id=?`, req.query.issue_id)));
   r.get('/returnable-issues', async (req, res) => res.json(await all(`SELECT i.id, i.no, i.date, i.kind, p.name project_name FROM stock_issues i LEFT JOIN projects p ON p.id=i.project_id
-      WHERE i.kind<>'return' AND i.status='posted' ORDER BY i.date DESC, i.id DESC LIMIT 300`)));
+      WHERE i.kind NOT IN ('return','site_in') AND i.status='posted' ORDER BY i.date DESC, i.id DESC LIMIT 300`)));
   // سلف العمال اليومية المصروفة داخل مدة معينة (مجمّعة لكل عامل) + بداية المدة الجديدة (اليوم التالي لنهاية آخر مدة)
   r.get('/labor-advances', async (req, res) => {
     const { from, to } = req.query;

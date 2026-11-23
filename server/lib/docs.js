@@ -306,12 +306,12 @@ async function issueAccount(kind, stage_id) {
   }
   return kind === 'site' ? await acc('acc_site_transfer') : await acc('acc_overhead_materials');
 }
-const effectiveKind = async (h) => (h.kind === 'return' ? await val('SELECT kind FROM stock_issues WHERE id=?', h.ref_issue_id) : h.kind);
+const effectiveKind = async (h) => (h.kind === 'return' ? await val('SELECT kind FROM stock_issues WHERE id=?', h.ref_issue_id) : h.kind === 'site_in' ? 'site' : h.kind);
 
 async function buildIssue(id) {
   const h = await get('SELECT * FROM stock_issues WHERE id=?', id);
   if (!h || h.status === 'void') return;
-  const sign = h.kind === 'return' ? -1 : 1; const kind = await effectiveKind(h);
+  const sign = h.kind === 'return' || h.kind === 'site_in' ? -1 : 1; const kind = await effectiveKind(h);
   const lines = await all('SELECT * FROM stock_issue_lines WHERE issue_id=? ORDER BY id', id);
   let total = 0; const byItem = new Map();
   await run(`DELETE FROM cost_lines WHERE source_type='issue' AND source_id=?`, id);
@@ -330,7 +330,7 @@ async function buildIssue(id) {
   const inv = await acc('acc_inventory_raw');
   const label = { production: 'إنتاج', site: 'تحويل لموقع', overhead: 'تشغيل غير مباشر' }[kind];
   await replaceJournal({
-    date: h.date, source_type: 'issue', source_id: id, description: `${h.kind === 'return' ? 'مرتجع صرف' : 'صرف'} ${h.no} — ${label}`,
+    date: h.date, source_type: 'issue', source_id: id, description: `${h.kind === 'return' ? 'مرتجع صرف' : h.kind === 'site_in' ? 'تحويل وارد' : 'صرف'} ${h.no} — ${label}`,
     lines: (await Promise.all([...byItem.values()].map(async ({ it: item_id, sg, amt }) => ({ item_id, sg, amt, costAcc: await issueAccount(kind, sg) })))).flatMap(({ item_id, sg, amt, costAcc }) => {
       const dims = { project_id: h.project_id, item_id, stage_id: sg };
       return sign === 1 ? [dc(costAcc, amt, dims), cr(inv, amt)] : [dc(inv, amt), cr(costAcc, amt, dims)];
@@ -341,14 +341,14 @@ onRecost.issue = buildIssue;
 
 DOCS.stock_issue = {
   table: 'stock_issues', lines: 'stock_issue_lines', fk: 'issue_id',
-  seq: (p) => (p.kind === 'return' ? 'stock_return' : 'stock_issue'),
+  seq: (p) => (p.kind === 'return' ? 'stock_return' : p.kind === 'site_in' ? 'stock_site_in' : 'stock_issue'),
   locked: (cur) => cur.status === 'posted' && cur.kind !== 'return' && !cur.reopened,
   relock: async (id) => { await run('UPDATE stock_issues SET reopened=0 WHERE id=?', id); },
   cols: ['date', 'kind', 'warehouse_id', 'project_id', 'item_id', 'stage_id', 'site_id', 'ref_issue_id', 'received_by_id', 'notes'],
-  lineCols: ['material_id', 'item_id', 'stage_id', 'received_by_id', 'qty', 'ref_line_id', 'notes'],
+  lineCols: ['material_id', 'item_id', 'stage_id', 'received_by_id', 'qty', 'in_cost', 'ref_line_id', 'notes'],
   blank: (l) => !l.material_id && !l.ref_line_id,
   async validate(p, lines) {
-    if (!['production', 'site', 'overhead', 'return'].includes(p.kind)) throw new AppError('نوع الصرف غير معروف');
+    if (!['production', 'site', 'site_in', 'overhead', 'return'].includes(p.kind)) throw new AppError('نوع الصرف غير معروف');
     if (p.kind !== 'return') await must('warehouses', p.warehouse_id, 'المخزن');
     if (p.kind === 'return') {
       const ref = await get('SELECT * FROM stock_issues WHERE id=?', p.ref_issue_id);
@@ -373,8 +373,8 @@ DOCS.stock_issue = {
         if (!ok) throw new AppError('الموقع المختار لا يتبع المشروع');
       } else p.site_id = null;
     }
-    if (p.kind === 'site') {
-      if (!p.project_id) throw new AppError('التحويل لموقع لازم يتحدد له المشروع');
+    if (p.kind === 'site' || p.kind === 'site_in') {
+      if (!p.project_id) throw new AppError(p.kind === 'site_in' ? 'التحويل الوارد لازم يتحدد له المشروع المحوَّل منه' : 'التحويل لموقع لازم يتحدد له المشروع');
       // الموقع مطلوب بس لو المشروع متكود له مواقع (نشطة)؛ ولو مفيش مواقع بيتساب فاضي
       const siteIds = (await all('SELECT id FROM sites WHERE project_id=? AND active=1', p.project_id)).map((x) => Number(x.id));
       if (siteIds.length) {
@@ -384,7 +384,8 @@ DOCS.stock_issue = {
       for (const l of lines) l.stage_id = null;
     }
     if (p.kind === 'overhead') { p.project_id = null; p.site_id = null; for (const l of lines) l.item_id = null; }
-    if (p.kind !== 'return') { p.item_id = null; p.stage_id = null; if (p.kind === 'site') for (const l of lines) l.item_id = null; }
+    if (p.kind !== 'return') { p.item_id = null; p.stage_id = null; if (p.kind === 'site' || p.kind === 'site_in') for (const l of lines) l.item_id = null; }
+    for (const l of lines) { if (p.kind === 'site_in') { if (l.in_cost === '' || l.in_cost === undefined || l.in_cost === null) l.in_cost = null; else if (!(Number(l.in_cost) >= 0)) throw new AppError('تكلفة الوحدة غير صحيحة'); } else l.in_cost = null; }
     if (p.project_id) await must('projects', p.project_id, 'المشروع');
     for (const l of lines) if (l.item_id) {
       const it = await get('SELECT project_id FROM project_items WHERE id=?', l.item_id);
@@ -409,6 +410,16 @@ DOCS.stock_issue = {
         const rl = await get('SELECT unit_cost FROM stock_issue_lines WHERE id=?', l.ref_line_id);
         await addMove({ date: doc.date, warehouse_id: doc.warehouse_id, material_id: l.material_id, direction: 'in', qty: l.qty, value: r2(l.qty * rl.unit_cost),
           doc_type: 'issue', doc_id: doc.id, line_id: l.id, party: `مرتجع ${party}`, notes: doc.notes });
+      } else if (doc.kind === 'site_in') {
+        // تحويل وارد: بالتكلفة المدخلة يدوياً، وإلا بمتوسط تكلفة الصنف الحالي في المخزن (أو في كل المخازن لو الصنف جديد على المخزن ده)
+        let uc = l.in_cost === null || l.in_cost === undefined ? null : Number(l.in_cost);
+        if (uc === null) {
+          uc = Number(await val('SELECT avg_cost FROM material_stock WHERE warehouse_id=? AND material_id=? AND qty>0', doc.warehouse_id, l.material_id))
+            || Number(await val('SELECT CASE WHEN SUM(qty)>0 THEN SUM(value)/SUM(qty) ELSE 0 END FROM material_stock WHERE material_id=?', l.material_id)) || 0;
+          if (!(uc > 0)) throw new AppError(`حدد تكلفة الوحدة للصنف «${await nm('materials', l.material_id)}» — مفيش متوسط تكلفة ليه في المخزن`);
+        }
+        await addMove({ date: doc.date, warehouse_id: doc.warehouse_id, material_id: l.material_id, direction: 'in', qty: l.qty, value: r2(l.qty * uc),
+          doc_type: 'issue', doc_id: doc.id, line_id: l.id, party: `تحويل وارد من ${party}`, notes: doc.notes });
       } else {
         await addMove({ date: doc.date, warehouse_id: doc.warehouse_id, material_id: l.material_id, direction: 'out', qty: l.qty,
           doc_type: 'issue', doc_id: doc.id, line_id: l.id, party, notes: doc.notes });

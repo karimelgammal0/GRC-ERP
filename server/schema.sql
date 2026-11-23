@@ -210,7 +210,7 @@ CREATE TABLE IF NOT EXISTS material_stock (      -- الرصيد الحالي (�
 CREATE TABLE IF NOT EXISTS stock_issues (
   id SERIAL PRIMARY KEY,
   no TEXT NOT NULL UNIQUE, date TEXT NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'production',       -- production | site | overhead | return
+  kind TEXT NOT NULL DEFAULT 'production',       -- production | site | site_in | overhead | return
   warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
   project_id INTEGER, item_id INTEGER, stage_id INTEGER, site_id INTEGER,
   ref_issue_id INTEGER,                          -- للمرتجع: إذن الصرف الأصلي
@@ -225,6 +225,8 @@ CREATE TABLE IF NOT EXISTS stock_issue_lines (
   qty NUMERIC NOT NULL, unit_cost NUMERIC NOT NULL DEFAULT 0, total NUMERIC NOT NULL DEFAULT 0,
   ref_line_id INTEGER, notes TEXT
 );
+-- تحويل وارد من موقع (kind='site_in'): تكلفة الوحدة المدخلة يدوياً؛ لو فاضية بتتاخد من متوسط تكلفة الصنف في المخزن
+ALTER TABLE stock_issue_lines ADD COLUMN IF NOT EXISTS in_cost NUMERIC;
 -- جرد وتسوية
 CREATE TABLE IF NOT EXISTS stock_adjustments (
   id SERIAL PRIMARY KEY,

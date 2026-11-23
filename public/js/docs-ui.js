@@ -21,7 +21,7 @@ export function docScreen(cfg) {
       };
       const dv = (v) => (typeof v === 'function' ? v() : v);
       const fb = filterBar(fields, load, { from: dv(cfg.defaultFrom) ?? monthStart(), to: dv(cfg.defaultTo) ?? today() });
-      host.replaceChildren(pageHead(cfg.title, cfg.canCreate === false || (cfg.perm && !can(cfg.perm + '.create')) ? null : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`)), cfg.note ? h('div.note', cfg.note) : null, fb, tableHost);
+      host.replaceChildren(pageHead(cfg.title, cfg.canCreate === false || (cfg.perm && !can(cfg.perm + '.create')) ? null : (cfg.newButtons ? h('span', { style: { display: 'inline-flex', gap: '8px' } }, cfg.newButtons.map((b) => h('button.btn.primary', { onclick: () => showEditor(null, b.init) }, `＋ ${b.label}`))) : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`))), cfg.note ? h('div.note', cfg.note) : null, fb, tableHost);
       fb.run();
     };
 
@@ -106,8 +106,9 @@ export function docScreen(cfg) {
       });
 
       // رقم المستند: للجديد بنعرض الرقم المتوقع (cfg.nextNoKey)، والتحديد النهائي بيتم عند الحفظ
-      const noEl = h('span.doc-no', doc ? doc.no : `${cfg.noun} جديد`);
-      if (!doc && cfg.nextNoKey) GET('/helpers/next-no', { key: cfg.nextNoKey }).then((r) => { if (r?.no) { noEl.textContent = `${cfg.noun} جديد — رقم ${r.no}`; noEl.title = 'الرقم يتأكد نهائياً عند الحفظ'; } }).catch(() => {});
+      const nounNow = cfg.nounOf?.(st.header) || cfg.noun, noKey = typeof cfg.nextNoKey === 'function' ? cfg.nextNoKey(st.header) : cfg.nextNoKey;
+      const noEl = h('span.doc-no', doc ? doc.no : `${nounNow} جديد`);
+      if (!doc && noKey) GET('/helpers/next-no', { key: noKey }).then((r) => { if (r?.no) { noEl.textContent = `${nounNow} جديد — رقم ${r.no}`; noEl.title = 'الرقم يتأكد نهائياً عند الحفظ'; } }).catch(() => {});
       drawHeader(); drawFooter(); drawLines(); updateTotals(); drawExtra();
       host.replaceChildren(
         h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); showList(); } }, '← ' + cfg.title)),
