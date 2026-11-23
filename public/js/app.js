@@ -13,8 +13,8 @@ const root = document.getElementById('root');
 const M = (n, o) => masterPage(n, o);
 const NAV = [
   { id: 'dashboard', ico: '▦', title: 'لوحة التحكم', direct: true, items: [['home', 'نظرة عامة', dashboardPage]] },
-  { id: 'inventory', ico: '▣', title: 'مخازن المواد الخام', items: [
-    ['issues', 'صرف للإنتاج والتشغيل', inv.issuesPage], ['site-transfers', 'التحويل للمواقع', inv.siteTransfersPage], ['returns', 'مرتجع للمخزن', inv.returnsPage], ['adjustments', 'جرد وتسويات', inv.adjustmentsPage],
+  { id: 'inventory', ico: '▣', title: 'المخازن', items: [
+    ['issues', 'صرف للإنتاج والتشغيل', inv.issuesPage], ['site-transfers', 'تحويلات المواقع', inv.siteTransfersPage], ['returns', 'مرتجع للمخزن', inv.returnsPage], ['adjustments', 'جرد وتسويات', inv.adjustmentsPage],
     ['balances', 'أرصدة المخزون', inv.balancesPage], ['stock-card', 'كارت الصنف', inv.stockCardPage], ['moves', 'حركة المخزون', inv.movesPage], ['fg', 'مخازن المنتجات التامة — قريباً', null]] },
   { id: 'purchases', ico: '⛟', title: 'المشتريات', items: [
     ['requests', 'طلبات الشراء', pur.requestsPage], ['orders', 'أوامر التوريد', pur.ordersPage], ['receipts', 'إذونات الاستلام', pur.receiptsPage], ['invoices', 'فواتير الشراء', pur.invoicesPage],

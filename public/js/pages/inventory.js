@@ -80,7 +80,7 @@ export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true, 
 
 // ---------------- تحويل أصناف لموقع (منفصل عن صرف الإنتاج) ----------------
 export const siteTransfersPage = docScreen({ perm: 'inventory.site-transfers', lockable: true, print: issuePrint,
-  type: 'stock_issue', nextNoKey: 'stock_issue', title: 'التحويل للمواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' }, defaultFrom: monthStart, defaultTo: today,
+  type: 'stock_issue', nextNoKey: 'stock_issue', title: 'تحويلات المواقع', noun: 'تحويل لموقع', newLabel: 'تحويل جديد', fixed: { only: 'site_transfers' }, defaultFrom: monthStart, defaultTo: today,
   note: 'تحويل أصناف من المخزن لمشروع. لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
   filters: (() => { let fp = null; return [
     { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, onChange: (v) => { fp = v; } },

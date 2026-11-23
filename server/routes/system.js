@@ -9,7 +9,7 @@ import { COST_CLASS, VOUCHER_KINDS } from '../lib/docs.js';
 import { CATALOG, userPerms, can, need, cleanPerms, modulesOf } from '../lib/perms.js';
 
 export const MODULES = [
-  ['dashboard', 'لوحة التحكم'], ['settings', 'الإعدادات'], ['inventory', 'مخازن المواد الخام'], ['purchases', 'المشتريات'],
+  ['dashboard', 'لوحة التحكم'], ['settings', 'الإعدادات'], ['inventory', 'المخازن'], ['purchases', 'المشتريات'],
   ['hr', 'الموارد البشرية'], ['finance', 'الإدارة المالية'], ['accounts', 'الحسابات'], ['reports', 'التقارير'],
 ];
 const adminOnly = (req) => { if (req.user.role !== 'admin') throw new AppError('للمدير فقط', 403); };
