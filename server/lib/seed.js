@@ -46,6 +46,11 @@ export async function ensureBaseData() {
   }
   for (const [key, label, prefix, padding] of DEFAULT_SEQUENCES)
     await run('INSERT INTO sequences(key,label,prefix,padding) VALUES(?,?,?,?) ON CONFLICT DO NOTHING', key, label, prefix, padding);
+  // لوجو المصنع الافتراضي (نفس أيقونة التطبيق) — لو مفيش لوجو متخزن؛ يتغيّر من الإعدادات العامة
+  if (await getSetting('company_logo') === null) {   // '' = المستخدم حذفه عمداً
+    const lf = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../public/img/logo.jpg');
+    if (fs.existsSync(lf)) await setSetting('company_logo', `data:image/jpeg;base64,${fs.readFileSync(lf).toString('base64')}`);
+  }
   if (!await getSetting('jobs_seeded') && !Number(await val('SELECT COUNT(*) FROM module_jobs'))) {
     for (const [module, names] of [['purchases', ['مدير المشتريات', 'أمين المخزن', 'المحاسب', 'الاعتماد']], ['inventory', ['أمين المخزن', 'الاعتماد']]])
       for (const name of names) await run('INSERT INTO module_jobs(module,name) VALUES(?,?) ON CONFLICT DO NOTHING', module, name);
