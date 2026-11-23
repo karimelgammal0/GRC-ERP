@@ -46,6 +46,8 @@ export async function ensureBaseData() {
   }
   for (const [key, label, prefix, padding] of DEFAULT_SEQUENCES)
     await run('INSERT INTO sequences(key,label,prefix,padding) VALUES(?,?,?,?) ON CONFLICT DO NOTHING', key, label, prefix, padding);
+  // اسم الشركة في المطبوعات: بدون «— مصنع GRC»
+  if (await getSetting('company_name') === 'شركة سيف لصناعة مواد البناء — مصنع GRC') await setSetting('company_name', 'شركة سيف لصناعة مواد البناء');
   // لوجو المصنع الافتراضي (نفس أيقونة التطبيق) — لو مفيش لوجو متخزن؛ يتغيّر من الإعدادات العامة
   if (await getSetting('company_logo') === null) {   // '' = المستخدم حذفه عمداً
     const lf = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../public/img/logo.jpg');
@@ -122,7 +124,7 @@ export async function seedAll({ withSamples = true } = {}) {
     const ids = Object.fromEntries((await all('SELECT id, code FROM accounts')).map((a) => [a.code, a.id]));
     for (const [k, code] of Object.entries(MAPPING)) await setSetting(k, ids[code]);
     // الإعدادات
-    await setSetting('company_name', 'شركة سيف لصناعة مواد البناء — مصنع GRC');
+    await setSetting('company_name', 'شركة سيف لصناعة مواد البناء');
     await setSetting('currency', 'ج.م');
     await setSetting('opening_date', '2026-11-01');
     await setSetting('opening_locked', '0');
