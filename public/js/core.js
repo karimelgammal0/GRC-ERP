@@ -223,7 +223,7 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${e(title)} ${e(no)}</title><style>
     body{font-family:Tahoma,Arial,sans-serif;font-size:13px;color:#111;margin:24px}
     .top{border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px}
-    .co{font-size:17px;font-weight:700;display:flex;flex-direction:column;align-items:flex-start;gap:4px}.co img{max-height:64px;max-width:180px;object-fit:contain}.dn{display:flex;justify-content:flex-start;gap:24px;margin:-2px 0 10px}.ttl{font-size:20px;font-weight:700;text-align:center;margin:6px 0 12px}
+    .co{font-size:17px;font-weight:700;display:inline-flex;flex-direction:column;align-items:center;gap:4px;text-align:center}.co img{max-height:64px;max-width:180px;object-fit:contain}.dn{display:flex;flex-direction:column;align-items:flex-end;gap:2px;margin:-2px 0 10px}.ttl{font-size:20px;font-weight:700;text-align:center;margin:6px 0 12px}
     .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin-bottom:12px}.meta b{color:#555;font-weight:600}
     table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #444;padding:5px 7px;text-align:right}th{background:#eee}
     td.n{text-align:center}.tot{display:flex;justify-content:flex-end;gap:24px;font-weight:700;margin-bottom:10px}
