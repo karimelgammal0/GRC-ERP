@@ -236,7 +236,7 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
     ${totals.length ? `<div class="tot">${totals.map(([k, v]) => `<span>${e(k)}: ${e(v)}</span>`).join('')}</div>` : ''}
     ${notes ? `<div><b>ملاحظات:</b> ${e(notes)}</div>` : ''}
     <div class="sig">${sign.map((s) => { const names = META.signers?.[module]?.[s] || []; const nm = by && names.includes(by) ? by : names.join(' / '); return nm ? `<div class="u"><div class="nm">${e(nm)}</div><div class="ln">${e(s)}</div></div>` : `<div>${e(s)}</div>`; }).join('')}</div>
-    <div class="pby">طُبع بواسطة: ${e(META.me?.name || META.me?.username || '')} — ${e(new Date().toLocaleString('en-GB'))}</div></body></html>`;
+    <div class="pby">طُبع بواسطة: ${e(META.me?.employee_name || META.me?.name || META.me?.username || '')} — ${e(new Date().toLocaleString('en-GB'))}</div></body></html>`;
   const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.append(f); const d = f.contentWindow.document; d.open(); d.write(html); d.close();
   setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 2000); }, 250);

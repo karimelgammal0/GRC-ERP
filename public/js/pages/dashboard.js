@@ -33,7 +33,7 @@ function lowStockCard(items) {
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' } }, h('b', { style: { color: col, minWidth: '42px' } }, x.pct + '%'), h('div.bar', { style: { flex: '1' } }, h('i', { style: { width: Math.min(100, x.pct) + '%', background: col } })))); };
   const more = h('button.btn', { onclick: () => { all = !all; draw(); } });
   const draw = () => { const list = all ? items : items.slice(0, 5);
-    host.replaceChildren(...(list.length ? list.map(row) : [h('div.empty-state', 'لا توجد أصناف بحد أدنى')]));
+    host.replaceChildren(...(list.length ? list.map(row) : [h('div.empty-state', 'لا توجد أصناف وصلت لحد التنبيه')]));
     more.textContent = all ? 'أقل' : 'مزيد'; more.style.display = items.length > 5 ? '' : 'none'; };
   draw();
   const c = card('تنبيهات المخزون', host); const head = c.firstChild; if (head && head.appendChild) { head.style.display = 'flex'; head.style.justifyContent = 'space-between'; head.style.alignItems = 'center'; head.appendChild(more); } else c.appendChild(more);
@@ -43,7 +43,7 @@ export async function dashboardPage(root) {
   const d = await GET('/reports/dashboard'); const mc = Object.fromEntries(d.month_cost.map((x) => [x.cost_type, x.amt]));
   root.replaceChildren(pageHead('لوحة التحكم'), quickAccessCard(),
     h('div.kpis', kpi('قيمة المخزون', fmt(d.stock_value), d.low_stock ? `${d.low_stock} صنف تحت الحد الأدنى` : '', d.low_stock ? 'warn' : ''), kpi('مستحق للموردين', fmt(d.ap_total), d.overdue_ap ? `متأخر: ${fmt(d.overdue_ap)}` : '', d.overdue_ap ? 'warn' : ''), kpi('رصيد عهد', fmt(d.custody)),
-      kpi(`تكلفة ${d.month}`, fmt((mc.material || 0) + (mc.labor || 0) + (mc.expense || 0)), `خامات ${fmt(mc.material || 0)} · عمالة ${fmt(mc.labor || 0)} · مصروفات ${fmt(mc.expense || 0)}`)),
+      kpi(`تكلفة ${d.month}`, fmt((mc.material || 0) + (mc.labor || 0) + (mc.expense || 0)), `أصناف ${fmt(mc.material || 0)} · عمالة ${fmt(mc.labor || 0)} · مصروفات ${fmt(mc.expense || 0)}`)),
     h('div.grid2', card('التكلفة حسب المرحلة (كل المشاريع)', bars(d.by_stage)), card('أعلى المشروعات تكلفة', bars(d.top_projects))),
     lowStockCard(d.low_items || []));
 }

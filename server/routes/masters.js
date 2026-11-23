@@ -16,16 +16,16 @@ export const MASTERS = {
   units: { title: 'الوحدات', table: 'units', seq: 'unit',
     fields: [T('name', 'الاسم', 'text', { req: 1 }), T('sub_unit_id', 'الوحدة الفرعية (اختياري)', 'fk', { ref: 'units' }), T('sub_factor', 'المعدل: 1 وحدة رئيسية = كم فرعية', 'number', { min: 0 })],
     cols: ['code', 'name', 'sub_unit_id', 'sub_factor'], used: [['materials', 'unit_id'], ['project_items', 'unit_id'], ['units', 'sub_unit_id']] },
-  material_categories: { title: 'فئات الخامات', table: 'material_categories', seq: 'material_category', fields: [T('name', 'الاسم', 'text', { req: 1 })], cols: ['code', 'name'], used: [['materials', 'category_id']] },
+  material_categories: { title: 'فئات الأصناف', table: 'material_categories', seq: 'material_category', fields: [T('name', 'الاسم', 'text', { req: 1 })], cols: ['code', 'name'], used: [['materials', 'category_id']] },
   materials: {
-    title: 'الخامات (الأصناف)', table: 'materials', seq: 'material',
-    fields: [T('name', 'اسم الخامة', 'text', { req: 1 }), T('category_id', 'الفئة', 'fk', { ref: 'material_categories' }), T('unit_id', 'وحدة القياس', 'fk', { ref: 'units', req: 1 }),
+    title: 'الأصناف', table: 'materials', seq: 'material',
+    fields: [T('name', 'اسم الصنف', 'text', { req: 1 }), T('category_id', 'الفئة', 'fk', { ref: 'material_categories' }), T('unit_id', 'وحدة القياس', 'fk', { ref: 'units', req: 1 }),
       T('min_qty', 'حد الطلب (تنبيه)', 'number', { def: 0 }), T('notes', 'ملاحظات', 'textarea')],
     cols: ['code', 'name', 'category_id', 'unit_id', 'min_qty'],
     used: [['stock_moves', 'material_id'], ['purchase_request_lines', 'material_id'], ['purchase_order_lines', 'material_id'], ['goods_receipt_lines', 'material_id'], ['purchase_invoice_lines', 'material_id'], ['stock_issue_lines', 'material_id'], ['stock_adjustment_lines', 'material_id'], ['purchase_return_lines', 'material_id']],
   },
-  warehouses: { title: 'المخازن', table: 'warehouses', seq: 'warehouse', fields: [T('name', 'الاسم', 'text', { req: 1 }), T('type', 'النوع', 'select', { options: [['raw', 'مخزن خامات'], ['finished', 'مخزن منتجات تامة (لاحقاً)']] }),
-      T('category_ids', 'فئات الخامات المسموحة في المخزن', 'multifk', { ref: 'material_categories', wide: true, help: 'الخامات اللي فئتها مختارة هنا بس هي اللي هتظهر عند الصرف والتحويل من المخزن ده. سيبها فاضية = كل الخامات.' })], cols: ['code', 'name', 'type', 'category_ids'], used: [['stock_moves', 'warehouse_id']] },
+  warehouses: { title: 'المخازن', table: 'warehouses', seq: 'warehouse', fields: [T('name', 'الاسم', 'text', { req: 1 }), T('type', 'النوع', 'select', { options: [['raw', 'مخزن أصناف'], ['finished', 'مخزن منتجات تامة (لاحقاً)']] }),
+      T('category_ids', 'فئات الأصناف المسموحة في المخزن', 'multifk', { ref: 'material_categories', wide: true, help: 'الأصناف اللي فئتها مختارة هنا بس هي اللي هتظهر عند الصرف والتحويل من المخزن ده. سيبها فاضية = كل الأصناف.' })], cols: ['code', 'name', 'type', 'category_ids'], used: [['stock_moves', 'warehouse_id']] },
   suppliers: {
     title: 'الموردين', table: 'suppliers', seq: 'supplier',
     fields: [T('name', 'اسم المورد', 'text', { req: 1 }), T('phone', 'الهاتف'), T('address', 'العنوان'), T('tax_no', 'الرقم الضريبي'), T('credit_days', 'مدة الائتمان (يوم)', 'number', { def: 0 }), T('notes', 'ملاحظات', 'textarea')],
@@ -101,7 +101,7 @@ const LINKS = { warehouses: { table: 'warehouse_categories', col: 'warehouse_id'
 async function saveLinks(name, id, body) {
   const L = LINKS[name]; if (!L || body[L.field] === undefined) return;
   const ids = [...new Set((Array.isArray(body[L.field]) ? body[L.field] : []).map(Number).filter(Number.isInteger))];
-  for (const x of ids) if (!await get(`SELECT 1 FROM ${L.ref} WHERE id=?`, x)) throw new AppError('فئة الخامات غير موجودة');
+  for (const x of ids) if (!await get(`SELECT 1 FROM ${L.ref} WHERE id=?`, x)) throw new AppError('فئة الأصناف غير موجودة');
   await run(`DELETE FROM ${L.table} WHERE ${L.col}=?`, id);
   for (const x of ids) await run(`INSERT INTO ${L.table}(${L.col},${L.other}) VALUES(?,?)`, id, x);
 }

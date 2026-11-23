@@ -14,8 +14,9 @@ export function docScreen(cfg) {
       const load = async (v) => {
         const rows = await GET(`/doc/${cfg.type}`, { ...cfg.fixed, ...v });
         const pcol = cfg.print ? [{ k: '_p', l: '', render: (r) => h('button.btn.sm', { title: 'طباعة', onclick: guard(async (ev) => { ev.stopPropagation(); cfg.print(await GET(`/doc/${cfg.type}/${r.id}`)); }) }, '🖨') }] : [];
+        const pcol2 = cfg.print2 ? [{ k: '_p2', l: '', render: (r) => h('button.btn.sm', { title: cfg.print2.title || cfg.print2.label, onclick: guard(async (ev) => { ev.stopPropagation(); cfg.print2.fn(await GET(`/doc/${cfg.type}/${r.id}`)); }) }, cfg.print2.short || '🖨 كميات') }] : [];
         const acol = cfg.rowActions ? [{ k: '_a', l: '', render: (r) => h('span', cfg.rowActions(r, () => fb.run())) }] : [];
-        const t = table({ cols: [...cfg.listCols, ...pcol, ...acol], rows, onRow: (r) => showEditor(r.id), rowClass: (r) => (r.status === 'void' ? 'void' : ''), name: cfg.title, foot: cfg.listFoot, empty: `لا توجد ${cfg.title}` });
+        const t = table({ cols: [...cfg.listCols, ...pcol, ...pcol2, ...acol], rows, onRow: (r) => showEditor(r.id), rowClass: (r) => (r.status === 'void' ? 'void' : ''), name: cfg.title, foot: cfg.listFoot, empty: `لا توجد ${cfg.title}` });
         tableHost.replaceChildren(t);
       };
       const dv = (v) => (typeof v === 'function' ? v() : v);
@@ -104,11 +105,15 @@ export function docScreen(cfg) {
         await POST(`/doc/${cfg.type}/${id}/void`); toast('تم الإلغاء'); showList();
       });
 
+      // رقم المستند: للجديد بنعرض الرقم المتوقع (cfg.nextNoKey)، والتحديد النهائي بيتم عند الحفظ
+      const noEl = h('span.doc-no', doc ? doc.no : `${cfg.noun} جديد`);
+      if (!doc && cfg.nextNoKey) GET('/helpers/next-no', { key: cfg.nextNoKey }).then((r) => { if (r?.no) { noEl.textContent = `${cfg.noun} جديد — رقم ${r.no}`; noEl.title = 'الرقم يتأكد نهائياً عند الحفظ'; } }).catch(() => {});
       drawHeader(); drawFooter(); drawLines(); updateTotals(); drawExtra();
       host.replaceChildren(
         h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); showList(); } }, '← ' + cfg.title)),
-        h('div.doc-head', h('span.doc-no', doc ? doc.no : `${cfg.noun} جديد`), doc ? statusBadge(doc.status) : null, h('span.grow'),
+        h('div.doc-head', noEl, doc ? statusBadge(doc.status) : null, h('span.grow'),
           doc ? h('button.btn.sm', { onclick: () => (cfg.print ? cfg.print(doc) : window.print()) }, '🖨 طباعة') : null,
+          doc && cfg.print2 ? h('button.btn.sm', { onclick: () => cfg.print2.fn(doc) }, cfg.print2.label) : null,
           locked && can(cfg.perm + '.reopen') ? h('button.btn.sm', { onclick: reopenIt }, '🔓 إعادة فتح') : null,
           doc && !voided && cfg.canVoid !== false && (!cfg.perm || can(cfg.perm + '.void')) ? h('button.btn.sm.danger', { onclick: voidIt }, 'إلغاء المستند') : null),
         locked ? h('div.note', 'الإذن معتمد ومقفول للتعديل. لإضافة بنود أنشئ إذن جديد' + (can(cfg.perm + '.reopen') ? '، أو اضغط «إعادة فتح» للتعديل عليه.' : '، أو اطلب من صاحب الصلاحية إعادة فتحه.')) : null,
@@ -132,8 +137,8 @@ export function docScreen(cfg) {
 // حقول جاهزة مشتركة
 export const dateF = { k: 'date', l: 'التاريخ', t: 'date', req: 1 };
 export const notesF = { k: 'notes', l: 'ملاحظات', t: 'text', wide: true };
-/** عمود الكمية في أسطر المستندات: لو الخامة ليها وحدات فرعية/رئيسية مرتبطة، بتقدر تدخل الكمية بأي وحدة منهم
- *  والقيمة المحفوظة (qty) دايماً بوحدة الخامة الأساسية. (_eu/_ev حالة واجهة فقط ومبتتحفظش) */
+/** عمود الكمية في أسطر المستندات: لو الصنف ليه وحدات فرعية/رئيسية مرتبطة، بتقدر تدخل الكمية بأي وحدة منهم
+ *  والقيمة المحفوظة (qty) دايماً بوحدة الصنف الأساسية. (_eu/_ev حالة واجهة فقط ومبتتحفظش) */
 export const qtyCol = ({ l = 'الكمية', w = '130px' } = {}) => ({
   k: 'qty', l, w,
   render(line, ctx, readonly) {
@@ -158,7 +163,7 @@ export const qtyCol = ({ l = 'الكمية', w = '130px' } = {}) => ({
     return h('div.qty-entry', inp, sel, hint);
   },
 });
-/** لما الخامة تتغير: ارجع لوحدة الخامة وأعد رسم الأسطر (قائمة الوحدات بتتغير) */
+/** لما الصنف تتغير: ارجع لوحدة الصنف وأعد رسم الأسطر (قائمة الوحدات بتتغير) */
 export const matChange = (v, l, ctx) => { l._eu = null; l._ev = undefined; ctx.setLines(ctx.lines); };
 export const total = (arr, f) => arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
 export { fmt, fq, nameOf, byId };

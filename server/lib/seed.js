@@ -61,6 +61,9 @@ export async function ensureBaseData() {
   await run(`UPDATE sequences SET label='كشوف الرواتب' WHERE key='payroll' AND label LIKE '%مسير%'`);
   // ترحيل التسمية: «أوامر الشراء» ← «أوامر التوريد» (اسم الترقيم)
   await run(`UPDATE sequences SET label='أوامر التوريد' WHERE key='purchase_order' AND label='أوامر الشراء'`);
+  // ترحيل التسمية: «الخامات» ← «الأصناف» (اسم الترقيم)
+  await run(`UPDATE sequences SET label='الأصناف' WHERE key='material' AND label='الخامات'`);
+  await run(`UPDATE sequences SET label='فئات الأصناف' WHERE key='material_category' AND label='فئات الخامات'`);
   await run(`UPDATE journal_entries SET description=REPLACE(description,'مسير رواتب','كشف رواتب') WHERE source_type='payroll' AND description LIKE '%مسير رواتب%'`);
   // ترحيل كشوف الرواتب القديمة: مبالغ الإضافات/الاستقطاعات القديمة بتتحول لـ«إضافات أخرى/خصومات أخرى» (من غير ما الصافي يتغير)
   await run(`UPDATE payroll_lines SET other_additions=other_additions+additions, additions=0 WHERE additions<>0 AND additions_days=0`);
@@ -124,19 +127,19 @@ export async function seedAll({ withSamples = true } = {}) {
       await insertRow('fiscal_periods', { name: `${mon[m - 1]} ${y}`, start_date: `${y}-${mm}-01`, end_date: `${y}-${mm}-${last}` }, ['name', 'start_date', 'end_date']);
     }
     // التكويد الأساسي
-    await insertRow('warehouses', { code: await nextNo('warehouse'), name: 'مخزن الخامات الرئيسي', type: 'raw' }, ['code', 'name', 'type']);
+    await insertRow('warehouses', { code: await nextNo('warehouse'), name: 'مخزن الأصناف الرئيسي', type: 'raw' }, ['code', 'name', 'type']);
     for (const [i, [name, acct]] of [['القوالب', '1223'], ['الصب', '1224'], ['التشطيب', '1225']].entries())
       await insertRow('stages', { code: await nextNo('stage'), name, seq: i + 1, account_id: ids[acct] }, ['code', 'name', 'seq', 'account_id']);
     await insertRow('treasuries', { code: await nextNo('treasury'), name: 'الخزينة الرئيسية', type: 'cash', account_id: ids['1211'] }, ['code', 'name', 'type', 'account_id']);
     await insertRow('treasuries', { code: await nextNo('treasury'), name: 'البنك', type: 'bank', account_id: ids['1212'] }, ['code', 'name', 'type', 'account_id']);
-    for (const [name, cost_class, a] of [['نقل وتحميل خامات', 'indirect', '5600'], ['صيانة معدات وقطع غيار', 'indirect', '5400'], ['كهرباء ومياه وغاز', 'indirect', '5500'],
+    for (const [name, cost_class, a] of [['نقل وتحميل أصناف', 'indirect', '5600'], ['صيانة معدات وقطع غيار', 'indirect', '5400'], ['كهرباء ومياه وغاز', 'indirect', '5500'],
       ['مصروف مباشر على مرحلة تصنيع', 'direct', null], ['إيجارات', 'admin', '6200'], ['اتصالات وإنترنت', 'admin', '6300'],
       ['مصروفات مكتبية', 'admin', '6400'], ['مصروفات متنوعة', 'admin', '6500']])
       await insertRow('expense_categories', { code: await nextNo('expense_category'), name, cost_class, account_id: a ? ids[a] : null }, ['code', 'name', 'cost_class', 'account_id']);
     // المستخدم الأول
     await insertRow('users', { username: 'admin', name: 'مدير النظام', pass_hash: hashPassword('admin123'), role: 'admin', modules: '[]', must_change: 1 }, ['username', 'name', 'pass_hash', 'role', 'modules', 'must_change']);
 
-    // خامات من شيت المخزون
+    // أصناف من شيت المخزون
     const mf = path.join(seedDir, 'materials.json');
     if (fs.existsSync(mf)) {
       const mats = JSON.parse(fs.readFileSync(mf, 'utf8'));

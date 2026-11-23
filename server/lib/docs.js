@@ -21,7 +21,7 @@ export async function getDoc(type, id) {
   const h = await get(`SELECT * FROM ${D.table} WHERE id=?`, id);
   if (!h) return null;
   if (D.lines) h.lines = await all(`SELECT * FROM ${D.lines} WHERE ${D.fk}=? ORDER BY id`, id);
-  h.created_by_name = h.created_by ? await val('SELECT name FROM users WHERE id=?', h.created_by) : null;
+  h.created_by_name = h.created_by ? await val('SELECT COALESCE(e.name, u.name) FROM users u LEFT JOIN employees e ON e.id=u.employee_id WHERE u.id=?', h.created_by) : null;
   await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.enrich?.(h);
   return h;
 }
@@ -77,7 +77,7 @@ DOCS.purchase_request = {
   table: 'purchase_requests', lines: 'purchase_request_lines', fk: 'request_id', seq: 'purchase_request',
   cols: ['date', 'requested_by_id', 'supplier_id', 'project_id', 'needed_date', 'notes'], lineCols: ['material_id', 'qty', 'notes'],
   blank: (l) => !l.material_id,
-  async validate(p, lines) { if (p.supplier_id) await must('suppliers', p.supplier_id, 'المورد'); else p.supplier_id = null; for (const l of lines) { await must('materials', l.material_id, 'الخامة'); posQty(l); } },
+  async validate(p, lines) { if (p.supplier_id) await must('suppliers', p.supplier_id, 'المورد'); else p.supplier_id = null; for (const l of lines) { await must('materials', l.material_id, 'الصنف'); posQty(l); } },
   async unpost(cur) {
     if (await val('SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=? AND ordered_qty>0', cur.id))
       throw new AppError('تم إصدار أمر توريد على هذا الطلب — ألغِ أمر التوريد أولاً');
@@ -103,12 +103,12 @@ DOCS.purchase_order = {
   async validate(p, lines) {
     await must('suppliers', p.supplier_id, 'المورد');
     for (const l of lines) {
-      await must('materials', l.material_id, 'الخامة'); posQty(l);
+      await must('materials', l.material_id, 'الصنف'); posQty(l);
       if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً');
       if (l.request_line_id) {
         const rl = await get('SELECT * FROM purchase_request_lines WHERE id=?', l.request_line_id);
         if (!rl || rl.request_id !== Number(p.request_id)) throw new AppError('بند طلب الشراء لا يخص الطلب المختار');
-        if (rl.material_id !== Number(l.material_id)) throw new AppError('الخامة لا تطابق بند طلب الشراء');
+        if (rl.material_id !== Number(l.material_id)) throw new AppError('الصنف لا تطابق بند طلب الشراء');
         if (num(l.qty) > rl.qty - rl.ordered_qty + 1e-6)
           throw new AppError(`الكمية أكبر من المتبقي في طلب الشراء (${r4(rl.qty - rl.ordered_qty)})`);
       }
@@ -155,11 +155,11 @@ DOCS.goods_receipt = {
       if (o.supplier_id !== Number(p.supplier_id)) throw new AppError('أمر التوريد لمورد مختلف');
     }
     for (const l of lines) {
-      await must('materials', l.material_id, 'الخامة'); posQty(l);
+      await must('materials', l.material_id, 'الصنف'); posQty(l);
       if (l.order_line_id) {
         const ol = await get('SELECT * FROM purchase_order_lines WHERE id=?', l.order_line_id);
         if (!ol || ol.order_id !== Number(p.order_id)) throw new AppError('بند أمر التوريد لا يخص الأمر المختار');
-        if (ol.material_id !== Number(l.material_id)) throw new AppError('الخامة لا تطابق بند أمر التوريد');
+        if (ol.material_id !== Number(l.material_id)) throw new AppError('الصنف لا تطابق بند أمر التوريد');
         if (num(l.qty) > ol.qty - ol.received_qty + 1e-6) throw new AppError(`كمية الاستلام أكبر من المتبقي في أمر التوريد (${r4(ol.qty - ol.received_qty)})`);
         if (l.unit_price === undefined || l.unit_price === null || l.unit_price === '') l.unit_price = ol.unit_price;
       }
@@ -217,7 +217,7 @@ DOCS.purchase_invoice = {
     for (const k of ['discount', 'freight', 'vat_percent']) { p[k] = num(p[k]); if (p[k] < 0) throw new AppError('القيم لا يمكن أن تكون سالبة'); }
     let sub = 0;
     for (const l of lines) {
-      await must('materials', l.material_id, 'الخامة'); posQty(l);
+      await must('materials', l.material_id, 'الصنف'); posQty(l);
       if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً');
       sub += r2(l.qty * l.unit_price);
       if (l.grn_line_id) throw new AppError('الفاتورة دي كانت مطابقة لإذن استلام (منطق قديم اتلغى) — ألغِها وسجّل فاتورة مباشرة بدلها');
@@ -275,7 +275,7 @@ DOCS.purchase_return = {
   blank: (l) => !l.material_id,
   async validate(p, lines) {
     await must('suppliers', p.supplier_id, 'المورد'); await must('warehouses', p.warehouse_id, 'المخزن');
-    for (const l of lines) { await must('materials', l.material_id, 'الخامة'); posQty(l); if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً'); }
+    for (const l of lines) { await must('materials', l.material_id, 'الصنف'); posQty(l); if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً'); }
   },
   async post(doc) {
     const supplier = await nm('suppliers', doc.supplier_id); const pairs = []; let total = 0;
@@ -295,7 +295,7 @@ DOCS.purchase_return = {
 };
 
 // ============================================================
-//  إذن صرف خامات (إنتاج / تحويل لموقع / تشغيل غير مباشر) ومرتجع صرف
+//  إذن صرف أصناف (إنتاج / تحويل لموقع / تشغيل غير مباشر) ومرتجع صرف
 //  الأبعاد الأساسية للتكلفة: مشروع + بند + مرحلة
 // ============================================================
 async function issueAccount(kind, stage_id) {
@@ -366,7 +366,7 @@ DOCS.stock_issue = {
     }
     if (p.kind === 'production') {
       if (!p.project_id) throw new AppError('صرف الإنتاج لازم يتحدد له المشروع');
-      for (const l of lines) { if (!l.item_id) throw new AppError(`حدد البند للخامة «${await nm('materials', l.material_id)}»`); if (!l.stage_id) throw new AppError(`حدد المرحلة للخامة «${await nm('materials', l.material_id)}»`); }
+      for (const l of lines) { if (!l.item_id) throw new AppError(`حدد البند للصنف «${await nm('materials', l.material_id)}»`); if (!l.stage_id) throw new AppError(`حدد المرحلة للصنف «${await nm('materials', l.material_id)}»`); }
       // الموقع اختياري هنا، ومسموح بس لو المشروع متكود له مواقع نشطة وتابع له
       if (p.site_id) {
         const ok = await get('SELECT 1 x FROM sites WHERE id=? AND project_id=? AND active=1', p.site_id, p.project_id);
@@ -395,9 +395,9 @@ DOCS.stock_issue = {
     if (p.site_id) await must('sites', p.site_id, 'الموقع');
     const seen = new Set();
     for (const l of lines) {
-      await must('materials', l.material_id, 'الخامة'); posQty(l);
+      await must('materials', l.material_id, 'الصنف'); posQty(l);
       const key = `${l.material_id}:${l.item_id || 0}:${l.stage_id || 0}`;
-      if (seen.has(key)) throw new AppError(`الخامة «${await nm('materials', l.material_id)}» مكررة${l.item_id ? ' على نفس البند والمرحلة' : ''} في الإذن`);
+      if (seen.has(key)) throw new AppError(`الصنف «${await nm('materials', l.material_id)}» مكرر${l.item_id ? ' على نفس البند والمرحلة' : ''} في الإذن`);
       seen.add(key);
     }
   },
@@ -465,9 +465,9 @@ DOCS.stock_adjustment = {
   async validate(p, lines) {
     await must('warehouses', p.warehouse_id, 'المخزن'); const seen = new Set();
     for (const l of lines) {
-      await must('materials', l.material_id, 'الخامة');
+      await must('materials', l.material_id, 'الصنف');
       if (!(num(l.counted_qty, -1) >= 0)) throw new AppError('الكمية المجرودة لا يمكن أن تكون سالبة');
-      if (seen.has(Number(l.material_id))) throw new AppError('خامة مكررة في الجرد'); seen.add(Number(l.material_id));
+      if (seen.has(Number(l.material_id))) throw new AppError('صنف مكرر في الجرد'); seen.add(Number(l.material_id));
     }
   },
   async post(doc) {

@@ -35,7 +35,7 @@ const cfg = await getConfig(); ok(cfg.cast_stage_id === st['الصب'] && cfg.fi
 let s = await computeLive('2026-06', 0, { spread_rate: 1.5 });
 ok(s.inputs.cement_lines.length === 1 && s.inputs.cement_lines[0].material_id === cement && s.inputs.cement_lines[0].kg === 50, 'الأسمنت اتحدد تلقائياً بوزن 50'); near(s.inputs.bags_system, 289, 'شكاير الصب من النظام (من غير التحويلات)');
 near(s.inputs.area, 433.5, 'المتر المسطح = 289 × 1.5');
-near(s.cast.mat_total, 79821.8 + 52474.8, 'خامات الصب'); near(s.cast.labor_daily, 35710, 'أجور الصب'); near(s.cast.labor_monthly, 11907, 'مرتبات الصب');
+near(s.cast.mat_total, 79821.8 + 52474.8, 'أصناف الصب'); near(s.cast.labor_daily, 35710, 'أجور الصب'); near(s.cast.labor_monthly, 11907, 'مرتبات الصب');
 near(s.cast.total, 179913.6, 'إجمالي الصب'); near(s.finish.total, 31282, 'إجمالي التشطيب');
 near(s.cast.per_m2, 415.03, 'تكلفة المتر — صب'); near(s.finish.per_m2, 72.16, 'تكلفة المتر — تشطيب'); near(s.unit_cost.total, 487.19, 'سعر المتر الإجمالي', 0.02);
 near(s.cast.materials.find((m) => m.material_id === fiber).per_bag, 249.88 / 289, 'معيار الشيكارة للفيبر', 0.0001);

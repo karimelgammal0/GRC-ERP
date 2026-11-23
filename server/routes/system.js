@@ -50,7 +50,7 @@ export async function systemRouter() {
     masters: MASTERS, modules: MODULES, catalog: CATALOG, cost_class: COST_CLASS, voucher_kinds: VOUCHER_KINDS, acc_keys: ACC_KEYS,
     settings: await allSettings(), opening_locked: await openingLocked(),
     // أسماء أصحاب كل وظيفة في كل موديول (للتوقيعات في الطباعة): { module: { job: [names] } }
-    signers: (await all(`SELECT m.module, m.name job, u.name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id JOIN users u ON u.id=uj.user_id WHERE u.active=1 ORDER BY u.id`)).reduce((o, x) => { ((o[x.module] ||= {})[x.job] ||= []).push(x.name); return o; }, {}),
+    signers: (await all(`SELECT m.module, m.name job, COALESCE(e.name, u.name) name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id JOIN users u ON u.id=uj.user_id LEFT JOIN employees e ON e.id=u.employee_id WHERE u.active=1 ORDER BY u.id`)).reduce((o, x) => { ((o[x.module] ||= {})[x.job] ||= []).push(x.name); return o; }, {}),
   }));
   r.get('/lookups', async (req, res) => {
     // بالتوازي: ~25 استعلام ورا بعض كانوا بيضربوا زمن الذهاب والإياب لقاعدة البيانات في كل مرة
@@ -126,22 +126,22 @@ export async function systemRouter() {
     adminOnly(req);
     const jl = await all('SELECT uj.user_id, m.module, m.name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id ORDER BY m.module, m.name');
     const mt = (id) => CATALOG.find((m) => m.id === id)?.title || id;
-    res.json((await all('SELECT id,username,name,role,modules,perms,active FROM users ORDER BY id')).map((u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, active: u.active, jobs: jl.filter((x) => x.user_id === u.id).map((x) => `${mt(x.module)}: ${x.name}`), modules: JSON.parse(u.modules), legacy: !u.perms, perms: [...userPerms(u)] })));
+    res.json((await all('SELECT id,username,name,employee_id,role,modules,perms,active FROM users ORDER BY id')).map((u) => ({ id: u.id, username: u.username, name: u.name, employee_id: u.employee_id, role: u.role, active: u.active, jobs: jl.filter((x) => x.user_id === u.id).map((x) => `${mt(x.module)}: ${x.name}`), modules: JSON.parse(u.modules), legacy: !u.perms, perms: [...userPerms(u)] })));
   });
   await r.post('/users', async (req, res) => {
     adminOnly(req); const b = req.body;
     if (!b.username || !b.name || String(b.password || '').length < 6) throw new AppError('الاسم واسم المستخدم وكلمة مرور (6 أحرف+) مطلوبين');
     if (await get('SELECT 1 FROM users WHERE username=?', b.username)) throw new AppError('اسم المستخدم مستخدم');
-    const id = await insertRow('users', { username: b.username.trim(), name: b.name, pass_hash: hashPassword(b.password), role: b.role === 'admin' ? 'admin' : 'user', modules: JSON.stringify(modulesOf(cleanPerms(b.perms))), perms: JSON.stringify(cleanPerms(b.perms)), must_change: 1 }, ['username', 'name', 'pass_hash', 'role', 'modules', 'perms', 'must_change']);
+    const id = await insertRow('users', { username: b.username.trim(), name: b.name, pass_hash: hashPassword(b.password), role: b.role === 'admin' ? 'admin' : 'user', modules: JSON.stringify(modulesOf(cleanPerms(b.perms))), perms: JSON.stringify(cleanPerms(b.perms)), must_change: 1, employee_id: b.employee_id ? Number(b.employee_id) : null }, ['username', 'name', 'pass_hash', 'role', 'modules', 'perms', 'must_change', 'employee_id']);
     res.json({ id });
   });
   r.put('/users/:id', async (req, res) => {
     adminOnly(req); const b = req.body; const id = Number(req.params.id);
-    const o = { name: b.name, role: b.role, active: b.active === undefined ? undefined : (b.active ? 1 : 0), modules: undefined, perms: undefined };
+    const o = { name: b.name, employee_id: b.employee_id === undefined ? undefined : (b.employee_id ? Number(b.employee_id) : null), role: b.role, active: b.active === undefined ? undefined : (b.active ? 1 : 0), modules: undefined, perms: undefined };
     if (Array.isArray(b.perms)) { const cp = cleanPerms(b.perms); o.perms = JSON.stringify(cp); o.modules = JSON.stringify(modulesOf(cp)); }
     if (id === req.user.id && (o.active === 0 || (o.role && o.role !== 'admin'))) throw new AppError('لا يمكنك تعطيل نفسك أو سحب صلاحيات المدير منك');
     if (b.password) { if (String(b.password).length < 6) throw new AppError('كلمة المرور قصيرة'); o.pass_hash = hashPassword(b.password); o.must_change = 1; }
-    await updateRow('users', id, o, ['name', 'role', 'active', 'modules', 'perms', 'pass_hash', 'must_change']); res.json({ ok: true });
+    await updateRow('users', id, o, ['name', 'employee_id', 'role', 'active', 'modules', 'perms', 'pass_hash', 'must_change']); res.json({ ok: true });
   });
   // ----- وظائف الموديولات وتخصيصها على المستخدمين -----
   const JOB_MODULES = () => CATALOG.filter((m) => !['settings', 'reports'].includes(m.id)).map((m) => m.id);

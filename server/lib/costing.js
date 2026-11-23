@@ -46,7 +46,7 @@ export async function saveConfig(b) {
   return c;
 }
 
-/** أسطر تكلفة مرحلة في شهر مجمّعة: خامات بالصنف + أجور يومية + مرتبات شهرية + مصروفات مباشرة */
+/** أسطر تكلفة مرحلة في شهر مجمّعة: أصناف بالصنف + أجور يومية + مرتبات شهرية + مصروفات مباشرة */
 async function stageBlock(stageId, month, projectId) {
   if (!stageId) return null;
   const pw = projectId ? ' AND c.project_id=?' : ''; const pp = projectId ? [projectId] : [];
@@ -139,7 +139,7 @@ export async function approvePeriod(month, projectId, user) {
   if (cur.status === 'approved') throw new AppError('الشهر معتمد بالفعل');
   const live = await computeLive(month, pid);
   if (!(live.inputs.spread_rate > 0)) throw new AppError('أدخل معدل فرد الشيكارة قبل الاعتماد');
-  if (!(live.inputs.bags > 0)) throw new AppError('لا توجد شكاير أسمنت مصروفة للصب في هذا الشهر — تأكد من خامة الأسمنت أو أدخل العدد يدوياً');
+  if (!(live.inputs.bags > 0)) throw new AppError('لا توجد شكاير أسمنت مصروفة للصب في هذا الشهر — تأكد من صنف الأسمنت أو أدخل العدد يدوياً');
   if (!live.config.cast_stage_id || !live.config.finish_stage_id) throw new AppError('اربط مرحلتي الصب والتشطيب من إعدادات التكاليف');
   await run(`UPDATE unit_cost_periods SET status='approved', snapshot=?, approved_by=?, approved_at=to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS') WHERE id=?`, JSON.stringify(live), user?.id ?? null, cur.id);
   return await getSheet(month, pid);

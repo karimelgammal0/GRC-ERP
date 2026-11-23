@@ -6,7 +6,7 @@ export const setSetting = async (k, v) => await run('INSERT INTO settings(key,va
 export const allSettings = async () => Object.fromEntries((await all('SELECT key,value FROM settings')).map((r) => [r.key, r.value]));
 
 export const ACC_KEYS = {
-  acc_inventory_raw: 'مخزون الخامات',
+  acc_inventory_raw: 'مخزون الأصناف',
   acc_ap: 'الموردين (دائنون)',
   acc_vat_in: 'ضريبة القيمة المضافة — مدخلات',
   acc_wages_payable: 'أجور ومرتبات مستحقة',
@@ -15,8 +15,8 @@ export const ACC_KEYS = {
   acc_ar: 'العملاء (مدينون)',
   acc_custody: 'العهد',
   acc_opening_equity: 'أرصدة افتتاحية (حقوق ملكية)',
-  acc_site_transfer: 'خامات محولة للمواقع',
-  acc_overhead_materials: 'خامات تشغيل غير مباشرة',
+  acc_site_transfer: 'أصناف محولة للمواقع',
+  acc_overhead_materials: 'أصناف تشغيل غير مباشرة',
   acc_indirect_labor: 'أجور غير مباشرة',
   acc_admin_labor: 'مرتبات وأجور إدارية',
 };
@@ -39,6 +39,17 @@ export async function nextNo(key) {
     if (!table || !await get(`SELECT 1 FROM ${table.t} WHERE ${table.c}=?`, no)) return no;
   }
 }
+/** الرقم القادم لترقيم معيّن بدون ما يتحجز (للعرض على الشاشة قبل الحفظ) — نفس منطق nextNo */
+export async function peekNo(key) {
+  const s = await get('SELECT * FROM sequences WHERE key=?', key);
+  if (!s) return null;
+  const table = SEQ_TABLE[key];
+  for (let n = Number(s.next_no), i = 0; i < 1000; n++, i++) {
+    const no = `${s.prefix}${String(n).padStart(s.padding, '0')}`;
+    if (!table || !await get(`SELECT 1 FROM ${table.t} WHERE ${table.c}=?`, no)) return no;
+  }
+  return null;
+}
 // جدول/عمود الفحص عشان مفيش تكرار لو في كود اتكتب يدوي
 const SEQ_TABLE = {
   unit: { t: 'units', c: 'code' }, material_category: { t: 'material_categories', c: 'code' },
@@ -60,7 +71,7 @@ const SEQ_TABLE = {
 };
 
 export const DEFAULT_SEQUENCES = [
-  ['unit', 'الوحدات', 'UN-', 3], ['material_category', 'فئات الخامات', 'MC-', 3], ['material', 'الخامات', 'RM-', 4],
+  ['unit', 'الوحدات', 'UN-', 3], ['material_category', 'فئات الأصناف', 'MC-', 3], ['material', 'الأصناف', 'RM-', 4],
   ['warehouse', 'المخازن', 'WH-', 2], ['supplier', 'الموردين', 'SUP-', 4], ['project', 'المشروعات', 'PRJ-', 3],
   ['project_item', 'بنود المشروعات', 'BND-', 4], ['stage', 'المراحل', 'STG-', 2], ['site', 'المواقع', 'SITE-', 3],
   ['treasury', 'الخزن والبنوك', 'TR-', 2], ['custodian', 'العهد', 'CUS-', 3], ['client', 'العملاء', 'CL-', 3], ['expense_category', 'المصروفات', 'EXC-', 3],

@@ -6,7 +6,7 @@ import { addMove, settle } from './stock.js';
 export const openingLocked = async () => await getSetting('opening_locked', '0') === '1';
 export const defaultWarehouse = async () => {
   const w = await get(`SELECT id FROM warehouses WHERE type='raw' AND active=1 ORDER BY id LIMIT 1`);
-  if (!w) throw new AppError('لا يوجد مخزن خامات — أضف مخزن من الإعدادات');
+  if (!w) throw new AppError('لا يوجد مخزن أصناف — أضف مخزن من الإعدادات');
   return w.id;
 };
 

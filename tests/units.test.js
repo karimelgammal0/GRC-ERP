@@ -29,12 +29,12 @@ await (await import('../server/db.js')).run('UPDATE units SET sub_unit_id=?, sub
 
 console.log('▶ وحدات الإدخال');
 const units = (await (await import('../server/db.js')).all('SELECT * FROM units ORDER BY id'));
-const kgOpts = entryUnits(units, kg);                       // خامة بالكيلو → تقدر تدخل بالشيكارة والطن
-ok(kgOpts[0].id === kg && kgOpts[0].toBase === 1, 'وحدة الخامة أولاً');
-ok(kgOpts.find((o) => o.id === bag)?.toBase === 50 && kgOpts.find((o) => o.id === ton)?.toBase === 1000, 'شيكارة=50 وطن=1000 لخامة بالكيلو');
-const bagOpts = entryUnits(units, bag);                      // خامة بالشيكارة → تقدر تدخل بالكيلو
-ok(bagOpts.length === 2 && bagOpts[1].id === kg && Math.abs(bagOpts[1].toBase - 0.02) < 1e-12, 'خامة بالشيكارة: كجم = 1/50');
-ok(entryUnits(units, 99999).length === 0, 'خامة بوحدة غير موجودة');
+const kgOpts = entryUnits(units, kg);                       // صنف بالكيلو → تقدر تدخل بالشيكارة والطن
+ok(kgOpts[0].id === kg && kgOpts[0].toBase === 1, 'وحدة الصنف أولاً');
+ok(kgOpts.find((o) => o.id === bag)?.toBase === 50 && kgOpts.find((o) => o.id === ton)?.toBase === 1000, 'شيكارة=50 وطن=1000 لصنف بالكيلو');
+const bagOpts = entryUnits(units, bag);                      // صنف بالشيكارة → تقدر تدخل بالكيلو
+ok(bagOpts.length === 2 && bagOpts[1].id === kg && Math.abs(bagOpts[1].toBase - 0.02) < 1e-12, 'صنف بالشيكارة: كجم = 1/50');
+ok(entryUnits(units, 99999).length === 0, 'صنف بوحدة غير موجودة');
 ok(toBaseQty(3, 50) === 150, '3 شيكارة = 150 كجم');
 ok(toBaseQty(125, 1 / 50) === 2.5, '125 كجم = 2.5 شيكارة');
 ok(toBaseQty(0.3, 3) === 0.9, 'من غير ضجيج الفاصلة العائمة');

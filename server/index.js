@@ -48,7 +48,7 @@ const wrap = (router) => {  // الأخطاء المتزامنة بتتحول ل
 app.use('/api', await authRoutes());
 app.use('/api', async (req, res, next) => {
   const token = cookies(req).sid;
-  const u = token && await get(`SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND u.active=1`, token);
+  const u = token && await get(`SELECT u.*, e.name employee_name FROM sessions s JOIN users u ON u.id=s.user_id LEFT JOIN employees e ON e.id=u.employee_id WHERE s.token=? AND u.active=1`, token);
   if (!u) return res.status(401).json({ error: 'سجّل الدخول أولاً' });
   req.user = u; req.token = token; next();
 });

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { all, get, run, val, AppError, r2 } from '../db.js';
 import { DOCS, saveDoc, voidDoc, getDoc, invoiceOpenAmount, VOUCHER_KINDS } from '../lib/docs.js';
 import { stockOf } from '../lib/stock.js';
-import { nextNo, audit } from '../lib/core.js';
+import { nextNo, peekNo, audit } from '../lib/core.js';
 import { can, need } from '../lib/perms.js';
 import { insertRow } from '../db.js';
 
@@ -184,15 +184,24 @@ export function helperRouter() {
     res.json(await get('SELECT * FROM project_items WHERE id=?', id));
   });
   r.get('/stock', async (req, res) => res.json(await stockOf(Number(req.query.warehouse_id), Number(req.query.material_id))));
-  // آخر سعر شراء للخامة (من فواتير الشراء واستلامات البضاعة المعتمدة)، بالوحدة الأساسية
-  r.get('/last-price', async (req, res) => {
-    const row = await get(`SELECT unit_price, date, supplier_name FROM (
+  // آخر سعر شراء للصنف (من فواتير الشراء واستلامات البضاعة المعتمدة)، بالوحدة الأساسية
+  const lastPurchase = (materialId) => get(`SELECT unit_price, date, supplier_name FROM (
         SELECT l.unit_price, d.date, d.id, 1 src, s.name supplier_name FROM purchase_invoice_lines l JOIN purchase_invoices d ON d.id=l.invoice_id JOIN suppliers s ON s.id=d.supplier_id WHERE l.material_id=? AND d.status<>'void' AND l.unit_price>0
         UNION ALL
         SELECT l.unit_price, d.date, d.id, 0 src, s.name supplier_name FROM goods_receipt_lines l JOIN goods_receipts d ON d.id=l.receipt_id JOIN suppliers s ON s.id=d.supplier_id WHERE l.material_id=? AND d.status<>'void' AND l.unit_price>0
-      ) x ORDER BY date DESC, src DESC, id DESC LIMIT 1`, req.query.material_id, req.query.material_id);
-    res.json(row || null);
+      ) x ORDER BY date DESC, src DESC, id DESC LIMIT 1`, materialId, materialId);
+  r.get('/last-price', async (req, res) => res.json((await lastPurchase(req.query.material_id)) || null));
+  // سعر مرجعي للصنف: آخر سعر شراء، ولو مفيش فمتوسط التكلفة من كارت الصنف (المخزن المحدد أو أي مخزن له رصيد)
+  r.get('/price-hint', async (req, res) => {
+    const mid = Number(req.query.material_id); if (!mid) return res.json(null);
+    const last = await lastPurchase(mid);
+    if (last && Number(last.unit_price) > 0) return res.json({ price: Number(last.unit_price), source: 'last', date: last.date, supplier_name: last.supplier_name });
+    const wh = Number(req.query.warehouse_id) || 0;
+    const avg = (wh ? await get('SELECT avg_cost FROM material_stock WHERE material_id=? AND warehouse_id=? AND avg_cost>0', mid, wh) : null) || await get('SELECT avg_cost FROM material_stock WHERE material_id=? AND avg_cost>0 ORDER BY qty DESC LIMIT 1', mid);
+    res.json(avg ? { price: Number(avg.avg_cost), source: 'avg' } : null);
   });
+  // الرقم المتوقع لمستند جديد (للعرض فقط — الرقم الفعلي بيتحجز عند الحفظ)
+  r.get('/next-no', async (req, res) => res.json({ no: await peekNo(String(req.query.key || '')) }));
   r.get('/stock-all', async (req, res) => res.json(await all(`SELECT material_id, qty, value, avg_cost FROM material_stock WHERE warehouse_id=?`, req.query.warehouse_id)));
   r.get('/project-items', async (req, res) => res.json(await all(`SELECT id,code,name FROM project_items WHERE project_id=? AND active=1 ORDER BY code`, req.query.project_id)));
   r.get('/employee-rates', async (req, res) => res.json(await all(`SELECT id, code, name, emp_type, daily_rate, monthly_salary, cost_class, default_stage_id FROM employees WHERE active=1 ORDER BY code`)));

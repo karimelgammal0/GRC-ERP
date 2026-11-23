@@ -28,11 +28,11 @@ export const CATALOG = [
   { id: 'costs', title: 'تكاليف', pages: [
     P('unit-cost', 'سعر المتر الشهري', [['save', 'حفظ المدخلات'], ['approve', 'اعتماد الشهر'], ['reopen', 'إعادة فتح شهر معتمد']]), P('history', 'سجل أسعار المتر'), P('config', 'ربط المراحل والأسمنت', [['edit', 'تعديل']])] },
   { id: 'reports', title: 'التقارير', pages: [
-    P('hub', 'كل التقارير'), P('project-stage', 'تكلفة المشاريع × المراحل'), P('stage-project', 'تكلفة المراحل × المشاريع'), P('project-analysis', 'تحليل مشروع (بنود)'), P('material-usage', 'استهلاك الخامات'),
+    P('hub', 'كل التقارير'), P('project-stage', 'تكلفة المشاريع × المراحل'), P('stage-project', 'تكلفة المراحل × المشاريع'), P('project-analysis', 'تحليل مشروع (بنود)'), P('material-usage', 'استهلاك الأصناف'),
     P('factory-cost', 'تكاليف المصنع (مباشرة/غير مباشرة/إدارية)'), P('cost-detail', 'تفاصيل التكاليف'), P('expenses', 'المصروفات'), P('labor', 'العمالة'), P('trial-balance', 'ميزان المراجعة'), P('ledger', 'كشف حساب أستاذ'), P('income', 'قائمة الدخل')] },
   { id: 'settings', title: 'الإعدادات', pages: [
     P('general', 'عام (بيانات الشركة)', [['edit', 'تعديل']]), P('opening', 'الأرصدة الافتتاحية', [['edit', 'حفظ وتطبيق'], ['lock', 'قفل نهائي'], ['unlock', 'فك القفل']]),
-    P('materials', 'الخامات', CRUD), P('categories', 'فئات الخامات', CRUD), P('units', 'وحدات القياس', CRUD), P('warehouses', 'المخازن', CRUD), P('clients', 'العملاء', CRUD), P('projects', 'المشروعات', CRUD),
+    P('materials', 'الأصناف', CRUD), P('categories', 'فئات الأصناف', CRUD), P('units', 'وحدات القياس', CRUD), P('warehouses', 'المخازن', CRUD), P('clients', 'العملاء', CRUD), P('projects', 'المشروعات', CRUD),
     P('project-items', 'بنود المشروعات', CRUD), P('stages', 'مراحل التصنيع', CRUD), P('sites', 'المواقع', CRUD), P('suppliers', 'الموردين', CRUD), P('treasuries', 'الخزن والبنوك', CRUD),
     P('custodians', 'العهد', CRUD), P('expense-cats', 'المصروفات', CRUD), P('payment-types', 'أنواع المدفوعات', CRUD), P('receipt-types', 'أنواع المقبوضات', CRUD), P('employees', 'العاملين', CRUD)] },
 ];

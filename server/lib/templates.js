@@ -1,7 +1,7 @@
 // نماذج القيود: القيود اللي البرنامج بيولّدها فعلاً، مكتوبة كنماذج. كل خط: الجانب + الحساب (دور يحدده البرنامج أو حساب ثابت من الدليل)
 import { all, get, run, val, insertRow } from '../db.js';
 
-export const MODULES = { inventory: 'مخزن الخامات', purchases: 'المشتريات', hr: 'الموارد البشرية', finance: 'المالية', accounts: 'الحسابات', manufacturing: 'التصنيع' };
+export const MODULES = { inventory: 'مخزن الأصناف', purchases: 'المشتريات', hr: 'الموارد البشرية', finance: 'المالية', accounts: 'الحسابات', manufacturing: 'التصنيع' };
 
 // أدوار الحسابات الديناميكية (بتتحدد من المستند نفسه)
 export const DYNAMIC_ROLES = {
@@ -21,9 +21,9 @@ export const SYSTEM_TEMPLATES = [
   { code: 'S-INV', module: 'purchases', name: 'فاتورة شراء آجل', description: 'الفاتورة المطابقة لاستلام بتسجّل الفروق والضريبة والخصم بس (قيمة الاستلام اتسجلت وقت الاستلام)', lines: [D('acc_inventory_raw'), D('acc_vat_in'), C('acc_ap')] },
   { code: 'S-INV-CASH', module: 'purchases', name: 'فاتورة شراء نقدي', description: 'قيد الفاتورة + سداد فوري', lines: [D('acc_inventory_raw'), D('acc_vat_in'), C('acc_ap'), D('acc_ap', 'سداد الفاتورة'), C('pay_source')] },
   { code: 'S-PRET', module: 'purchases', name: 'مرتجع مشتريات', description: 'إرجاع بضاعة للمورد', lines: [D('acc_ap'), C('acc_inventory_raw')] },
-  { code: 'S-ISS-PROD', module: 'inventory', name: 'صرف خامات للتصنيع', description: 'صرف على مشروع/بند/مرحلة', lines: [D('stage_wip'), C('acc_inventory_raw')] },
-  { code: 'S-ISS-SITE', module: 'inventory', name: 'صرف خامات لموقع', description: 'تحويل خامات للموقع', lines: [D('acc_site_transfer'), C('acc_inventory_raw')] },
-  { code: 'S-ISS-OH', module: 'inventory', name: 'صرف خامات تشغيل غير مباشرة', description: 'مواد تشغيل ليست على مشروع', lines: [D('acc_overhead_materials'), C('acc_inventory_raw')] },
+  { code: 'S-ISS-PROD', module: 'inventory', name: 'صرف أصناف للتصنيع', description: 'صرف على مشروع/بند/مرحلة', lines: [D('stage_wip'), C('acc_inventory_raw')] },
+  { code: 'S-ISS-SITE', module: 'inventory', name: 'صرف أصناف لموقع', description: 'تحويل أصناف للموقع', lines: [D('acc_site_transfer'), C('acc_inventory_raw')] },
+  { code: 'S-ISS-OH', module: 'inventory', name: 'صرف أصناف تشغيل غير مباشرة', description: 'مواد تشغيل ليست على مشروع', lines: [D('acc_overhead_materials'), C('acc_inventory_raw')] },
   { code: 'S-ISS-RET', module: 'inventory', name: 'مرتجع صرف', description: 'عكس قيد الصرف الأصلي', lines: [D('acc_inventory_raw'), C('stage_wip', 'أو حساب الموقع/التشغيل حسب الصرف الأصلي')] },
   { code: 'S-ADJ-DEF', module: 'inventory', name: 'جرد — عجز', description: 'تسوية بتؤثر في التكلفة والمخزن مباشرة', lines: [D('acc_overhead_materials', 'تكلفة عجز مخزون'), C('acc_inventory_raw')] },
   { code: 'S-ADJ-SUR', module: 'inventory', name: 'جرد — زيادة', description: 'تسوية بتخفّض التكلفة وتزوّد المخزن', lines: [D('acc_inventory_raw'), C('acc_overhead_materials', 'تخفيض تكلفة (زيادة مخزون)')] },

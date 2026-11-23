@@ -4,15 +4,26 @@ import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.j
 const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) || {}).id;
 const unitOf = (mid) => nameOf('units', byId('materials', mid)?.unit_id);
 const PAY = [['credit', 'آجل (على حساب المورد)'], ['cash', 'نقدي']];
-const matCol = { k: 'material_id', l: 'الخامة', t: 'fk', ref: 'materials', req: 1, w: '38%', onChange: matChange };
+const matCol = { k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', req: 1, w: '38%', onChange: matChange };
 const unitCol = { l: 'الوحدة', calc: (l) => unitOf(l.material_id), w: '80px' };
-// فاتورة الشراء: لما تختار خامة والسعر فاضي، السعر يتملا من آخر سعر شراء للخامة
+// فاتورة الشراء: لما تختار صنف والسعر فاضي، السعر يتملا من آخر سعر شراء للصنف
 const fillLastPrice = async (v, l, ctx) => {
   matChange(v, l, ctx);
   if (!v || (Number(l.unit_price) || 0) > 0) return;
   const p = await GET('/helpers/last-price', { material_id: v });
   if (p && l.material_id === v && !(Number(l.unit_price) > 0)) { l.unit_price = Number(p.unit_price); ctx.setLines(ctx.lines); }
 };
+// إذن الاستلام: لما تختار صنف يظهر جنبه آخر سعر شراء له، ولو مفيش سعر شراء يظهر متوسط التكلفة من كارت الصنف
+const hintCol = { l: 'آخر سعر شراء', calc: (l) => (l._hint ? `${fmt(l._hint.price, 3)}${l._hint.source === 'avg' ? ' (متوسط)' : ''}` : ''), w: '130px' };
+const loadHints = async (ctx) => {
+  await Promise.all(ctx.lines.filter((l) => l.material_id && l._hint === undefined).map(async (l) => {
+    const mid = l.material_id; l._hint = null;
+    const p = await GET('/helpers/price-hint', { material_id: mid, warehouse_id: ctx.header.warehouse_id });
+    if (l.material_id === mid) l._hint = p;
+  }));
+  ctx.refresh();
+};
+const pickWithHint = async (v, l, ctx) => { matChange(v, l, ctx); l._hint = undefined; if (v) await loadHints(ctx); };
 const supF = { k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true, req: 1 };
 const lineTotal = { l: 'الإجمالي', calc: (l) => (Number(l.qty) || 0) * (Number(l.unit_price) || 0), fmt: (v) => fmt(v), w: '120px' };
 const dateStatusCols = [{ k: 'date', l: 'التاريخ' }];
@@ -23,7 +34,7 @@ const lineRows = (doc, withPrice) => (doc.lines || []).map((l) => [nameOf('mater
 export const requestsPage = docScreen({ perm: 'purchases.requests',
   print: (doc) => printSheet({ title: 'طلب شراء', no: doc.no, date: doc.date,
     meta: [['مقدم الطلب', nameOf('employees', doc.requested_by_id) || doc.requested_by], ['المورد', nameOf('suppliers', doc.supplier_id)], ['المشروع', nameOf('projects', doc.project_id)], ['مطلوب في', doc.needed_date]],
-    cols: ['الخامة', 'الوحدة', 'الكمية المطلوبة', 'ملاحظة'], rows: lineRows(doc, false), notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['مقدم الطلب', 'مدير المشتريات', 'الاعتماد'] }),
+    cols: ['الصنف', 'الوحدة', 'الكمية المطلوبة', 'ملاحظة'], rows: lineRows(doc, false), notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['مقدم الطلب', 'مدير المشتريات', 'الاعتماد'] }),
   type: 'purchase_request', title: 'طلبات الشراء', noun: 'طلب شراء', newLabel: 'طلب شراء جديد', defaultFrom: monthStart, defaultTo: today, statuses: [['open', 'مفتوح'], ['ordered', 'تم الأمر']],
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'requested_by', l: 'مقدم الطلب' }, { k: 'supplier_name', l: 'المورد' }, { k: 'project_name', l: 'المشروع' }, { k: 'n_lines', l: 'البنود', num: true }, { k: 'needed_date', l: 'مطلوب في' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -45,7 +56,7 @@ const closeOrder = (o, done) => guard(async (ev) => {
 export const ordersPage = docScreen({ perm: 'purchases.orders',
   print: (doc) => printSheet({ title: 'أمر توريد', no: doc.no, date: doc.date,
     meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['نوع الشراء', doc.payment_type === 'cash' ? 'نقدي' : 'آجل'], ['التسليم المتوقع', doc.expected_date]],
-    cols: ['الخامة', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true), totals: [['إجمالي الأمر', fmt(doc.total)]], notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['مدير المشتريات', 'المورد', 'الاعتماد'] }),
+    cols: ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true), totals: [['إجمالي الأمر', fmt(doc.total)]], notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['مدير المشتريات', 'المورد', 'الاعتماد'] }),
   rowActions: (r, reload) => (can('purchases.orders.close') && ['open', 'partial'].includes(r.status) ? h('button.btn.sm', { title: 'إغلاق الأمر يدوياً', onclick: closeOrder(r, reload) }, 'إغلاق') : null),
   type: 'purchase_order', title: 'أوامر التوريد', noun: 'أمر توريد', newLabel: 'أمر توريد جديد', statuses: [['open', 'مفتوح'], ['partial', 'استلام جزئي'], ['received', 'تم الاستلام'], ['closed', 'مغلق']],
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
@@ -71,9 +82,13 @@ export const ordersPage = docScreen({ perm: 'purchases.orders',
 export const receiptsPage = docScreen({ perm: 'purchases.receipts',
   print: (doc) => printSheet({ title: 'إذن استلام', no: doc.no, date: doc.date,
     meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['المخزن', nameOf('warehouses', doc.warehouse_id)], ['مرجع المورد', doc.supplier_ref], ['نوع الشراء', doc.payment_type === 'cash' ? 'نقدي' : 'آجل']],
-    cols: ['الخامة', 'الوحدة', 'الكمية المستلمة', 'السعر', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true), totals: [['إجمالي قيمة الاستلام', fmt((doc.lines || []).reduce((s, l) => s + l.qty * l.unit_price, 0))]], notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['أمين المخزن', 'المورد / المندوب', 'مدير المشتريات'] }),
+    cols: ['الصنف', 'الوحدة', 'الكمية المستلمة', 'السعر', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true), totals: [['إجمالي قيمة الاستلام', fmt((doc.lines || []).reduce((s, l) => s + l.qty * l.unit_price, 0))]], notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['أمين المخزن', 'المورد / المندوب', 'مدير المشتريات'] }),
+  print2: { label: '🖨 طباعة كميات (بدون أسعار)', short: '🖨 كميات', title: 'طباعة الإذن كميات فقط بدون أسعار',
+    fn: (doc) => printSheet({ title: 'إذن استلام (كميات)', no: doc.no, date: doc.date,
+      meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['المخزن', nameOf('warehouses', doc.warehouse_id)], ['مرجع المورد', doc.supplier_ref]],
+      cols: ['الصنف', 'الوحدة', 'الكمية المستلمة', 'ملاحظة'], rows: lineRows(doc, false), notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['أمين المخزن', 'المورد / المندوب', 'مدير المشتريات'] }) },
   type: 'goods_receipt', title: 'إذون الاستلام', noun: 'إذن استلام', newLabel: 'إذن استلام جديد',
-  note: 'الاستلام بيدخّل الخامة للمخزن فوراً بسعر أمر التوريد، وبيسجّل القيد دائن مباشرة على المورد (آجل) أو على الخزينة/العهدة (نقدي). فاتورة المورد بعد كده بتسجّل الفروق والضريبة والخصم بس.',
+  note: 'الاستلام بيدخّل الصنف للمخزن فوراً بسعر أمر التوريد، وبيسجّل القيد دائن مباشرة على المورد (آجل) أو على الخزينة/العهدة (نقدي). فاتورة المورد بعد كده بتسجّل الفروق والضريبة والخصم بس.',
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'supplier_ref', l: 'مرجع المورد' }, { k: 'payment_type', l: 'الدفع', render: (r) => (r.payment_type === 'cash' ? badge('نقدي', 'info') : badge('آجل', 'warn')) },
     { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -86,14 +101,14 @@ export const receiptsPage = docScreen({ perm: 'purchases.receipts',
       cash && { k: 'treasury_id', l: 'الدفع من خزينة/بنك', t: 'fk', ref: 'treasuries', help: 'اختر خزينة أو عهدة (واحد فقط)', onChange: (v, c) => { if (v) c.setHeader('custodian_id', null); } },
       cash && { k: 'custodian_id', l: 'أو الدفع من عهدة', t: 'fk', ref: 'custodians', onChange: (v, c) => { if (v) c.setHeader('treasury_id', null); } },
       { k: 'supplier_ref', l: 'رقم إذن/فاتورة المورد', t: 'text' }, { ...notesF, wide: false }].filter(Boolean); },
-    lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المستلمة', w: '170px' }), unitCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal] },
+    lines: { blank: () => ({}), cols: [{ ...matCol, onChange: pickWithHint }, qtyCol({ l: 'الكمية المستلمة', w: '170px' }), unitCol, hintCol, { k: 'unit_price', l: 'السعر', t: 'number', w: '120px' }, lineTotal] },
     tools: [{ label: 'سحب المتبقي من أمر التوريد', run: async (ctx) => {
       const id = Number(ctx.header.order_id); if (!id) throw new Error('اختر أمر التوريد أولاً');
       const rows = await GET('/helpers/order-lines', { order_id: id });
-      ctx.setLines(rows.map((r) => ({ material_id: r.material_id, qty: r.remaining, unit_price: r.unit_price, order_line_id: r.id }))); toast('تم سحب المتبقي من الأمر — عدّل الكميات المستلمة فعلاً');
+      ctx.setLines(rows.map((r) => ({ material_id: r.material_id, qty: r.remaining, unit_price: r.unit_price, order_line_id: r.id }))); toast('تم سحب المتبقي من الأمر — عدّل الكميات المستلمة فعلاً'); await loadHints(ctx);
     } }],
     totals: (ctx) => [['قيمة الاستلام', fmt(total(ctx.lines, (l) => (Number(l.qty) || 0) * (Number(l.unit_price) || 0)))]],
-    onOpen: (ctx) => loadOrders(ctx),
+    onOpen: async (ctx) => { await loadOrders(ctx); if (!ctx.doc) await loadHints(ctx); },
     prepare: (p) => { p.order_id = p.order_id ? Number(p.order_id) : null; if (p.payment_type !== 'cash') { p.treasury_id = null; p.custodian_id = null; } },
   },
 });
@@ -113,11 +128,11 @@ const invCalc = (ctx) => {
 export const invoicesPage = docScreen({ perm: 'purchases.invoices',
   print: (doc) => printSheet({ title: 'فاتورة شراء', no: doc.no, date: doc.date,
     meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['المخزن', nameOf('warehouses', doc.warehouse_id)], ['فاتورة المورد', doc.supplier_inv_no], ['نوع الشراء', doc.payment_type === 'cash' ? 'نقدي' : 'آجل'], ['الاستحقاق', doc.payment_type === 'cash' ? '' : doc.due_date]],
-    cols: ['الخامة', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true),
+    cols: ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true),
     totals: [['الإجمالي قبل الخصم', fmt(doc.subtotal)], Number(doc.discount) ? ['الخصم', fmt(doc.discount)] : null, Number(doc.freight) ? ['نقل وتحميل', fmt(doc.freight)] : null, Number(doc.vat_amount) ? ['الضريبة', fmt(doc.vat_amount)] : null, ['إجمالي الفاتورة', fmt(doc.total)]].filter(Boolean),
     notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['أمين المخزن', 'مدير المشتريات', 'المحاسب'] }),
   type: 'purchase_invoice', title: 'فواتير الشراء', noun: 'فاتورة شراء', newLabel: 'فاتورة شراء جديدة',
-  note: 'تقدر تسجّل فاتورة مشتريات مباشرة من هنا بدون طلب شراء ولا أمر ولا إذن استلام — الخامات بتدخل المخزن بتكلفة الفاتورة (بدون الضريبة). الفاتورة آجلة (على حساب المورد) أو نقدية (من خزينة أو عهدة). والخصم ومصاريف النقل بتتوزّع على تكلفة الخامات تلقائياً.',
+  note: 'تقدر تسجّل فاتورة مشتريات مباشرة من هنا بدون طلب شراء ولا أمر ولا إذن استلام — الأصناف بتدخل المخزن بتكلفة الفاتورة (بدون الضريبة). الفاتورة آجلة (على حساب المورد) أو نقدية (من خزينة أو عهدة). والخصم ومصاريف النقل بتتوزّع على تكلفة الأصناف تلقائياً.',
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'supplier_inv_no', l: 'فاتورة المورد' }, { k: 'payment_type', l: 'الدفع', render: (r) => (r.payment_type === 'cash' ? badge('نقدي', 'info') : badge('آجل', 'warn')) },
     { k: 'total', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }, { k: 'open_amount', l: 'المتبقي', num: true, fmt: (v, r) => (r.payment_type === 'cash' || r.status === 'void' ? '' : fmt(v)) }, { k: 'due_date', l: 'الاستحقاق' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -143,7 +158,7 @@ export const invoicesPage = docScreen({ perm: 'purchases.invoices',
 export const preturnsPage = docScreen({ perm: 'purchases.returns',
   print: (doc) => printSheet({ title: 'مرتجع مشتريات', no: doc.no, date: doc.date,
     meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['المخزن', nameOf('warehouses', doc.warehouse_id)]],
-    cols: ['الخامة', 'الوحدة', 'الكمية', 'سعر الإرجاع', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true), totals: [['قيمة المرتجع', fmt(doc.total)]], notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['أمين المخزن', 'المورد / المندوب', 'مدير المشتريات'] }),
+    cols: ['الصنف', 'الوحدة', 'الكمية', 'سعر الإرجاع', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true), totals: [['قيمة المرتجع', fmt(doc.total)]], notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['أمين المخزن', 'المورد / المندوب', 'مدير المشتريات'] }),
   type: 'purchase_return', title: 'مرتجعات المشتريات', noun: 'مرتجع مشتريات', newLabel: 'مرتجع مشتريات جديد',
   note: 'المرتجع بيخرج من المخزن بالسعر اللي تحدده (سعر الفاتورة الأصلية عادةً) وبيخصم من حساب المورد.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'supplier_name', l: 'المورد' }, { k: 'total', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],

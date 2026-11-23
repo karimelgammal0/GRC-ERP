@@ -18,7 +18,7 @@ export function masterPage(name, opts = {}) {
       ...M.cols.filter((c) => c !== 'code').map((c) => {
         const f = M.fields.find((x) => x.k === c) || { l: c, t: 'text' };
         if (f.t === 'fk') return { k: c, l: f.l, text: (r) => (f.ref === 'accounts' ? codeName(byId('accounts', r[c])) : nameOf(f.ref, r[c])) };
-        if (f.t === 'multifk') return { k: c, l: f.l, text: (r) => ((r[c] || []).length ? r[c].map((i) => nameOf(f.ref, i)).join('، ') : 'كل الخامات') };
+        if (f.t === 'multifk') return { k: c, l: f.l, text: (r) => ((r[c] || []).length ? r[c].map((i) => nameOf(f.ref, i)).join('، ') : 'كل الأصناف') };
         if (f.t === 'select') return { k: c, l: f.l, text: (r) => labelOf(f.options, r[c]) };
         if (f.t === 'number') return { k: c, l: f.l, num: true, text: (r) => (r[c] === null ? '' : fq(r[c])) };
         return { k: c, l: f.l, text: (r) => r[c] ?? '' };
@@ -127,7 +127,7 @@ export async function openingPage(root) {
       content = h('div', h('div.tbl-bar', h('input.search', { type: 'search', placeholder: 'بحث بالاسم أو الكود…', oninput: (e) => { q = e.target.value.trim().toLowerCase(); draw(); } }),
         h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('input', { type: 'checkbox', checked: onlyNonZero, onchange: (e) => { onlyNonZero = e.target.checked; draw(); } }), 'الأصناف ذات الرصيد فقط'),
         h('span.grow'), h('span', 'إجمالي قيمة المخزون الافتتاحي: ', totalEl)),
-        h('div.tbl-wrap', h('table.tbl.compact', h('thead', h('tr', ['الكود', 'الخامة', 'الوحدة', 'الكمية', 'القيمة', 'تكلفة الوحدة', 'مصدر القيمة', 'ملاحظة'].map((x) => h('th', x)))),
+        h('div.tbl-wrap', h('table.tbl.compact', h('thead', h('tr', ['الكود', 'الصنف', 'الوحدة', 'الكمية', 'القيمة', 'تكلفة الوحدة', 'مصدر القيمة', 'ملاحظة'].map((x) => h('th', x)))),
           h('tbody', rows.map((r) => {
             const cur = () => edits.stock[r.material_id] || { qty: r.qty, value: r.value };
             const uc = h('td.num', r.qty > 0 ? fmt(r.value / r.qty, 4) : '');
@@ -197,7 +197,7 @@ function permEditor(initial) {
 export async function usersPage(root) {
   const users = await GET('/users'); const modName = (id) => META.catalog.find((m) => m.id === id)?.title || id;
   const open = (u) => {
-    const fg = formGrid([{ k: 'username', l: 'اسم المستخدم', t: 'text', readonly: !!u, req: 1 }, { k: 'name', l: 'الاسم', t: 'text', req: 1 }, { k: 'password', l: u ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور', t: 'password' },
+    const fg = formGrid([{ k: 'username', l: 'اسم المستخدم', t: 'text', readonly: !!u, req: 1 }, { k: 'name', l: 'الاسم', t: 'text', req: 1 }, { k: 'employee_id', l: 'الموظف (اسمه بيظهر في التوقيعات والطباعة)', t: 'fk', ref: 'employees', combo: true }, { k: 'password', l: u ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور', t: 'password' },
       { k: 'role', l: 'الدور', t: 'select', options: [['user', 'مستخدم (حسب الصلاحيات)'], ['admin', 'مدير (كل الصلاحيات)']], onChange: (v) => { pe.el.style.display = pe.bar.style.display = v === 'admin' ? 'none' : ''; } }], u || {}, 2);
     const pe = permEditor(u?.perms);
     modal({ title: u ? `تعديل ${u.name}` : 'مستخدم جديد', wide: true, body: h('div', fg.el, h('h4', { style: { margin: '14px 0 4px' } }, 'الصلاحيات (صفحة ← زرار)'),
@@ -209,7 +209,7 @@ export async function usersPage(root) {
     if (u?.role === 'admin') pe.el.style.display = pe.bar.style.display = 'none';
   };
   root.replaceChildren(pageHead('المستخدمون والصلاحيات', h('button.btn.primary', { onclick: () => open(null) }, '＋ مستخدم')),
-    table({ cols: [{ k: 'username', l: 'المستخدم' }, { k: 'name', l: 'الاسم' }, { k: 'jobs', l: 'الوظائف', text: (r) => (r.jobs || []).join(' — ') }, { k: 'role', l: 'الدور', text: (r) => (r.role === 'admin' ? 'مدير' : 'مستخدم') },
+    table({ cols: [{ k: 'username', l: 'المستخدم' }, { k: 'name', l: 'الاسم' }, { k: 'employee_id', l: 'الموظف', text: (r) => nameOf('employees', r.employee_id) }, { k: 'jobs', l: 'الوظائف', text: (r) => (r.jobs || []).join(' — ') }, { k: 'role', l: 'الدور', text: (r) => (r.role === 'admin' ? 'مدير' : 'مستخدم') },
       { k: 'perms', l: 'الصلاحيات', text: (r) => (r.role === 'admin' ? 'الكل' : `${r.perms.length} صلاحية — ${[...new Set(r.perms.map((k) => k.split('.')[0]))].map(modName).join('، ') || 'بدون'}`) }, { k: 'active', l: 'الحالة', render: (r) => (r.active ? badge('نشط', 'ok') : badge('معطّل', 'bad')) }], rows: users, onRow: open }));
 }
 

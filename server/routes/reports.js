@@ -4,7 +4,24 @@ import { all, get, val, AppError, r2 } from '../db.js';
 import { acc, getSetting } from '../lib/core.js';
 
 const CLASS_LBL = { direct: 'مباشرة', indirect: 'غير مباشرة', admin: 'إدارية', transfer: 'تحويلات للمواقع' };
-const TYPE_LBL = { material: 'خامات', labor: 'عمالة', expense: 'مصروفات' };
+const TYPE_LBL = { material: 'أصناف', labor: 'عمالة', expense: 'مصروفات' };
+
+// رقم المستند + المشروع + المرحلة لكل حركة مخزون (لكارت الصنف). المصروفات: المشروع من رأس الإذن والمرحلة من سطر الصرف
+async function attachMoveDocs(moves) {
+  const ids = (t, f = (m) => m.doc_type === t) => [...new Set(moves.filter(f).map((m) => Number(m.doc_id)).filter(Boolean))];
+  const inList = (a) => a.map(() => '?').join(',');
+  const noTable = { receipt: 'goods_receipts', invoice: 'purchase_invoices', preturn: 'purchase_returns', adjustment: 'stock_adjustments' };
+  const nos = {};
+  for (const [t, tb] of Object.entries(noTable)) { const a = ids(t); if (a.length) for (const r of await all(`SELECT id, no FROM ${tb} WHERE id IN (${inList(a)})`, ...a)) nos[`${t}:${r.id}`] = { no: r.no }; }
+  const iss = ids('issue'); const lines = [...new Set(moves.filter((m) => m.doc_type === 'issue').map((m) => Number(m.line_id)).filter(Boolean))];
+  if (iss.length) for (const r of await all(`SELECT i.id, i.no, i.kind, p.name project_name FROM stock_issues i LEFT JOIN projects p ON p.id=i.project_id WHERE i.id IN (${inList(iss)})`, ...iss)) nos[`issue:${r.id}`] = { no: r.no, kind: r.kind, project_name: r.project_name };
+  const stages = {};
+  if (lines.length) for (const r of await all(`SELECT l.id, st.name stage_name FROM stock_issue_lines l LEFT JOIN stock_issue_lines rl ON rl.id=l.ref_line_id LEFT JOIN stages st ON st.id=COALESCE(l.stage_id, rl.stage_id) WHERE l.id IN (${inList(lines)})`, ...lines)) stages[r.id] = r.stage_name;
+  for (const m of moves) {
+    const d = nos[`${m.doc_type}:${m.doc_id}`] || {};
+    m.doc_no = d.no || null; m.doc_kind = d.kind || null; m.project_name = d.project_name || null; m.stage_name = m.doc_type === 'issue' ? (stages[m.line_id] || null) : null;
+  }
+}
 
 // ---------- فلاتر التكلفة المشتركة ----------
 function costWhere(q) {
@@ -115,7 +132,7 @@ export function reportRouter() {
   // ---------- المخزون ----------
   r.get('/stock-card', async (req, res) => {
     const { material_id, warehouse_id, from, to } = req.query;
-    if (!material_id) throw new AppError('اختر الخامة');
+    if (!material_id) throw new AppError('اختر الصنف');
     const wh = warehouse_id || await val(`SELECT id FROM warehouses WHERE type='raw' ORDER BY id LIMIT 1`);
     const mat = await get('SELECT m.*, u.name unit_name FROM materials m JOIN units u ON u.id=m.unit_id WHERE m.id=?', material_id);
     let opening = { qty: 0, value: 0, avg: 0 };
@@ -126,6 +143,7 @@ export function reportRouter() {
     const w = ['warehouse_id=?', 'material_id=?']; const p = [wh, material_id];
     if (from) { w.push('date>=?'); p.push(from); } if (to) { w.push('date<=?'); p.push(to); }
     const moves = await all(`SELECT * FROM stock_moves WHERE ${w.join(' AND ')} ORDER BY date, ord, id`, ...p);
+    await attachMoveDocs(moves);
     res.json({ material: mat, opening, moves, closing: moves.length ? { qty: moves.at(-1).bal_qty, value: moves.at(-1).bal_value, avg: moves.at(-1).avg_cost } : opening });
   });
 
@@ -274,7 +292,7 @@ export function reportRouter() {
     const month = new Date().toISOString().slice(0, 7);
     const stock = (await get('SELECT COALESCE(SUM(value),0) v, COUNT(CASE WHEN qty>0 THEN 1 END) n FROM material_stock')).v;
     const lowN = await val(`SELECT COUNT(*) FROM materials m LEFT JOIN material_stock s ON s.material_id=m.id WHERE m.active=1 AND m.min_qty>0 AND COALESCE(s.qty,0)<=m.min_qty`);
-    const lowItems = (await all(`SELECT m.id, m.name, m.min_qty, u.name unit, COALESCE(s.qty,0) qty FROM materials m LEFT JOIN material_stock s ON s.material_id=m.id LEFT JOIN units u ON u.id=m.unit_id WHERE m.active=1 AND m.min_qty>0`)).map((x) => ({ ...x, pct: Math.max(0, Math.round(x.qty / x.min_qty * 100)) })).sort((a, b) => (a.qty / a.min_qty) - (b.qty / b.min_qty));
+    const lowItems = (await all(`SELECT m.id, m.name, m.min_qty, u.name unit, COALESCE(s.qty,0) qty FROM materials m LEFT JOIN material_stock s ON s.material_id=m.id LEFT JOIN units u ON u.id=m.unit_id WHERE m.active=1 AND m.min_qty>0 AND COALESCE(s.qty,0)<=m.min_qty`)).map((x) => ({ ...x, pct: Math.max(0, Math.round(x.qty / x.min_qty * 100)) })).sort((a, b) => (a.qty / a.min_qty) - (b.qty / b.min_qty));
     const apTotal = await val(`SELECT COALESCE(SUM(credit-debit),0) FROM journal_lines WHERE account_id=? AND supplier_id IS NOT NULL`, await acc('acc_ap'));
     const treas = await all(`SELECT t.name, COALESCE((SELECT SUM(jl.debit-jl.credit) FROM journal_lines jl WHERE jl.treasury_id=t.id AND jl.account_id=t.account_id),0) balance FROM treasuries t WHERE t.active=1`);
     const custody = await val(`SELECT COALESCE(SUM(debit-credit),0) FROM journal_lines WHERE account_id=?`, await acc('acc_custody'));

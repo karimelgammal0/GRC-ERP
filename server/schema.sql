@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS material_categories (
   code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
   active INTEGER NOT NULL DEFAULT 1
 );
-CREATE TABLE IF NOT EXISTS materials (           -- أصناف الخامات
+CREATE TABLE IF NOT EXISTS materials (           -- أصناف الأصناف
   id SERIAL PRIMARY KEY,
   code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
   category_id INTEGER REFERENCES material_categories(id),
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS stages (              -- مراحل التصنيع
   account_id INTEGER,                            -- حساب إنتاج تحت التشغيل للمرحلة
   active INTEGER NOT NULL DEFAULT 1
 );
-CREATE TABLE IF NOT EXISTS sites (               -- المواقع (تحويلات الخامات)
+CREATE TABLE IF NOT EXISTS sites (               -- المواقع (تحويلات الأصناف)
   id SERIAL PRIMARY KEY,
   code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
   project_id INTEGER REFERENCES projects(id),
@@ -437,6 +437,8 @@ ALTER TABLE stock_issues ADD COLUMN IF NOT EXISTS received_by_id INTEGER REFEREN
 -- أذون الصرف/التحويل المعتمدة بتتقفل؛ reopened=1 معناها اتفتحت بصلاحية للتعديل مرة واحدة
 ALTER TABLE stock_issues ADD COLUMN IF NOT EXISTS reopened INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS shortcuts TEXT;
+-- الموظف المرتبط بالمستخدم: اسمه (مش اسم المستخدم) هو اللي بيظهر في التوقيعات وطباعة المستندات
+ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES employees(id);
 -- وظائف كل موديول (بتظهر في خانات التوقيع بالطباعة) وتخصيصها على المستخدمين
 CREATE TABLE IF NOT EXISTS module_jobs (
   id SERIAL PRIMARY KEY, module TEXT NOT NULL, name TEXT NOT NULL, UNIQUE (module, name)
@@ -489,7 +491,7 @@ CREATE INDEX IF NOT EXISTS ix_jtl_t ON journal_template_lines(template_id);
 ALTER TABLE units ADD COLUMN IF NOT EXISTS sub_unit_id INTEGER REFERENCES units(id);
 ALTER TABLE units ADD COLUMN IF NOT EXISTS sub_factor NUMERIC;
 
--- ربط فئات الخامات بالمخازن (المخزن بدون فئات مربوطة = كل الخامات)
+-- ربط فئات الأصناف بالمخازن (المخزن بدون فئات مربوطة = كل الأصناف)
 CREATE TABLE IF NOT EXISTS warehouse_categories (
   warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
   category_id INTEGER NOT NULL REFERENCES material_categories(id) ON DELETE CASCADE,
@@ -545,7 +547,7 @@ CREATE TABLE IF NOT EXISTS unit_cost_periods (
   id SERIAL PRIMARY KEY,
   month TEXT NOT NULL,                              -- YYYY-MM
   project_id INTEGER NOT NULL DEFAULT 0,
-  cement_material_id INTEGER,                       -- خامة الأسمنت المقاس بيها الإنتاج (اختياري لهذا الشهر)
+  cement_material_id INTEGER,                       -- صنف الأسمنت المقاس بيها الإنتاج (اختياري لهذا الشهر)
   bags_override NUMERIC,                            -- عدد شكاير يدوي (لو فاضي: من المنصرف بالنظام)
   spread_rate NUMERIC NOT NULL DEFAULT 0,           -- معدل فرد الشيكارة (م² / شيكارة)
   notes TEXT,

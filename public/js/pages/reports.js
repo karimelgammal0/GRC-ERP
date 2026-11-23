@@ -1,7 +1,7 @@
 import { h, GET, L, META, can, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, modal, nameOf, labelOf, CLASS_OPTS } from '../core.js';
 import { barChart, donutChart, chartCard, chartsGrid } from '../charts.js';
 
-const CT = [['', 'الكل'], ['material', 'خامات'], ['labor', 'عمالة'], ['expense', 'مصروفات']];
+const CT = [['', 'الكل'], ['material', 'أصناف'], ['labor', 'عمالة'], ['expense', 'مصروفات']];
 const REP_CLASS = [...CLASS_OPTS, ['transfer', 'تحويلات للمواقع']];
 const SCOPES = [['manufacturing', 'تصنيع (بدون التحويلات للمواقع)'], ['transfer', 'تحويلات للمواقع'], ['all', 'الكل']];
 const COSTF = [{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'cost_type', l: 'نوع التكلفة', t: 'select', options: CT }, { k: 'scope', l: 'النطاق', t: 'select', options: SCOPES }];
@@ -30,7 +30,7 @@ export async function hub(root) {
     ['تكلفة المشاريع حسب المرحلة', 'كل مشروع وتكلفة كل مرحلة فيه (قوالب/صب/تشطيب)', '#/reports/project-stage'],
     ['تكلفة المراحل على كل المشاريع', 'كل مرحلة وتوزيعها على المشروعات', '#/reports/stage-project'],
     ['تحليل مشروع (بند × مرحلة)', 'تفصيل مشروع واحد على البنود والمراحل — بداية تكلفة البند', '#/reports/project-analysis'],
-    ['استهلاك الخامات', 'الخامة × المشروع أو المرحلة', '#/reports/material-usage'],
+    ['استهلاك الأصناف', 'الصنف × المشروع أو المرحلة', '#/reports/material-usage'],
     ['تكاليف المصنع', 'إجمالي تكاليف المصنع مصنفة مباشرة / غير مباشرة / إدارية (شهري أو حسب النوع)', '#/reports/factory-cost'],
     ['تفاصيل التكاليف', 'كل سطر تكلفة بفلاتر مشروع/بند/مرحلة/نوع', '#/reports/cost-detail'],
     ['المصروفات', 'حسب الفئة/التصنيف/المشروع/الشهر', '#/reports/expenses'],
@@ -38,7 +38,7 @@ export async function hub(root) {
     ['ميزان المراجعة', 'أرصدة الحسابات بالفترة', '#/reports/trial-balance'],
     ['كشف حساب أستاذ', 'حركة أي حساب بالتفصيل', '#/reports/ledger'],
     ['قائمة الدخل المبسطة', 'الإيرادات والمصروفات', '#/reports/income'],
-    ['أرصدة المخزون', 'كميات وقيم الخامات بالمتوسط المرجح', '#/inventory/balances'], ['أرصدة الموردين', 'المستحق مع أعمار الديون', '#/purchases/supplier-balances'], ['الخزن والعهد', 'أرصدة الخزن والبنوك والعهد', '#/finance/treasuries'],
+    ['أرصدة المخزون', 'كميات وقيم الأصناف بالمتوسط المرجح', '#/inventory/balances'], ['أرصدة الموردين', 'المستحق مع أعمار الديون', '#/purchases/supplier-balances'], ['الخزن والعهد', 'أرصدة الخزن والبنوك والعهد', '#/finance/treasuries'],
   ];
   root.replaceChildren(pageHead('التقارير'), h('div.cards-hub', items.filter(([, , href]) => { const [, m, pg] = href.slice(1).split('/'); return can(`${m}.${pg}`); }).map(([t, d, href]) => h('a.hub-card', { href }, h('b', t), h('span', d)))));
 }
@@ -77,12 +77,12 @@ function pivotPage({ title, row, col, rowRef, colRef, rowLbl, extra = [], note }
       const cell = (val, fn) => (val ? h('a', { href: '#', onclick: (e) => { e.preventDefault(); fn(); } }, fmt(val)) : '');
       const cols = [{ k: 'name', l: rowLbl, render: (r) => h('b', r.name || 'غير محدد') },
         ...d.cols.map((c) => ({ k: 'c' + c.key, l: c.name || 'غير محدد', num: true, render: (r) => cell(r.values[c.key], drill(Number(r.key) || null, Number(c.key) || null)) })),
-        { k: 'material', l: 'خامات', num: true, fmt: (n) => fmt(n) }, { k: 'labor', l: 'عمالة', num: true, fmt: (n) => fmt(n) }, { k: 'expense', l: 'مصروفات', num: true, fmt: (n) => fmt(n) }, { k: 'total', l: 'الإجمالي', num: true, render: (r) => h('b', fmt(r.total)) }];
+        { k: 'material', l: 'أصناف', num: true, fmt: (n) => fmt(n) }, { k: 'labor', l: 'عمالة', num: true, fmt: (n) => fmt(n) }, { k: 'expense', l: 'مصروفات', num: true, fmt: (n) => fmt(n) }, { k: 'total', l: 'الإجمالي', num: true, render: (r) => h('b', fmt(r.total)) }];
       const foot = (c) => (c.k === 'name' ? 'الإجمالي' : c.k.startsWith('c') ? fmt(d.totals.values[c.k.slice(1)]) : c.k === 'total' ? fmt(d.totals.total) : ['material', 'labor', 'expense'].includes(c.k) ? fmt(d.totals[c.k]) : '');
       const stacked = d.cols.length > 1 && d.cols.length <= 6;
       const rowItems = d.rows.map((r) => ({ label: r.name || 'غير محدد', value: r.total, series: stacked ? d.cols.map((c) => ({ name: c.name || 'غير محدد', value: r.values[c.key] || 0 })) : null }));
-      host.replaceChildren(h('div.kpis', kpi('إجمالي التكلفة', fmt(d.totals.total)), kpi('خامات', fmt(d.totals.material)), kpi('عمالة', fmt(d.totals.labor)), kpi('مصروفات', fmt(d.totals.expense))),
-        chartsGrid(chartCard('توزيع التكلفة حسب النوع', donutChart([{ label: 'خامات', value: d.totals.material }, { label: 'عمالة', value: d.totals.labor }, { label: 'مصروفات', value: d.totals.expense }])),
+      host.replaceChildren(h('div.kpis', kpi('إجمالي التكلفة', fmt(d.totals.total)), kpi('أصناف', fmt(d.totals.material)), kpi('عمالة', fmt(d.totals.labor)), kpi('مصروفات', fmt(d.totals.expense))),
+        chartsGrid(chartCard('توزيع التكلفة حسب النوع', donutChart([{ label: 'أصناف', value: d.totals.material }, { label: 'عمالة', value: d.totals.labor }, { label: 'مصروفات', value: d.totals.expense }])),
           chartCard(`أعلى ${rowLbl} تكلفة${stacked ? ' (مقسمة حسب ' + (col === 'stage' ? 'المرحلة' : 'العمود') + ')' : ''}`, barChart(rowItems))),
         table({ name: title, cols, rows: d.rows, foot }), h('div.hint', 'اضغط على أي رقم لعرض الحركات اللي كوّنته.'));
     };
@@ -97,12 +97,12 @@ export const projectAnalysisPage = async (root, params) => {
   const inner = pivotPage({ title: 'تحليل مشروع (بند × مرحلة)', row: 'item', col: 'stage', rowRef: 'project_items', colRef: 'stages', rowLbl: 'البند', extra: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, req: 1 }], note: 'اختر المشروع لعرض تكلفة كل بند داخله موزعة على المراحل. السطور «غير محدد» هي تكلفة غير مربوطة ببند.' });
   await inner(root, { project_id: pid });
 };
-export const materialUsagePage = pivotPage({ title: 'استهلاك الخامات', row: 'material', col: 'stage', rowRef: 'materials', colRef: 'stages', rowLbl: 'الخامة', extra: [{ k: 'project_id', l: 'مشروع', t: 'fk', ref: 'projects', combo: true }] });
+export const materialUsagePage = pivotPage({ title: 'استهلاك الأصناف', row: 'material', col: 'stage', rowRef: 'materials', colRef: 'stages', rowLbl: 'الصنف', extra: [{ k: 'project_id', l: 'مشروع', t: 'fk', ref: 'projects', combo: true }] });
 
 export async function costDetailPage(root) {
   const host = h('div');
   const fb = fbar([...COSTF, { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'cost_class', l: 'التصنيف', t: 'select', options: [['', 'الكل'], ...CLASS_OPTS] }],
-    async (v) => { const rows = await GET('/reports/cost-lines', v); const TY = { material: 'خامات', labor: 'عمالة', expense: 'مصروفات' };
+    async (v) => { const rows = await GET('/reports/cost-lines', v); const TY = { material: 'أصناف', labor: 'عمالة', expense: 'مصروفات' };
       host.replaceChildren(h('div.kpis', kpi('إجمالي التكلفة', fmt(rows.reduce((s, r) => s + r.amount, 0))), kpi('عدد السطور', String(rows.length))),
         chartsGrid(chartCard('توزيع التكلفة حسب النوع', donutChart(sumBy(rows, (r) => TY[r.cost_type] || r.cost_type))), chartCard('التكلفة حسب المرحلة', barChart(sumBy(rows, (r) => r.stage_name || 'غير محدد')))),
         costTable(rows)); }, { from: monthStart(), scope: 'manufacturing' });

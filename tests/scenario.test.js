@@ -46,8 +46,8 @@ await run(`INSERT INTO project_items(code,name,project_id) VALUES('BND-T1','وا
 const item1 = await val(`SELECT id FROM project_items WHERE code='BND-T1'`), item2 = await val(`SELECT id FROM project_items WHERE code='BND-T2'`), itemOther = await val(`SELECT id FROM project_items WHERE code='BND-T3'`);
 await run(`INSERT INTO sites(code,name,project_id) VALUES('SITE-T1','موقع تجريبي',?)`, prj); const site = await val(`SELECT id FROM sites WHERE code='SITE-T1'`);
 const treasury = (await get(`SELECT id FROM treasuries LIMIT 1`)).id; const cust = (await get(`SELECT id FROM custodians LIMIT 1`)).id;
-// خامة جديدة صفر الرصيد لاختبار المتوسط المرجح بدقة
-await run(`INSERT INTO materials(code,name,unit_id) VALUES('RM-T1','خامة اختبار',(SELECT id FROM units LIMIT 1))`); const T1 = await mat('خامة اختبار');
+// صنف جديدة صفر الرصيد لاختبار المتوسط المرجح بدقة
+await run(`INSERT INTO materials(code,name,unit_id) VALUES('RM-T1','صنف اختبار',(SELECT id FROM units LIMIT 1))`); const T1 = await mat('صنف اختبار');
 
 section('3) طلب شراء → أمر توريد → استلام جزئي → فاتورة مطابقة');
 const pr = await saveDoc('purchase_request', { date: '2026-11-02', requested_by: 'المخزن', lines: [{ material_id: T1, qty: 100 }] }, null, U);
@@ -57,7 +57,7 @@ await throws(async () => await saveDoc('purchase_order', { date: '2026-11-02', s
 const grn1 = await saveDoc('goods_receipt', { date: '2026-11-03', supplier_id: sup, warehouse_id: wh, order_id: po.id, lines: [{ material_id: T1, qty: 40, order_line_id: po.lines[0].id }] }, null, U);
 near(grn1.lines[0].unit_price, 10, 'سعر الاستلام اتسحب من الأمر');
 ok((await get('SELECT status FROM purchase_orders WHERE id=?', po.id)).status === 'partial', 'الأمر «استلام جزئي»');
-near((await get('SELECT qty,avg_cost FROM material_stock WHERE material_id=?', T1)).qty, 40, 'رصيد الخامة 40');
+near((await get('SELECT qty,avg_cost FROM material_stock WHERE material_id=?', T1)).qty, 40, 'رصيد الصنف 40');
 ok(!(await get(`SELECT 1 FROM accounts WHERE code='2140'`)) && !(await get(`SELECT 1 FROM settings WHERE key='acc_grni'`)), 'مفيش حساب/ربط للاستلامات غير المفوترة');
 near(await glBal('2110'), -400, 'الاستلام 400 دائن على الموردين');
 await throws(async () => await saveDoc('goods_receipt', { date: '2026-11-03', supplier_id: sup, warehouse_id: wh, order_id: po.id, lines: [{ material_id: T1, qty: 61, order_line_id: po.lines[0].id }] }, null, U), /المتبقي/, 'استلام زيادة عن الأمر');
@@ -95,7 +95,7 @@ const iss2 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'productio
 const issM = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 3 }, { material_id: T1, item_id: item2, stage_id: stage.cast, qty: 2 }] }, null, U);
 near(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE source_type='issue' AND source_id=${issM.id} AND item_id=${item1}`), issM.lines[0].total, 'إذن واحد: تكلفة البند الأول');
 near(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE source_type='issue' AND source_id=${issM.id} AND item_id=${item2}`), issM.lines[1].total, 'إذن واحد: تكلفة البند الثاني');
-await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 1 }, { material_id: T1, item_id: item1, stage_id: stage.cast, qty: 1 }] }, null, U), /مكررة/, 'نفس الخامة على نفس البند');
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 1 }, { material_id: T1, item_id: item1, stage_id: stage.cast, qty: 1 }] }, null, U), /مكرر/, 'نفس الصنف على نفس البند');
 await voidDoc('stock_issue', issM.id, U);
 const iss3 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'site', warehouse_id: wh, project_id: prj, site_id: site, lines: [{ material_id: T1, qty: 10 }] }, null, U);
 // التحويل لموقع: الموقع مطلوب بس لو المشروع متكود له مواقع
@@ -118,7 +118,7 @@ const cl = async (w) => await val(`SELECT COALESCE(SUM(amount),0) FROM cost_line
 near(await cl(`project_id=${prj} AND stage_id=${stage.cast} AND item_id=${item1}`), iss1.lines[0].total, 'تكلفة المشروع/البند/مرحلة الصب');
 near(await glBal('1224'), iss1.lines[0].total, 'حساب إنتاج تحت التشغيل — الصب');
 near(await glBal('1223'), iss2.lines[0].total, 'حساب القوالب');
-near(await glBal('5200'), iss3.lines[0].total, 'خامات محولة للمواقع'); near(await glBal('5300'), iss4.lines[0].total, 'غير مباشر');
+near(await glBal('5200'), iss3.lines[0].total, 'أصناف محولة للمواقع'); near(await glBal('5300'), iss4.lines[0].total, 'غير مباشر');
 near(await cl(`cost_class='indirect'`), iss4.lines[0].total, 'تكلفة غير مباشرة بدون مشروع');
 
 section('6) حركة بأثر رجعي → إعادة تقييم الصرف');
@@ -213,7 +213,7 @@ await throws(async () => await voidDoc('voucher', ci.id, U), /مقفلة/, 'إل
 await run(`UPDATE fiscal_periods SET status='open'`);
 const tb = (await all(`SELECT COALESCE(SUM(debit),0) d, COALESCE(SUM(credit),0) c FROM journal_lines`))[0];
 near(tb.d, tb.c, 'ميزان المراجعة متزن (إجمالي المدين = الدائن)');
-near(await stockTotal(), await glBal('1221'), 'مخزون الخامات = الأستاذ');
+near(await stockTotal(), await glBal('1221'), 'مخزون الأصناف = الأستاذ');
 const wipAndCost = await glBal('1223') + await glBal('1224') + await glBal('1225') + await glBal('5200') + await glBal('5300') + await glBal('5100') + await glBal('6100') + await glBal('6200') + await glBal('5400') + await glBal('5500') + await glBal('5600') + await glBal('6300') + await glBal('6400') + await glBal('6500');
 near(await cl('1=1'), r2(wipAndCost), 'مجموع جدول التكلفة = مجموع حسابات التكلفة في الأستاذ');
 ok((await all('SELECT * FROM stock_moves WHERE bal_qty < -0.0000001')).length === 0, 'لا يوجد رصيد سالب في الدفتر');
@@ -243,7 +243,7 @@ const fcd = await api('/api/reports/factory-cost'); near(fcd.totals.total, await
 near(fcd.totals.direct + fcd.totals.indirect + fcd.totals.admin, fcd.totals.total, 'مباشرة + غير مباشرة + إدارية = الإجمالي');
 ok(fcd.rows.some((x) => x.project_id && x.stage_id), 'تفصيل المشروع والمرحلة');
 const noProj = await api('/api/reports/cost-lines?project_id=none'); ok(noProj.every((x) => x.project_id === null), 'فلتر بدون مشروع');
-const lastP = await api(`/api/helpers/last-price?material_id=${T1}`); ok(lastP && Number(lastP.unit_price) > 0, 'آخر سعر شراء للخامة');
+const lastP = await api(`/api/helpers/last-price?material_id=${T1}`); ok(lastP && Number(lastP.unit_price) > 0, 'آخر سعر شراء للصنف');
 const piv = await api('/api/reports/cost-pivot?row=project&col=stage');
 const pname = await val('SELECT name FROM projects WHERE id=?', prj); const prow = piv.rows.find((x) => x.name === pname);
 ok(prow && prow.total > 0, 'مصفوفة المشروع × المرحلة فيها بيانات');
@@ -259,7 +259,7 @@ const ss = await api(`/api/reports/supplier-statement?supplier_id=${sup}`); near
 const tr = await api('/api/reports/treasury-balances'); ok(tr.length === 2, 'أرصدة الخزن');
 const dash = await api('/api/reports/dashboard'); near(dash.stock_value, await stockTotal(), 'لوحة التحكم');
 const lk = await api('/api/lookups'); ok(lk.materials.length >= 102 && lk.accounts.length > 30, 'القوائم المرجعية');
-section('13) ربط فئات الخامات بالمخازن + إضافة بند من شاشة الصرف');
+section('13) ربط فئات الأصناف بالمخازن + إضافة بند من شاشة الصرف');
 const send = async (method, p, body, ck = cookie) => { const r = await fetch(base + p, { method, headers: { cookie: ck, 'content-type': 'application/json' }, body: JSON.stringify(body || {}) }); return { status: r.status, j: await r.json() }; };
 const cats = await all('SELECT id FROM material_categories ORDER BY id LIMIT 2');
 const wL1 = await send('PUT', `/api/m/warehouses/${wh}`, { category_ids: [cats[0].id, cats[1].id] });
@@ -269,7 +269,7 @@ const wL2 = await send('PUT', `/api/m/warehouses/${wh}`, { category_ids: [cats[0
 ok(wL2.j.category_ids.length === 1, 'استبدال الفئات');
 ok((await send('PUT', `/api/m/warehouses/${wh}`, { category_ids: [999999] })).status === 400, 'فئة غير موجودة مرفوضة');
 await send('PUT', `/api/m/warehouses/${wh}`, { category_ids: [] });
-lkW = await api('/api/lookups'); ok(lkW.warehouses.find((w) => w.id === wh).category_ids.length === 0, 'فك الربط = كل الخامات');
+lkW = await api('/api/lookups'); ok(lkW.warehouses.find((w) => w.id === wh).category_ids.length === 0, 'فك الربط = كل الأصناف');
 const prjQ = prj;
 const qi1 = await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: 'بند سريع' });
 ok(qi1.status === 200 && qi1.j.project_id === prjQ && qi1.j.code, 'إضافة بند سريع بصلاحية المدير');
@@ -293,7 +293,7 @@ section('15) حفظ تكويد بحقول رقمية فاضية');
 const e1 = await send('POST', '/api/m/employees', { name: 'عامل بدون أجر', emp_type: 'monthly', cost_class: 'admin', daily_rate: '', monthly_salary: null });
 ok(e1.status === 200 && e1.j.daily_rate === 0, 'موظف بدون أجر يوم');
 const e2 = await send('PUT', `/api/m/employees/${e1.j.id}`, { daily_rate: '' }); ok(e2.status === 200 && e2.j.daily_rate === 0, 'تفريغ أجر اليوم عند التعديل');
-const m1 = await send('POST', '/api/m/materials', { name: 'خامة بدون حد', unit_id: await val('SELECT id FROM units LIMIT 1'), min_qty: '' }); ok(m1.status === 200 && m1.j.min_qty === 0, 'خامة بدون حد طلب');
+const m1 = await send('POST', '/api/m/materials', { name: 'صنف بدون حد', unit_id: await val('SELECT id FROM units LIMIT 1'), min_qty: '' }); ok(m1.status === 200 && m1.j.min_qty === 0, 'صنف بدون حد طلب');
 const s1 = await send('POST', '/api/m/suppliers', { name: 'مورد بدون ائتمان', credit_days: '' }); ok(s1.status === 200 && s1.j.credit_days === 0, 'مورد بدون مدة ائتمان');
 const sq = await api('/api/sequences'); ok(sq.length > 20 && sq[0].key === 'unit', 'شاشة الترقيم');
 
