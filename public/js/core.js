@@ -227,8 +227,7 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
     .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin-bottom:12px}.meta b{color:#555;font-weight:600}
     table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #444;padding:5px 7px;text-align:right}th{background:#eee}
     td.n{text-align:center}.tot{display:flex;justify-content:flex-end;gap:24px;font-weight:700;margin-bottom:10px}
-    .sig{display:flex;justify-content:space-around;margin-top:48px}.sig div{text-align:center;min-width:140px;border-top:1px solid #111;padding-top:6px}
-    .sig div.u{border-top:0;padding-top:0}.sig .u .nm{font-weight:700;font-size:14px;min-height:22px}.sig .u .ln{border-top:1px solid #111;padding-top:6px}
+    .sig{display:flex;justify-content:space-around;margin-top:48px}.sig>div{text-align:center;min-width:140px}.sig .jb{font-weight:700;border-bottom:1px solid #111;padding-bottom:6px}.sig .nm{font-size:14px;min-height:22px;margin-top:34px}
     .pby{margin-top:28px;font-size:11px;color:#555;text-align:left;direction:rtl}
   </style></head><body>
     <div class="top"><div class="co">${META.settings?.company_logo ? `<img src="${e(META.settings.company_logo)}" alt="">` : ''}<span>${e(META.settings?.company_name || '')}</span></div></div>
@@ -238,7 +237,7 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
     <table><thead><tr><th>#</th>${cols.map((c) => `<th>${e(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r, i) => `<tr><td class="n">${i + 1}</td>${r.map((c) => `<td>${e(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>
     ${totals.length ? `<div class="tot">${totals.map(([k, v]) => `<span>${e(k)}: ${e(v)}</span>`).join('')}</div>` : ''}
     ${notes ? `<div><b>ملاحظات:</b> ${e(notes)}</div>` : ''}
-    <div class="sig">${sign.map((s) => { const names = META.signers?.[module]?.[s] || []; const nm = by && names.includes(by) ? by : names.join(' / '); return nm ? `<div class="u"><div class="nm">${e(nm)}</div><div class="ln">${e(s)}</div></div>` : `<div>${e(s)}</div>`; }).join('')}</div>
+    <div class="sig">${sign.map((s) => { const names = META.signers?.[module]?.[s] || []; const nm = by && names.includes(by) ? by : names.join(' / '); return `<div><div class="jb">${e(s)}</div><div class="nm">${e(nm)}</div></div>`; }).join('')}</div>
     <div class="pby">طُبع بواسطة: ${e(META.me?.employee_name || META.me?.name || META.me?.username || '')} — ${e(new Date().toLocaleString('en-GB'))}</div></body></html>`;
   const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.append(f); const d = f.contentWindow.document; d.open(); d.write(html); d.close();
