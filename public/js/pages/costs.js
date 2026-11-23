@@ -107,3 +107,8 @@ export async function historyPage(root) {
   root.replaceChildren(pageHead('سجل أسعار المتر'), bar, host);
   bar.run();
 }
+
+// ---------- تكاليف مشروعات (تبويب مبدئي — المحتوى لاحقاً) ----------
+export async function projectsCostPage(root) {
+  root.replaceChildren(pageHead('تكاليف مشروعات'), card('قيد التجهيز', h('div.note', 'التبويب ده متخصص لتكاليف المشروعات — هنحدد محتواه في خطوة جاية.')));
+}

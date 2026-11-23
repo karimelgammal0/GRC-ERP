@@ -46,13 +46,17 @@ export async function saveConfig(b) {
   return c;
 }
 
+// تكلفة متر GRC: نستبعد أسطر البنود المصنّفة على خامة منتج نهائي تانية (GRP / GRG). الأسطر بدون بند (رواتب، مصروفات عامة على المرحلة)
+// والبنود اللي لسه متصنّفتش بتفضل داخلة في الحساب
+const ONLY_GRC = ` AND NOT EXISTS (SELECT 1 FROM project_items pi JOIN product_types pt ON pt.id=pi.product_type_id WHERE pi.id=c.item_id AND UPPER(TRIM(pt.name))<>'GRC')`;
+
 /** أسطر تكلفة مرحلة في شهر مجمّعة: أصناف بالصنف + أجور يومية + مرتبات شهرية + مصروفات مباشرة */
 async function stageBlock(stageId, month, projectId) {
   if (!stageId) return null;
   const pw = projectId ? ' AND c.project_id=?' : ''; const pp = projectId ? [projectId] : [];
   const rows = await all(`SELECT c.cost_type, c.source_type, c.material_id, m.name mname, u.name unit, SUM(c.qty) qty, SUM(c.amount) amt
     FROM cost_lines c LEFT JOIN materials m ON m.id=c.material_id LEFT JOIN units u ON u.id=m.unit_id
-    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_class<>'transfer'${pw}
+    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_class<>'transfer'${pw}${ONLY_GRC}
     GROUP BY c.cost_type, c.source_type, c.material_id, m.name, u.name`, month, stageId, ...pp);
   const mats = rows.filter((r) => r.cost_type === 'material').map((r) => ({ material_id: r.material_id, name: r.mname || 'غير محدد', unit: r.unit || '', qty: r4(r.qty), amount: r2(r.amt) })).sort((a, b) => b.amount - a.amount);
   const sum = (f) => r2(rows.filter(f).reduce((s, r) => s + num(r.amt), 0));
@@ -70,7 +74,7 @@ async function moldBlock(stageId, month, projectId) {
       SUM(CASE WHEN c.cost_type='material' THEN c.amount ELSE 0 END) mat, SUM(CASE WHEN c.cost_type='labor' THEN c.amount ELSE 0 END) lab,
       SUM(CASE WHEN c.cost_type='expense' THEN c.amount ELSE 0 END) exp, SUM(c.amount) total
     FROM cost_lines c LEFT JOIN projects p ON p.id=c.project_id
-    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_class<>'transfer'${pw} GROUP BY COALESCE(c.project_id,0), p.name ORDER BY total DESC`, month, stageId, ...pp);
+    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_class<>'transfer'${pw}${ONLY_GRC} GROUP BY COALESCE(c.project_id,0), p.name ORDER BY total DESC`, month, stageId, ...pp);
   const by_project = rows.map((r) => ({ project_id: r.pid, name: r.pname || 'غير محدد', material: r2(r.mat), labor: r2(r.lab), expense: r2(r.exp), total: r2(r.total) }));
   return { stage_id: stageId, name: await val('SELECT name FROM stages WHERE id=?', stageId), by_project, total: r2(by_project.reduce((s, r) => s + r.total, 0)) };
 }
@@ -81,7 +85,7 @@ async function systemBags(cfg, month, projectId) {
   const pw = projectId ? ' AND c.project_id=?' : ''; const pp = projectId ? [projectId] : [];
   const ids = cfg.cement_material_ids; const iw = ids.length ? ` AND c.material_id IN (${ids.map(() => '?').join(',')})` : '';
   const rows = await all(`SELECT m.id, m.name, SUM(c.qty) qty FROM cost_lines c JOIN materials m ON m.id=c.material_id
-    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_type='material' AND c.cost_class<>'transfer' AND m.name LIKE '%اسمنت%'${iw}${pw}
+    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_type='material' AND c.cost_class<>'transfer' AND m.name LIKE '%اسمنت%'${iw}${pw}${ONLY_GRC}
     GROUP BY m.id, m.name ORDER BY m.name`, month, cfg.cast_stage_id, ...ids, ...pp);
   const lines = rows.map((r) => { const kg = kgOf(r, cfg.cement_kg); return { material_id: r.id, name: r.name, qty: r4(r.qty), kg, std_bags: r4(r.qty * kg / STD_BAG_KG) }; });
   return { lines, bags: r4(lines.reduce((t, l) => t + l.std_bags, 0)) };
