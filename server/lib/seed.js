@@ -51,6 +51,9 @@ export async function ensureBaseData() {
       for (const name of names) await run('INSERT INTO module_jobs(module,name) VALUES(?,?) ON CONFLICT DO NOTHING', module, name);
     await setSetting('jobs_seeded', '1');
   }
+  if (!Number(await val('SELECT COUNT(*) FROM product_types'))) {
+    for (const name of ['GRC', 'GRP', 'GRG']) await run('INSERT INTO product_types(code,name) VALUES(?,?)', await nextNo('product_type'), name);
+  }
   if (!Number(await val('SELECT COUNT(*) FROM payment_types'))) {
     for (const [name, link] of [['موردين', 'supplier'], ['مصروفات', 'expense']]) await run('INSERT INTO payment_types(code,name,link) VALUES(?,?,?)', await nextNo('payment_type'), name, link);
   }

@@ -43,7 +43,7 @@ export async function configPage(root) {
     canEdit ? h('div', { style: { marginTop: '12px' } }, h('button.btn.primary', { onclick: save }, 'حفظ')) : null);
 }
 
-// ---------- سعر المتر الشهري ----------
+// ---------- تكلفة متر GRC (شهرياً) ----------
 export async function unitCostPage(root, params = {}) {
   const host = h('div');
   let cur = { month: params.month || curMonth(), project_id: params.project_id ? Number(params.project_id) : null };
@@ -85,7 +85,7 @@ export async function unitCostPage(root, params = {}) {
       acts.some(Boolean) ? h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '14px 0' } }, acts) : null,
     );
   };
-  root.replaceChildren(pageHead('سعر المتر الشهري'), bar, host);
+  root.replaceChildren(pageHead('تكلفة متر GRC'), bar, host);
   await load();
 }
 unitCostPage.newInfo = null;

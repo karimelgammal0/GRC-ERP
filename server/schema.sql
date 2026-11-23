@@ -90,6 +90,12 @@ CREATE TABLE IF NOT EXISTS project_items (       -- بنود المشروع
   qty NUMERIC, unit_id INTEGER REFERENCES units(id),
   notes TEXT, active INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS product_types (       -- خامة المنتج النهائي (GRC / GRP / GRG)
+  id SERIAL PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE, name TEXT NOT NULL UNIQUE,
+  notes TEXT, active INTEGER NOT NULL DEFAULT 1
+);
+ALTER TABLE project_items ADD COLUMN IF NOT EXISTS product_type_id INTEGER REFERENCES product_types(id);
 CREATE TABLE IF NOT EXISTS stages (              -- مراحل التصنيع
   id SERIAL PRIMARY KEY,
   code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,

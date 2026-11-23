@@ -29,6 +29,7 @@ function costWhere(q) {
   if (q.from) { w.push('c.date>=?'); p.push(q.from); }
   if (q.to) { w.push('c.date<=?'); p.push(q.to); }
   for (const k of ['project_id', 'stage_id', 'item_id', 'site_id', 'material_id', 'employee_id', 'category_id']) if (q[k] === 'none') w.push(`c.${k} IS NULL`); else if (q[k]) { w.push(`c.${k}=?`); p.push(q[k]); }
+  if (q.product_type_id) { w.push('c.item_id IN (SELECT id FROM project_items WHERE product_type_id=?)'); p.push(q.product_type_id); }
   if (q.cost_type) { w.push('c.cost_type=?'); p.push(q.cost_type); }
   if (q.cost_class) { w.push('c.cost_class=?'); p.push(q.cost_class); }
   // النطاق: تصنيع (الافتراضي، بدون التحويلات للمواقع) | تحويلات للمواقع | الكل
@@ -39,7 +40,8 @@ function costWhere(q) {
 const DIM = {
   project: { expr: 'COALESCE(c.project_id,0)', names: async () => await dict('projects') },
   stage: { expr: 'COALESCE(c.stage_id,0)', names: async () => await dict('stages') },
-  item: { expr: 'COALESCE(c.item_id,0)', names: async () => Object.fromEntries((await all(`SELECT i.id, i.name || ' — ' || p.name n FROM project_items i JOIN projects p ON p.id=i.project_id`)).map((r) => [r.id, r.n])) },
+  product_type: { expr: 'COALESCE((SELECT product_type_id FROM project_items WHERE id=c.item_id),0)', names: async () => await dict('product_types') },
+  item: { expr: 'COALESCE(c.item_id,0)', names: async () => Object.fromEntries((await all(`SELECT i.id, i.name || ' — ' || p.name || COALESCE(' [' || t.name || ']', '') n FROM project_items i JOIN projects p ON p.id=i.project_id LEFT JOIN product_types t ON t.id=i.product_type_id`)).map((r) => [r.id, r.n])) },
   site: { expr: 'COALESCE(c.site_id,0)', names: async () => await dict('sites') },
   material: { expr: 'COALESCE(c.material_id,0)', names: async () => await dict('materials') },
   employee: { expr: 'COALESCE(c.employee_id,0)', names: async () => await dict('employees') },
@@ -54,7 +56,7 @@ const nameOf = (names, k) => (k === 0 || k === '0' ? 'غير محدد' : names[k
 
 // كل تقرير ليه صفحة (أو أكتر) بتستخدمه — المستخدم لازم يكون له صلاحية على واحدة منهم
 const REPORT_PAGES = {
-  'cost-pivot': ['reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.factory-cost'], 'factory-cost': ['reports.factory-cost'], 'cost-lines': ['reports.cost-detail', 'reports.material-usage', 'reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.factory-cost'],
+  'cost-pivot': ['reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.product-type', 'reports.factory-cost'], 'factory-cost': ['reports.factory-cost'], 'cost-lines': ['reports.cost-detail', 'reports.product-type', 'reports.material-usage', 'reports.project-stage', 'reports.stage-project', 'reports.project-analysis', 'reports.factory-cost'],
   'stock-card': ['inventory.stock-card'], 'stock-balances': ['inventory.balances'], 'stock-moves': ['inventory.moves'],
   'supplier-statement': ['purchases.supplier-statement'], 'supplier-balances': ['purchases.supplier-balances'],
   'treasury-statement': ['finance.treasury-statement'], 'treasury-balances': ['finance.treasuries'], 'custody-statement': ['finance.custody-statement'], 'custody-balances': ['finance.treasuries'],
@@ -117,14 +119,14 @@ export function reportRouter() {
 
   r.get('/cost-lines', async (req, res) => {
     const { sql, p } = costWhere(req.query);
-    res.json(await all(`SELECT c.*, pr.name project_name, it.name item_name, st.name stage_name, si.name site_name, m.name material_name, e.name employee_name, ec.name category_name,
+    res.json(await all(`SELECT c.*, pr.name project_name, it.name item_name, pt.name product_type_name, st.name stage_name, si.name site_name, m.name material_name, e.name employee_name, ec.name category_name,
       CASE c.source_type WHEN 'issue' THEN (SELECT no FROM stock_issues WHERE id=c.source_id) WHEN 'receipt' THEN (SELECT no FROM goods_receipts WHERE id=c.source_id)
         WHEN 'invoice' THEN (SELECT no FROM purchase_invoices WHERE id=c.source_id) WHEN 'preturn' THEN (SELECT no FROM purchase_returns WHERE id=c.source_id)
         WHEN 'adjustment' THEN (SELECT no FROM stock_adjustments WHERE id=c.source_id) WHEN 'labor' THEN (SELECT no FROM labor_sheets WHERE id=c.source_id)
         WHEN 'labor_advance' THEN (SELECT no FROM labor_advances WHERE id=c.source_id) WHEN 'payroll' THEN (SELECT no FROM payroll_runs WHERE id=c.source_id)
         WHEN 'voucher' THEN (SELECT no FROM vouchers WHERE id=c.source_id) END doc_no,
       CASE c.source_type WHEN 'issue' THEN (SELECT kind FROM stock_issues WHERE id=c.source_id) WHEN 'voucher' THEN (SELECT kind FROM vouchers WHERE id=c.source_id) END doc_kind
-      FROM cost_lines c LEFT JOIN projects pr ON pr.id=c.project_id LEFT JOIN project_items it ON it.id=c.item_id LEFT JOIN stages st ON st.id=c.stage_id
+      FROM cost_lines c LEFT JOIN projects pr ON pr.id=c.project_id LEFT JOIN project_items it ON it.id=c.item_id LEFT JOIN product_types pt ON pt.id=it.product_type_id LEFT JOIN stages st ON st.id=c.stage_id
       LEFT JOIN sites si ON si.id=c.site_id LEFT JOIN materials m ON m.id=c.material_id LEFT JOIN employees e ON e.id=c.employee_id LEFT JOIN expense_categories ec ON ec.id=c.category_id
       WHERE ${sql} ORDER BY c.date DESC, c.id DESC LIMIT 3000`, ...p));
   });

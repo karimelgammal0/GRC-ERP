@@ -5,7 +5,7 @@ const fieldDefs = (M) => M.fields.map((f) => ({
   ...f, filter: f.ref === 'accounts' ? ACCOUNT_FILTER : f.filter, combo: f.t === 'fk' && f.ref !== 'accounts' && (L[f.ref] || []).length > 14,
 }));
 
-const MASTER_PAGE = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', employees: 'employees' };
+const MASTER_PAGE = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', product_types: 'product-types', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', employees: 'employees' };
 /** شاشة تكويد عامة مبنية من مواصفات السيرفر */
 export function masterPage(name, opts = {}) {
   return async (root) => {

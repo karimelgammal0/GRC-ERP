@@ -174,12 +174,14 @@ export function helperRouter() {
     const prj = await get('SELECT id, active FROM projects WHERE id=?', Number(b.project_id));
     if (!prj || !prj.active) throw new AppError('اختر مشروعاً صحيحاً');
     if (await get('SELECT 1 FROM project_items WHERE project_id=? AND LOWER(name)=LOWER(?) AND active=1', prj.id, name)) throw new AppError('فيه بند بنفس الاسم في المشروع ده');
+    const ptype = await get('SELECT id FROM product_types WHERE id=? AND active=1', Number(b.product_type_id) || 0);
+    if (!ptype) throw new AppError('اختر خامة المنتج النهائي');
     const unit = b.unit_id ? Number(b.unit_id) : null;
     if (unit && !await get('SELECT 1 FROM units WHERE id=?', unit)) throw new AppError('الوحدة غير موجودة');
     const qty = b.qty === undefined || b.qty === null || b.qty === '' ? null : Number(b.qty);
     if (qty !== null && !(qty >= 0)) throw new AppError('الكمية غير صحيحة');
     const code = await nextNo('project_item');
-    const id = await insertRow('project_items', { code, name, project_id: prj.id, qty, unit_id: unit }, ['code', 'name', 'project_id', 'qty', 'unit_id']);
+    const id = await insertRow('project_items', { code, name, project_id: prj.id, product_type_id: ptype.id, qty, unit_id: unit }, ['code', 'name', 'project_id', 'product_type_id', 'qty', 'unit_id']);
     await audit(req.user, 'create', 'project_items', id, { code, via: 'issue-screen' });
     res.json(await get('SELECT * FROM project_items WHERE id=?', id));
   });

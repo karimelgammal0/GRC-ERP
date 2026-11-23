@@ -13,7 +13,7 @@ const whAllows = (wid) => { const cats = byId('warehouses', wid)?.category_ids |
 const canAddItems = () => can('inventory.issues.add_item') || can('settings.project-items.create');
 const addItemDialog = (ctx) => {
   const p = ctx.header.project_id; if (!p) { toast('اختر المشروع الأول', 'err'); return; }
-  const fg = formGrid([{ k: 'name', l: 'اسم البند', t: 'text', req: 1 }, { k: 'qty', l: 'الكمية (اختياري)', t: 'number' }, { k: 'unit_id', l: 'الوحدة (اختياري)', t: 'fk', ref: 'units' }], {}, 1);
+  const fg = formGrid([{ k: 'product_type_id', l: 'خامة المنتج النهائي', t: 'fk', ref: 'product_types', req: 1 }, { k: 'name', l: 'اسم البند', t: 'text', req: 1 }, { k: 'qty', l: 'الكمية (اختياري)', t: 'number' }, { k: 'unit_id', l: 'الوحدة (اختياري)', t: 'fk', ref: 'units' }], {}, 1);
   modal({ title: `بند جديد في مشروع ${nameOf('projects', p)}`, body: fg.el, buttons: [{ label: 'حفظ واختيار البند', cls: 'primary', onClick: async () => {
     const it = await POST('/helpers/quick-item', { ...fg.values(), project_id: p }); await loadLookups();
     const tgt = ctx.lines.find((l) => l.material_id && !l.item_id) || ctx.lines.find((l) => !l.item_id) || ctx.lines[ctx.lines.length - 1];

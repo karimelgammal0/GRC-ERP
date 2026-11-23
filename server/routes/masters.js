@@ -5,7 +5,7 @@ import { nextNo, audit } from '../lib/core.js';
 import { can } from '../lib/perms.js';
 
 // صفحة الصلاحيات لكل كود (العاملين ليهم صفحتين: الموارد البشرية والإعدادات)
-const PAGE_OF = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', payment_types: 'payment-types', receipt_types: 'receipt-types', employees: 'employees' };
+const PAGE_OF = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', product_types: 'product-types', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', payment_types: 'payment-types', receipt_types: 'receipt-types', employees: 'employees' };
 const masterKeys = (name, action) => [`settings.${PAGE_OF[name]}.${action}`, ...(name === 'employees' ? [`hr.employees.${action}`] : [])];
 
 const T = (k, l, t = 'text', extra = {}) => ({ k, l, t, ...extra });
@@ -37,10 +37,15 @@ export const MASTERS = {
       T('status', 'الحالة', 'select', { options: [['active', 'جارٍ'], ['done', 'مكتمل'], ['hold', 'متوقف']] }), T('notes', 'ملاحظات', 'textarea')],
     cols: ['code', 'name', 'client_id', 'status'], used: [['project_items', 'project_id'], ['stock_issues', 'project_id'], ['cost_lines', 'project_id'], ['sites', 'project_id']],
   },
+  product_types: {
+    title: 'خامة المنتج النهائي', table: 'product_types', seq: 'product_type',
+    fields: [T('name', 'اسم الخامة (GRC / GRP / GRG)', 'text', { req: 1 }), T('notes', 'ملاحظات', 'textarea')],
+    cols: ['code', 'name', 'notes'], used: [['project_items', 'product_type_id']],
+  },
   project_items: {
     title: 'بنود المشروعات', table: 'project_items', seq: 'project_item',
-    fields: [T('project_id', 'المشروع', 'fk', { ref: 'projects', req: 1 }), T('name', 'اسم البند', 'text', { req: 1 }), T('qty', 'الكمية', 'number'), T('unit_id', 'الوحدة', 'fk', { ref: 'units' }), T('notes', 'ملاحظات', 'textarea')],
-    cols: ['code', 'name', 'project_id', 'qty', 'unit_id'], used: [['stock_issues', 'item_id'], ['stock_issue_lines', 'item_id'], ['cost_lines', 'item_id'], ['labor_sheet_lines', 'item_id']],
+    fields: [T('project_id', 'المشروع', 'fk', { ref: 'projects', req: 1 }), T('product_type_id', 'خامة المنتج النهائي', 'fk', { ref: 'product_types', req: 1 }), T('name', 'اسم البند', 'text', { req: 1 }), T('qty', 'الكمية', 'number'), T('unit_id', 'الوحدة', 'fk', { ref: 'units' }), T('notes', 'ملاحظات', 'textarea')],
+    cols: ['code', 'name', 'project_id', 'product_type_id', 'qty', 'unit_id'], used: [['stock_issues', 'item_id'], ['stock_issue_lines', 'item_id'], ['cost_lines', 'item_id'], ['labor_sheet_lines', 'item_id']],
   },
   stages: {
     title: 'مراحل التصنيع', table: 'stages', seq: 'stage',
@@ -193,22 +198,25 @@ export async function masterRouter() {
     res.status(403).json({ error: 'ليس لديك صلاحية على هذا التكويد' });
   });
   // ---------- بنود المشروعات: نموذج Excel + رفع جماعي ----------
-  const HEAD = ['كود المشروع', 'اسم المشروع', 'اسم البند', 'الكمية', 'الوحدة', 'ملاحظات']; const TPL_ROWS = 500;
+  const HEAD = ['كود المشروع', 'اسم المشروع', 'اسم البند', 'الكمية', 'الوحدة', 'ملاحظات', 'خامة المنتج النهائي']; const TPL_ROWS = 500;
   r.get('/project_items/template', async (req, res) => {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('البنود', { views: [{ rightToLeft: true, state: 'frozen', ySplit: 1 }] });
     const ref = wb.addWorksheet('قوائم مرجعية', { views: [{ rightToLeft: true }] });
-    const lst = wb.addWorksheet('_الوحدات', { state: 'hidden' });
-    ws.columns = HEAD.map((h, i) => ({ header: h, key: 'c' + i, width: [16, 30, 40, 12, 14, 30][i] }));
+    const lst = wb.addWorksheet('_الوحدات', { state: 'hidden' }); const lstT = wb.addWorksheet('_الخامات', { state: 'hidden' });
+    ws.columns = HEAD.map((h, i) => ({ header: h, key: 'c' + i, width: [16, 30, 40, 12, 14, 30, 22][i] }));
     ws.getRow(1).font = { bold: true }; ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
     const projects = await all('SELECT code, name FROM projects WHERE active=1 ORDER BY code'); const units = await all('SELECT name FROM units WHERE active=1 ORDER BY code');
     ref.columns = [{ header: 'كود المشروع', width: 16 }, { header: 'اسم المشروع', width: 36 }]; ref.getRow(1).font = { bold: true };
     projects.forEach((p) => ref.addRow([p.code, p.name]));
     units.forEach((u) => lst.addRow([u.name]));
+    const ptypes = await all('SELECT name FROM product_types WHERE active=1 ORDER BY code'); ptypes.forEach((t) => lstT.addRow([t.name]));
+    const tRange = `'_الخامات'!$A$1:$A$${Math.max(ptypes.length, 1)}`;
     const uRange = `'_الوحدات'!$A$1:$A$${Math.max(units.length, 1)}`;
     for (let n = 2; n <= TPL_ROWS + 1; n++) {
       ws.getCell(`B${n}`).value = { formula: `IF(A${n}="","",IFERROR(VLOOKUP(A${n},'قوائم مرجعية'!$A:$B,2,FALSE),"كود غير موجود"))` };
       ws.getCell(`B${n}`).font = { color: { argb: 'FF475569' } };
+      ws.getCell(`G${n}`).dataValidation = { type: 'list', allowBlank: false, formulae: [tRange], showErrorMessage: true, errorTitle: 'خامة غير صحيحة', error: 'اختر الخامة من القائمة' };
       ws.getCell(`E${n}`).dataValidation = { type: 'list', allowBlank: true, formulae: [uRange], showErrorMessage: true, errorTitle: 'وحدة غير صحيحة', error: 'اختر الوحدة من القائمة' };
     }
     res.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -221,20 +229,21 @@ export async function masterRouter() {
     try { await wb.xlsx.load(Buffer.from(req.body.file, 'base64')); } catch { throw new AppError('الملف مش Excel صالح (.xlsx)'); }
     const ws = wb.worksheets[0]; if (!ws) throw new AppError('الملف فاضي');
     const cell = (row, i) => { let v = row.getCell(i).value; if (v && typeof v === 'object') v = v.result ?? v.text ?? (v.richText ? v.richText.map((x) => x.text).join('') : ''); return v === null || v === undefined ? '' : String(v).trim(); };
-    const projects = await all('SELECT id, code, name FROM projects'); const units = await all('SELECT id, code, name FROM units');
+    const projects = await all('SELECT id, code, name FROM projects'); const units = await all('SELECT id, code, name FROM units'); const tBy = new Map((await all('SELECT id, name FROM product_types')).map((t) => [t.name.toLowerCase(), t.id]));
     const pBy = new Map(); for (const p of projects) { pBy.set(p.code.toLowerCase(), p.id); if (!pBy.has(p.name.toLowerCase())) pBy.set(p.name.toLowerCase(), p.id); }
     const uBy = new Map(); for (const u of units) { uBy.set(u.name.toLowerCase(), u.id); uBy.set(u.code.toLowerCase(), u.id); }
     const rows = [], errors = [];
     ws.eachRow((row, n) => {
       if (n === 1) return;
-      const [pc, name, q, un, notes] = [1, 3, 4, 5, 6].map((i) => cell(row, i));
-      if (!pc && !name && !q && !un && !notes) return;
+      const [pc, name, q, un, notes, pt] = [1, 3, 4, 5, 6, 7].map((i) => cell(row, i));
+      if (!pc && !name && !q && !un && !notes && !pt) return;
       const err = (m) => errors.push(`صف ${n}: ${m}`);
       const pid = pBy.get(pc.toLowerCase()); if (!pc) err('كود المشروع فاضي'); else if (!pid) err(`المشروع «${pc}» غير موجود`);
       if (!name) err('اسم البند فاضي');
       let qty = null; if (q !== '') { qty = Number(q.replace(/,/g, '')); if (Number.isNaN(qty)) { err(`الكمية «${q}» مش رقم`); qty = null; } }
       let uid = null; if (un) { uid = uBy.get(un.toLowerCase()); if (!uid) err(`الوحدة «${un}» غير موجودة`); }
-      rows.push({ project_id: pid, name, qty, unit_id: uid || null, notes: notes || null });
+      let ptid = null; if (!pt) err('خامة المنتج النهائي فاضية'); else { ptid = tBy.get(pt.toLowerCase()); if (!ptid) err(`خامة المنتج «${pt}» غير موجودة`); }
+      rows.push({ project_id: pid, product_type_id: ptid, name, qty, unit_id: uid || null, notes: notes || null });
     });
     if (!rows.length) throw new AppError('مفيش بنود في الملف');
     if (errors.length) throw new AppError(`في ${errors.length} خطأ — لم يتم رفع أي بند:\n` + errors.slice(0, 15).join('\n') + (errors.length > 15 ? '\n…' : ''));
