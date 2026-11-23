@@ -186,11 +186,11 @@ export async function stockCardPage(root, params) {
     if (v.from || true) rows.push({ _open: true, date: v.from || '', party: 'رصيد أول المدة', bq: r.opening.qty, bp: r.opening.avg, bv: r.opening.value });
     for (const m of r.moves) rows.push({ date: m.date, party: m.party || '', notes: [DOC_LABEL[m.doc_type], m.notes].filter(Boolean).join(' — '), iq: m.direction === 'in' ? m.qty : null, ip: m.direction === 'in' ? m.unit_cost : null, iv: m.direction === 'in' ? m.value : null,
       oq: m.direction === 'out' ? m.qty : null, op: m.direction === 'out' ? m.unit_cost : null, ov: m.direction === 'out' ? m.value : null, bq: m.bal_qty, bp: m.avg_cost, bv: m.bal_value,
-      doc_type: m.doc_type, doc_id: m.doc_id, doc_no: m.doc_no, doc_kind: m.doc_kind, project_name: m.project_name, stage_name: m.stage_name });
+      doc_type: m.doc_type, doc_id: m.doc_id, doc_no: m.doc_no, doc_kind: m.doc_kind, site_name: m.site_name, stage_name: m.stage_name });
     const N = (k, f = (n) => fmt(n)) => ({ num: true, fmt: f });
     host.replaceChildren(h('div.kpis', kpi('الصنف', r.material.name, `${r.material.code} — الوحدة: ${unit}`), kpi('الرصيد الحالي', fq(r.closing.qty), unit), kpi('متوسط التكلفة', fmt(r.closing.avg, 4)), kpi('قيمة الرصيد', fmt(r.closing.value))),
       table({ name: `كارت-${r.material.code}`, compact: true, rows, maxRows: 2000, rowClass: (x) => (x._open ? 'low' : ''),
-        cols: [{ k: 'date', l: 'التاريخ' }, { k: 'doc_no', l: 'رقم الإذن', render: docLink, text: (x) => x.doc_no || '' }, { k: 'party', l: 'الجهة' }, { k: 'project_name', l: 'المشروع' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'notes', l: 'البيان' },
+        cols: [{ k: 'date', l: 'التاريخ' }, { k: 'doc_no', l: 'رقم الإذن', render: docLink, text: (x) => x.doc_no || '' }, { k: 'party', l: 'الجهة' }, { k: 'site_name', l: 'الموقع' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'notes', l: 'البيان' },
           { k: 'iq', l: 'وارد: كمية', ...N(), fmt: fq }, { k: 'ip', l: 'سعر', ...N(), fmt: (n) => fmt(n, 3) }, { k: 'iv', l: 'قيمة', ...N() },
           { k: 'oq', l: 'صادر: كمية', ...N(), fmt: fq }, { k: 'op', l: 'سعر', ...N(), fmt: (n) => fmt(n, 3) }, { k: 'ov', l: 'قيمة', ...N() },
           { k: 'bq', l: 'الرصيد: كمية', ...N(), fmt: fq }, { k: 'bp', l: 'سعر', ...N(), fmt: (n) => fmt(n, 3) }, { k: 'bv', l: 'قيمة', ...N() }] }));

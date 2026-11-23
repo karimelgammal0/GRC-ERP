@@ -14,12 +14,12 @@ async function attachMoveDocs(moves) {
   const nos = {};
   for (const [t, tb] of Object.entries(noTable)) { const a = ids(t); if (a.length) for (const r of await all(`SELECT id, no FROM ${tb} WHERE id IN (${inList(a)})`, ...a)) nos[`${t}:${r.id}`] = { no: r.no }; }
   const iss = ids('issue'); const lines = [...new Set(moves.filter((m) => m.doc_type === 'issue').map((m) => Number(m.line_id)).filter(Boolean))];
-  if (iss.length) for (const r of await all(`SELECT i.id, i.no, i.kind, p.name project_name FROM stock_issues i LEFT JOIN projects p ON p.id=i.project_id WHERE i.id IN (${inList(iss)})`, ...iss)) nos[`issue:${r.id}`] = { no: r.no, kind: r.kind, project_name: r.project_name };
+  if (iss.length) for (const r of await all(`SELECT i.id, i.no, i.kind, p.name project_name, s.name site_name FROM stock_issues i LEFT JOIN projects p ON p.id=i.project_id LEFT JOIN sites s ON s.id=i.site_id WHERE i.id IN (${inList(iss)})`, ...iss)) nos[`issue:${r.id}`] = { no: r.no, kind: r.kind, project_name: r.project_name, site_name: r.site_name };
   const stages = {};
   if (lines.length) for (const r of await all(`SELECT l.id, st.name stage_name FROM stock_issue_lines l LEFT JOIN stock_issue_lines rl ON rl.id=l.ref_line_id LEFT JOIN stages st ON st.id=COALESCE(l.stage_id, rl.stage_id) WHERE l.id IN (${inList(lines)})`, ...lines)) stages[r.id] = r.stage_name;
   for (const m of moves) {
     const d = nos[`${m.doc_type}:${m.doc_id}`] || {};
-    m.doc_no = d.no || null; m.doc_kind = d.kind || null; m.project_name = d.project_name || null; m.stage_name = m.doc_type === 'issue' ? (stages[m.line_id] || null) : null;
+    m.doc_no = d.no || null; m.doc_kind = d.kind || null; m.project_name = d.project_name || null; m.site_name = d.site_name || null; m.stage_name = m.doc_type === 'issue' ? (stages[m.line_id] || null) : null;
   }
 }
 
