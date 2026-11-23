@@ -223,7 +223,7 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${e(title)} ${e(no)}</title><style>
     body{font-family:Tahoma,Arial,sans-serif;font-size:13px;color:#111;margin:24px}
     .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px}
-    .co{font-size:17px;font-weight:700}.ttl{font-size:20px;font-weight:700;text-align:center;margin:6px 0 12px}
+    .co{font-size:17px;font-weight:700;display:flex;align-items:center;gap:12px}.co img{max-height:64px;max-width:180px;object-fit:contain}.ttl{font-size:20px;font-weight:700;text-align:center;margin:6px 0 12px}
     .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin-bottom:12px}.meta b{color:#555;font-weight:600}
     table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #444;padding:5px 7px;text-align:right}th{background:#eee}
     td.n{text-align:center}.tot{display:flex;justify-content:flex-end;gap:24px;font-weight:700;margin-bottom:10px}
@@ -231,7 +231,7 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
     .sig div.u{border-top:0;padding-top:0}.sig .u .nm{font-weight:700;font-size:14px;min-height:22px}.sig .u .ln{border-top:1px solid #111;padding-top:6px}
     .pby{margin-top:28px;font-size:11px;color:#555;text-align:left;direction:rtl}
   </style></head><body>
-    <div class="top"><div class="co">${e(META.settings?.company_name || '')}</div><div>رقم: <b>${e(no)}</b><br>التاريخ: <b>${e(date)}</b></div></div>
+    <div class="top"><div class="co">${META.settings?.company_logo ? `<img src="${e(META.settings.company_logo)}" alt="">` : ''}<span>${e(META.settings?.company_name || '')}</span></div><div>رقم: <b>${e(no)}</b><br>التاريخ: <b>${e(date)}</b></div></div>
     <div class="ttl">${e(title)}</div>
     <div class="meta">${meta.filter((m) => m[1]).map(([k, v]) => `<div><b>${e(k)}:</b> ${e(v)}</div>`).join('')}</div>
     <table><thead><tr><th>#</th>${cols.map((c) => `<th>${e(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r, i) => `<tr><td class="n">${i + 1}</td>${r.map((c) => `<td>${e(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>

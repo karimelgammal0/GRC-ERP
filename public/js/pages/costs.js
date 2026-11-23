@@ -85,7 +85,7 @@ export async function unitCostPage(root, params = {}) {
       acts.some(Boolean) ? h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '14px 0' } }, acts) : null,
     );
   };
-  root.replaceChildren(pageHead('تكلفة المتر GRC / GRP'), bar, host);
+  root.replaceChildren(h('div.print-only.print-head', h('div.ph-co', META.settings?.company_logo ? h('img.ph-logo', { src: META.settings.company_logo }) : null, META.settings?.company_name || ''), h('div.ph-title', 'تكلفة المتر GRC / GRP')), pageHead('تكلفة المتر GRC / GRP'), bar, host);
   await load();
 }
 unitCostPage.newInfo = null;

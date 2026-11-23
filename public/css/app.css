@@ -160,7 +160,7 @@ input.ro, select.ro { background: #f1efe8; color: var(--ink2); }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .print-only { display: block; } .mbar, .tabbar, .page-head { display: none !important; }
   .print-head { border-bottom: 2px solid #111; margin-bottom: 10px; padding-bottom: 6px; }
-  .ph-co { font-weight: 700; font-size: 15px; } .ph-title { font-size: 20px; font-weight: 700; text-align: center; margin: 4px 0; } .ph-filters, .ph-date { font-size: 11px; color: #444; }
+  .ph-co { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 10px; } .ph-logo { max-height: 56px; max-width: 160px; object-fit: contain; } .ph-title { font-size: 20px; font-weight: 700; text-align: center; margin: 4px 0; } .ph-filters, .ph-date { font-size: 11px; color: #444; }
   .chart-grid, .kpis { break-inside: avoid; } .card { break-inside: avoid; } .hint, .note { display: none; }
 }
 @media print {

@@ -66,7 +66,7 @@ export async function systemRouter() {
 
   // ----- إعدادات عامة وربط الحسابات والترقيم -----
   r.put('/settings', async (req, res) => {
-    const ok = ['company_name', 'currency', 'opening_date', 'allow_negative_stock', ...Object.keys(ACC_KEYS)];
+    const ok = ['company_name', 'company_logo', 'currency', 'opening_date', 'allow_negative_stock', ...Object.keys(ACC_KEYS)];
     for (const k of Object.keys(req.body)) {
       if (!ok.includes(k)) continue;
       if (k.startsWith('acc_')) need(req.user, 'accounts.account-links.edit', 'ليس لديك صلاحية تعديل ربط الحسابات');
@@ -75,6 +75,7 @@ export async function systemRouter() {
     }
     for (const [k, v] of Object.entries(req.body)) {
       if (!ok.includes(k)) continue;
+      if (k === 'company_logo' && v && !(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(String(v)) && String(v).length <= 400000)) throw new AppError('اللوجو لازم يكون صورة PNG أو JPG أو WEBP بحجم صغير');
       if (k === 'opening_date' && await openingLocked()) throw new AppError('الأرصدة الافتتاحية مقفلة');
       if (k.startsWith('acc_')) { const a = await get('SELECT postable FROM accounts WHERE id=?', Number(v)); if (!a || !a.postable) throw new AppError(`اختر حساب فرعي لـ «${ACC_KEYS[k]}»`); }
       await setSetting(k, v);

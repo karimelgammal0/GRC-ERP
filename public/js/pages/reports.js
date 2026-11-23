@@ -20,7 +20,7 @@ const printReport = (title) => {
   window.addEventListener('afterprint', done); window.print();
 };
 const rhead = (title) => {
-  PH = h('div.print-only.print-head', h('div.ph-co', META.settings?.company_name || ''), h('div.ph-title', title), h('div.ph-filters'), h('div.ph-date', `تاريخ الطباعة: ${today()}`));
+  PH = h('div.print-only.print-head', h('div.ph-co', META.settings?.company_logo ? h('img.ph-logo', { src: META.settings.company_logo }) : null, META.settings?.company_name || ''), h('div.ph-title', title), h('div.ph-filters'), h('div.ph-date', `تاريخ الطباعة: ${today()}`));
   return [PH, pageHead(title, h('button.btn.sm', { onclick: () => printReport(title) }, '🖨 طباعة التقرير'))];
 };
 const sumBy = (rows, keyFn, valFn = (r) => r.amount) => { const m = new Map(); for (const r of rows) m.set(keyFn(r), (m.get(keyFn(r)) || 0) + (Number(valFn(r)) || 0)); return [...m].map(([label, value]) => ({ label, value: Math.round(value * 100) / 100 })); };

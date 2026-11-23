@@ -79,6 +79,23 @@ export function masterPage(name, opts = {}) {
 }
 
 // ------------------------------------------------------------
+/** لوجو المصنع: بيتصغّر في المتصفح (حد أقصى 400×200) ويتخزن كإعداد، وبيظهر في هيدر كل المطبوعات */
+const shrink = (file) => new Promise((res, rej) => {
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => { const k = Math.min(1, 400 / img.width, 200 / img.height); const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c.toDataURL('image/png')); };
+  img.onerror = () => rej(new Error('الملف مش صورة صالحة')); img.src = url;
+});
+function logoCard(canE) {
+  const prev = h('div', { style: { minHeight: '70px', display: 'flex', alignItems: 'center' } });
+  const show = () => { const v = META.settings?.company_logo; prev.replaceChildren(v ? h('img', { src: v, style: { maxHeight: '70px', maxWidth: '240px' } }) : h('span.hint', 'لا يوجد لوجو')); };
+  const setLogo = guard(async (v) => { await PUT('/settings', { company_logo: v }); await loadMeta(); show(); toast(v ? 'تم حفظ اللوجو' : 'تم حذف اللوجو'); });
+  const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', style: { display: 'none' }, onchange: guard(async () => { const f = file.files[0]; file.value = ''; if (f) await setLogo(await shrink(f)); }) });
+  show();
+  return card('لوجو المصنع (بيظهر في هيدر المطبوعات)', prev, canE ? h('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } }, file,
+    h('button.btn', { onclick: () => file.click() }, 'رفع / تغيير اللوجو'), META.settings?.company_logo ? h('button.btn', { onclick: () => setLogo('') }, 'حذف') : null) : null);
+}
+
 export async function generalPage(root) {
   const S = META.settings; const canE = can('settings.general.edit');
   const g1 = formGrid([{ k: 'company_name', l: 'اسم الشركة', t: 'text', wide: true, readonly: !canE }, { k: 'currency', l: 'العملة', t: 'text', readonly: !canE },
@@ -86,7 +103,7 @@ export async function generalPage(root) {
   const save = guard(async () => { await PUT('/settings', g1.values()); await loadMeta(); toast('تم حفظ الإعدادات'); });
   root.replaceChildren(pageHead('الإعدادات العامة', canE ? h('button.btn.primary', { onclick: save }, 'حفظ') : null),
     h('div.note', 'ربط الحسابات (للقيود التلقائية) اتنقل لموديول الحسابات ← ربط الحسابات.'),
-    card('بيانات الشركة', g1.el));
+    card('بيانات الشركة', g1.el), logoCard(canE));
 }
 
 export async function sequencesPage(root) {
