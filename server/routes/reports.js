@@ -133,7 +133,8 @@ export function reportRouter() {
   r.get('/stock-card', async (req, res) => {
     const { material_id, warehouse_id, from, to } = req.query;
     if (!material_id) throw new AppError('اختر الصنف');
-    const wh = warehouse_id || await val(`SELECT id FROM warehouses WHERE type='raw' ORDER BY id LIMIT 1`);
+    // بدون مخزن محدد: المخزن اللي عليه آخر حركة للصنف، وإلا أول مخزن أصناف
+    const wh = warehouse_id || await val('SELECT warehouse_id FROM stock_moves WHERE material_id=? ORDER BY date DESC, id DESC LIMIT 1', material_id) || await val(`SELECT id FROM warehouses WHERE type='raw' ORDER BY id LIMIT 1`);
     const mat = await get('SELECT m.*, u.name unit_name FROM materials m JOIN units u ON u.id=m.unit_id WHERE m.id=?', material_id);
     let opening = { qty: 0, value: 0, avg: 0 };
     if (from) {
@@ -144,7 +145,7 @@ export function reportRouter() {
     if (from) { w.push('date>=?'); p.push(from); } if (to) { w.push('date<=?'); p.push(to); }
     const moves = await all(`SELECT * FROM stock_moves WHERE ${w.join(' AND ')} ORDER BY date, ord, id`, ...p);
     await attachMoveDocs(moves);
-    res.json({ material: mat, opening, moves, closing: moves.length ? { qty: moves.at(-1).bal_qty, value: moves.at(-1).bal_value, avg: moves.at(-1).avg_cost } : opening });
+    res.json({ material: mat, warehouse_id: Number(wh), opening, moves, closing: moves.length ? { qty: moves.at(-1).bal_qty, value: moves.at(-1).bal_value, avg: moves.at(-1).avg_cost } : opening });
   });
 
   r.get('/stock-balances', async (req, res) => {

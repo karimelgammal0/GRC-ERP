@@ -160,14 +160,14 @@ export async function balancesPage(root, params) {
     const r = await GET('/reports/stock-balances', { ...v, hide_zero: v.hide_zero === '1' ? '1' : '' });
     const nLow = r.rows.filter((x) => x.low).length;
     kp.replaceChildren(kpi('إجمالي قيمة المخزون', fmt(r.total_value), 'بالمتوسط المرجح'), kpi('عدد الأصناف', String(r.rows.length), v.hide_zero === '1' ? 'ذات رصيد' : 'كلها'), kpi('أصناف تحت حد الطلب', String(nLow), nLow ? 'محتاجة شراء' : 'تمام', nLow ? 'warn' : ''));
-    host.replaceChildren(table({ name: 'أرصدة-المخزن', center: true, rowClass: (x) => (x.low ? 'low' : x.qty < 0 ? 'neg' : ''), onRow: (x) => { location.hash = `#/inventory/stock-card?material_id=${x.id}`; },
+    host.replaceChildren(table({ name: 'أرصدة-المخزن', center: true, rowClass: (x) => (x.low ? 'low' : x.qty < 0 ? 'neg' : ''), onRow: (x) => { location.hash = `#/inventory/stock-card?material_id=${x.id}${v.warehouse_id ? '&warehouse_id=' + v.warehouse_id : ''}`; },
       cols: [{ k: 'code', l: 'الكود' }, { k: 'name', l: 'الصنف', render: (x) => h('b', x.name) }, { k: 'category', l: 'الفئة' }, { k: 'unit', l: 'الوحدة' },
         { k: 'qty', l: 'الكمية', num: true, fmt: fq }, { k: 'avg_cost', l: 'متوسط التكلفة', num: true, fmt: (n) => fmt(n, 4) }, { k: 'value', l: 'القيمة', num: true, fmt: (n) => fmt(n) },
         { k: 'min_qty', l: 'حد الطلب', num: true, fmt: (n) => (n ? fq(n) : '') }, { l: '', render: (x) => (x.low ? badge('تحت الحد', 'warn') : '') }],
       rows: r.rows, foot: (c) => (c.k === 'value' ? fmt(r.total_value) : c.k === 'name' ? 'الإجمالي' : '') }));
   };
-  const fb = filterBar([{ k: 'category_id', l: 'الفئة', t: 'fk', ref: 'material_categories' }, { k: 'as_of', l: 'الأرصدة في تاريخ (اختياري)', t: 'date' },
-    { k: 'hide_zero', l: 'عرض', t: 'select', options: [['1', 'الأصناف ذات الرصيد فقط'], ['0', 'كل الأصناف']] }], run, { hide_zero: '1' });
+  const fb = filterBar([{ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', filter: (x) => x.type === 'raw' }, { k: 'category_id', l: 'الفئة', t: 'fk', ref: 'material_categories' }, { k: 'as_of', l: 'الأرصدة في تاريخ (اختياري)', t: 'date' },
+    { k: 'hide_zero', l: 'عرض', t: 'select', options: [['1', 'الأصناف ذات الرصيد فقط'], ['0', 'كل الأصناف']] }], run, { hide_zero: '1', warehouse_id: defaultWh() });
   root.replaceChildren(pageHead('أرصدة مخزن الأصناف'), fb, kp, host); fb.run();
 }
 
@@ -195,7 +195,7 @@ export async function stockCardPage(root, params) {
           { k: 'oq', l: 'صادر: كمية', ...N(), fmt: fq }, { k: 'op', l: 'سعر', ...N(), fmt: (n) => fmt(n, 3) }, { k: 'ov', l: 'قيمة', ...N() },
           { k: 'bq', l: 'الرصيد: كمية', ...N(), fmt: fq }, { k: 'bp', l: 'سعر', ...N(), fmt: (n) => fmt(n, 3) }, { k: 'bv', l: 'قيمة', ...N() }] }));
   };
-  const fb = filterBar([{ k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', combo: true, req: 1 }, { k: 'from', l: 'من تاريخ', t: 'date' }, { k: 'to', l: 'إلى تاريخ', t: 'date' }], run, { material_id: params.material_id ? Number(params.material_id) : null });
+  const fb = filterBar([{ k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', combo: true, req: 1 }, { k: 'warehouse_id', l: 'المخزن (اختياري)', t: 'fk', ref: 'warehouses', filter: (x) => x.type === 'raw' }, { k: 'from', l: 'من تاريخ', t: 'date' }, { k: 'to', l: 'إلى تاريخ', t: 'date' }], run, { material_id: params.material_id ? Number(params.material_id) : null, warehouse_id: params.warehouse_id ? Number(params.warehouse_id) : null });
   root.replaceChildren(pageHead('كارت الصنف', h('a.btn', { href: '#/inventory/balances' }, 'الأرصدة')), h('div.note', 'نفس تصميم شيت المخزون القديم: وارد / صادر / رصيد (كمية — سعر — قيمة) بالمتوسط المرجح.'), fb, host); fb.run();
 }
 

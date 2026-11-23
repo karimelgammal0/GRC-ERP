@@ -16,13 +16,16 @@ export async function applyOpening(user) {
     if (await openingLocked()) throw new AppError('الأرصدة الافتتاحية مقفلة — اطلب من المدير فك القفل');
     const date = await getSetting('opening_date');
     await assertOpenPeriod(date);
-    const wh = await defaultWarehouse();
     const oldPairs = (await all(`SELECT DISTINCT warehouse_id w, material_id m FROM stock_moves WHERE doc_type='opening'`)).map((r) => [r.w, r.m]);
     await deleteJournals('opening', 0);
     await run(`DELETE FROM stock_moves WHERE doc_type='opening'`);
     const pairs = [...oldPairs]; let inv = 0;
-    for (const o of await all('SELECT * FROM opening_stock WHERE qty>0 ORDER BY material_id')) {
+    // الرصيد الافتتاحي بيتسجّل في المخزن المربوط بفئة الصنف (لو في مخازن بفئات محددة)، وإلا في المخزن الافتراضي
+    const whOfCat = {};
+    for (const o of await all('SELECT o.*, m.category_id FROM opening_stock o JOIN materials m ON m.id=o.material_id WHERE o.qty>0 ORDER BY o.material_id')) {
       const value = r2(o.value);
+      if (!(o.category_id in whOfCat)) whOfCat[o.category_id] = o.category_id ? await val(`SELECT w.id FROM warehouse_categories wc JOIN warehouses w ON w.id=wc.warehouse_id WHERE wc.category_id=? AND w.type='raw' AND w.active=1 ORDER BY w.id LIMIT 1`, o.category_id) : null;
+      const wh = whOfCat[o.category_id] || await defaultWarehouse();
       await addMove({ date, ord: 0, warehouse_id: wh, material_id: o.material_id, direction: 'in', qty: o.qty, value, doc_type: 'opening', doc_id: 0, line_id: o.material_id, party: 'رصيد افتتاحي', notes: o.note });
       pairs.push([wh, o.material_id]); inv += value;
     }
