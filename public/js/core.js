@@ -77,6 +77,8 @@ export async function loadMeta() { Object.assign(META, await GET('/meta')); }
 export const can = (key) => { const m = META.me; if (!m) return false; if (m.role === 'admin') return true; return (m._set ||= new Set(m.perms || [])).has(key); };
 export const canAny = (keys) => keys.some(can);
 export const byId = (list, id) => (L[list] || []).find((x) => x.id === Number(id));
+// مراحل الإدخال: المرحلة الفرعية لو للرئيسية فروع، والرئيسية نفسها لو معندهاش فروع
+export const leafStage = (x) => !(L.stages || []).some((c) => c.parent_id === x.id && c.active !== 0);
 export const nameOf = (list, id) => { const x = byId(list, id); return x ? (x.full_name || x.name) : ''; };   // full_name: «الصب › المرحلة الفرعية»
 export const codeName = (x) => (x ? `${x.code} — ${x.full_name || x.name}` : '');
 export const labelOf = (opts, v) => (opts.find(([k]) => k === v) || [])[1] ?? v ?? '';

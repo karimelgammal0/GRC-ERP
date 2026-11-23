@@ -1,4 +1,4 @@
-import { h, GET, POST, L, META, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, labelOf, statusBadge, toast, guard, fieldInput, combo } from '../core.js';
+import { h, GET, POST, L, META, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, labelOf, statusBadge, toast, guard, fieldInput, combo, leafStage } from '../core.js';
 import { docScreen, dateF, notesF, total } from '../docs-ui.js';
 
 const ACC_F = (x) => x.postable === 1 && x.active !== 0;
@@ -51,7 +51,7 @@ const mkLines = ({ typeList, typeLabel, kind, title, withStage }) => ({
     { k: 'amount', l: 'القيمة', t: 'number', w: '110px' },
     { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, w: '15%', onChange: (v, l, c) => { const it = byId('project_items', l.item_id); if (it && it.project_id !== v) { l.item_id = null; c.setLines(c.lines); } } },
     { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, w: '15%', filter: (x, l) => !l.project_id || x.project_id === l.project_id },
-    ...(withStage ? [{ k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', w: '11%' }] : []),
+    ...(withStage ? [{ k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', filter: leafStage, w: '11%' }] : []),
     { k: 'notes', l: 'ملاحظات', t: 'text' }],
 });
 const disbLines = mkLines({ typeList: 'payment_types', typeLabel: 'نوع الدفع', kind: 'disbursement', title: 'المصروفات والمدفوعات — أضف أكتر من سطر في نفس السند', withStage: true });
@@ -76,7 +76,7 @@ function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind
         if (k === 'supplier_payment') f.push({ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true, req: 1, lockOnEdit: true, onChange: () => loadInvoices(ctx) }, ...payFields(ctx));
         if (k === 'expense') f.push({ k: 'category_id', l: 'فئة المصروف', t: 'fk', ref: 'expense_categories', req: 1 }, ...srcFields(ctx),
           { k: 'project_id', l: 'المشروع (إجباري للمصروف المباشر)', t: 'fk', ref: 'projects', combo: true, onChange: (v, c) => { const it = byId('project_items', c.header.item_id); if (it && it.project_id !== v) c.setHeader('item_id', null); } },
-          { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, filter: (x) => !ctx.header.project_id || x.project_id === ctx.header.project_id }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' });
+          { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, filter: (x) => !ctx.header.project_id || x.project_id === ctx.header.project_id }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', filter: leafStage });
         if (k === 'wage_payment') f.push(...srcFields(ctx));
         if (k === 'custody_issue' || k === 'custody_return') f.push({ k: 'custodian_id', l: 'صاحب العهدة', t: 'fk', ref: 'custodians', req: 1 }, { k: 'treasury_id', l: k === 'custody_issue' ? 'تُصرف من' : 'تُردّ إلى', t: 'fk', ref: 'treasuries', req: 1 });
         if (k === 'transfer') f.push({ k: 'treasury_id', l: 'من خزينة', t: 'fk', ref: 'treasuries', req: 1 }, { k: 'to_treasury_id', l: 'إلى خزينة', t: 'fk', ref: 'treasuries', req: 1 });

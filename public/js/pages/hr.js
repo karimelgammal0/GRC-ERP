@@ -1,4 +1,4 @@
-import { h, GET, POST, L, META, fmt, fq, today, monthStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, labelOf, statusBadge, toast, guard, modal, fieldInput, CLASS_OPTS } from '../core.js';
+import { h, GET, POST, L, META, fmt, fq, today, monthStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, labelOf, statusBadge, toast, guard, modal, fieldInput, CLASS_OPTS, leafStage } from '../core.js';
 import { docScreen, dateF, notesF, total } from '../docs-ui.js';
 
 const empCol = { k: 'employee_id', l: 'العامل', t: 'fk', ref: 'employees', req: 1, combo: true, w: '24%' };
@@ -66,7 +66,7 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
       { l: 'صافي المنصرف', calc: (l) => lbNet(l), fmt: (v) => fmt(v), w: '100px' },
       { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, w: '15%', onChange: (v, l, ctx) => { const it = byId('project_items', l.item_id); if (it && it.project_id !== v) { l.item_id = null; ctx.setLines(ctx.lines); } } },
       { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, w: '15%', filter: (x, l) => !l.project_id || x.project_id === l.project_id },
-      { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', w: '110px' },
+      { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', filter: leafStage, w: '110px' },
       { l: 'التصنيف', calc: (l) => labelOf(CLASS_OPTS, classOf(l.employee_id)).split(' (')[0] }] },
     totals: (ctx) => [['إجمالي أيام الأساسي', fq(total(ctx.lines, (l) => l.days))], ['إجمالي أيام السهرات', fq(total(ctx.lines, (l) => l.ot_days))], ['صافي المنصرف', fmt(total(ctx.lines, (l) => lbNet(l))), 'ok']],
   },
@@ -134,7 +134,7 @@ function allocModal(l, done) {
       h('tbody', rows.map((r, i) => h('tr',
         h('td', fieldInput({ t: 'fk', ref: 'projects', combo: true, onChange: (v) => { r.project_id = v; r.item_id = null; draw(); } }, r.project_id)),
         h('td', fieldInput({ t: 'fk', ref: 'project_items', combo: true, filter: (x) => !r.project_id || x.project_id === r.project_id, onChange: (v) => { r.item_id = v; } }, r.item_id)),
-        h('td', fieldInput({ t: 'fk', ref: 'stages', req: 1, onChange: (v) => { r.stage_id = v; } }, r.stage_id)),
+        h('td', fieldInput({ t: 'fk', ref: 'stages', filter: leafStage, req: 1, onChange: (v) => { r.stage_id = v; } }, r.stage_id)),
         h('td', fieldInput({ t: 'number', onChange: (v) => { r.percent = v; upd(); } }, r.percent)),
         h('td', h('button.del', { onclick: () => { rows.splice(i, 1); draw(); } }, '×')))))),
       h('div.actions', h('button.btn.sm', { onclick: () => { rows.push({ percent: 0 }); draw(); } }, '＋ سطر'), h('span.grow'), h('span', 'المجموع: ', sumEl, '%'))); upd();

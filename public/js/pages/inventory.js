@@ -1,4 +1,4 @@
-import { h, GET, POST, L, META, can, loadLookups, modal, formGrid, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, printSheet } from '../core.js';
+import { h, GET, POST, L, META, can, loadLookups, modal, formGrid, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, printSheet, leafStage } from '../core.js';
 import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 export const KINDS = [['production', 'صرف إنتاج (مشروع + بند + مرحلة)'], ['site', 'تحويل لموقع'], ['overhead', 'تشغيل غير مباشر (بدون مشروع)']];
@@ -41,7 +41,7 @@ const issueLines = { blank: () => ({ material_id: null, qty: null }), cols: [
   { l: 'التكلفة', calc: (l, c) => (l.total ?? (Number(l.qty) || 0) * (c.stock?.[l.material_id]?.avg_cost ?? 0)), fmt: (v) => fmt(v), w: '110px' }] };
 const recvCol = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'employees', combo: true, w: '15%' };
 const itemCol = { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', req: 1, combo: true, w: '24%', filter: (x, l, c) => !c.header.project_id || x.project_id === Number(c.header.project_id) };
-const stageCol = (req) => ({ k: 'stage_id', l: req ? 'المرحلة' : 'المرحلة (اختياري)', t: 'fk', ref: 'stages', req, w: '16%' });
+const stageCol = (req) => ({ k: 'stage_id', l: req ? 'المرحلة' : 'المرحلة (اختياري)', t: 'fk', ref: 'stages', filter: leafStage, req, w: '16%' });
 const issueLinesItems = { ...issueLines, blank: () => ({ material_id: null, item_id: null, stage_id: null, received_by_id: null, qty: null }),
   cols: (ctx) => (ctx.header.kind === 'production' ? [{ ...issueLines.cols[0], w: '18%' }, { ...itemCol, w: '15%' }, stageCol(true), recvCol, ...issueLines.cols.slice(1)] : [issueLines.cols[0], stageCol(false), recvCol, ...issueLines.cols.slice(1)]) };
 const issueTotals = (ctx) => { const t = total(ctx.lines, (l) => l.total ?? (Number(l.qty) || 0) * (ctx.stock?.[l.material_id]?.avg_cost ?? 0)); return [[ctx.doc ? 'إجمالي تكلفة الصرف' : 'تكلفة تقديرية (الفعلية تُحسب عند الحفظ)', fmt(t)]]; };
