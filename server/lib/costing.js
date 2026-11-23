@@ -46,14 +46,25 @@ export async function saveConfig(b) {
   return c;
 }
 
+export const KINDS = ['GRC', 'GRP'];
+const kindOf = (k) => { const v = String(k || 'GRC').toUpperCase(); if (!KINDS.includes(v)) throw new AppError('نوع الإنتاج غير صحيح (GRC / GRP)'); return v; };
+/** مراحل نوع إنتاج تحت مرحلة رئيسية (صب/تشطيب): المراحل الفرعية اللي اسمها فيه GRC أو GRP؛ ولو مفيش فرعية للنوع GRC بنرجع للمرحلة الرئيسية نفسها (توافق مع البيانات القديمة) */
+async function kindStageIds(parentId, kind) {
+  if (!parentId) return [];
+  const subs = await all(`SELECT id FROM stages WHERE parent_id=? AND active=1 AND UPPER(name) LIKE ?`, parentId, `%${kind}%`);
+  if (subs.length) return subs.map((s) => s.id);
+  return kind === 'GRC' ? [parentId] : [];
+}
+
 /** أسطر تكلفة مرحلة في شهر مجمّعة: أصناف بالصنف + أجور يومية + مرتبات شهرية + مصروفات مباشرة */
-async function stageBlock(stageId, month, projectId) {
-  if (!stageId) return null;
+async function stageBlock(stageId, ids, month, projectId) {
+  if (!stageId || !ids.length) return null;
+  const inS = ids.map(() => '?').join(',');
   const pw = projectId ? ' AND c.project_id=?' : ''; const pp = projectId ? [projectId] : [];
   const rows = await all(`SELECT c.cost_type, c.source_type, c.material_id, m.name mname, u.name unit, SUM(c.qty) qty, SUM(c.amount) amt
     FROM cost_lines c LEFT JOIN materials m ON m.id=c.material_id LEFT JOIN units u ON u.id=m.unit_id
-    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_class<>'transfer'${pw}
-    GROUP BY c.cost_type, c.source_type, c.material_id, m.name, u.name`, month, stageId, ...pp);
+    WHERE substr(c.date,1,7)=? AND c.stage_id IN (${inS}) AND c.cost_class<>'transfer'${pw}
+    GROUP BY c.cost_type, c.source_type, c.material_id, m.name, u.name`, month, ...ids, ...pp);
   const mats = rows.filter((r) => r.cost_type === 'material').map((r) => ({ material_id: r.material_id, name: r.mname || 'غير محدد', unit: r.unit || '', qty: r4(r.qty), amount: r2(r.amt) })).sort((a, b) => b.amount - a.amount);
   const sum = (f) => r2(rows.filter(f).reduce((s, r) => s + num(r.amt), 0));
   const b = { stage_id: stageId, name: await val('SELECT name FROM stages WHERE id=?', stageId), materials: mats,
@@ -76,88 +87,91 @@ async function moldBlock(stageId, month, projectId) {
 }
 
 /** شكاير الأسمنت المصروفة للصب في الشهر محوّلة لشكاير معيارية 50 كجم (الأصناف 30 كجم وغيرها بتتحول بالوزن) */
-async function systemBags(cfg, month, projectId) {
-  if (!cfg.cast_stage_id) return { lines: [], bags: 0 };
+async function systemBags(cfg, castIds, month, projectId) {
+  if (!castIds.length) return { lines: [], bags: 0 };
   const pw = projectId ? ' AND c.project_id=?' : ''; const pp = projectId ? [projectId] : [];
   const ids = cfg.cement_material_ids; const iw = ids.length ? ` AND c.material_id IN (${ids.map(() => '?').join(',')})` : '';
   const rows = await all(`SELECT m.id, m.name, SUM(c.qty) qty FROM cost_lines c JOIN materials m ON m.id=c.material_id
-    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_type='material' AND c.cost_class<>'transfer' AND m.name LIKE '%اسمنت%'${iw}${pw}
-    GROUP BY m.id, m.name ORDER BY m.name`, month, cfg.cast_stage_id, ...ids, ...pp);
+    WHERE substr(c.date,1,7)=? AND c.stage_id IN (${castIds.map(() => '?').join(',')}) AND c.cost_type='material' AND c.cost_class<>'transfer' AND m.name LIKE '%اسمنت%'${iw}${pw}
+    GROUP BY m.id, m.name ORDER BY m.name`, month, ...castIds, ...ids, ...pp);
   const lines = rows.map((r) => { const kg = kgOf(r, cfg.cement_kg); return { material_id: r.id, name: r.name, qty: r4(r.qty), kg, std_bags: r4(r.qty * kg / STD_BAG_KG) }; });
   return { lines, bags: r4(lines.reduce((t, l) => t + l.std_bags, 0)) };
 }
 
-const keyOf = (month, projectId) => [month, projectId || 0];
-export const getPeriod = async (month, projectId) => await get('SELECT * FROM unit_cost_periods WHERE month=? AND project_id=?', ...keyOf(month, projectId));
+export const getPeriod = async (month, projectId, kind = 'GRC') => await get('SELECT * FROM unit_cost_periods WHERE month=? AND project_id=? AND kind=?', month, projectId || 0, kindOf(kind));
 
 /** الحساب الحي من أسطر التكلفة + المدخلات المحفوظة (معدل الفرد). لا يقرأ الـ snapshot */
-export async function computeLive(month, projectId = 0, inputs = null) {
+export async function computeLive(month, projectId = 0, inputs = null, kind = 'GRC') {
+  kind = kindOf(kind);
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح (YYYY-MM)');
-  const cfg = await getConfig(); const saved = await getPeriod(month, 0);   // معدل الفرد والإعدادات شهرية واحدة لكل المشروعات
+  const cfg = await getConfig(); const saved = await getPeriod(month, 0, kind);   // معدل الفرد والإعدادات شهرية واحدة لكل المشروعات
   const spread = num(inputs?.spread_rate ?? saved?.spread_rate);
-  const [cast, finish, mold] = [await stageBlock(cfg.cast_stage_id, month, projectId), await stageBlock(cfg.finish_stage_id, month, projectId), await moldBlock(cfg.mold_stage_id, month, projectId)];
-  const sys = await systemBags(cfg, month, projectId);
+  const castIds = await kindStageIds(cfg.cast_stage_id, kind), finishIds = await kindStageIds(cfg.finish_stage_id, kind);
+  const [cast, finish, mold] = [await stageBlock(cfg.cast_stage_id, castIds, month, projectId), await stageBlock(cfg.finish_stage_id, finishIds, month, projectId), await moldBlock(cfg.mold_stage_id, month, projectId)];
+  const sys = await systemBags(cfg, castIds, month, projectId);
   const bags = sys.bags;   // الشكاير دايماً من المنصرف بالنظام (مفيش إدخال يدوي)
   const area = r2(bags * spread);
   if (cast) for (const m of cast.materials) m.per_bag = bags > 0 ? r4(m.qty / bags) : null;   // معيار الشيكارة
   const per = (b) => (b && area > 0 ? r2(b.total / area) : null);
   if (cast) cast.per_m2 = per(cast); if (finish) finish.per_m2 = per(finish);
   const unit_cost = { cast: cast?.per_m2 ?? null, finish: finish?.per_m2 ?? null, total: area > 0 ? r2((cast?.total || 0) / area + (finish?.total || 0) / area) : null };
-  return { month, project_id: projectId || 0, config: cfg,
+  return { month, kind, project_id: projectId || 0, config: cfg, stage_ids: { cast: castIds, finish: finishIds },
     inputs: { cement_lines: sys.lines, bags_system: sys.bags, bags, spread_rate: spread, area },
     cast, finish, mold, unit_cost, pool_total: r2((cast?.total || 0) + (finish?.total || 0)) };
 }
 
 /** الشيت الكامل: المعتمد بيرجع من الـ snapshot (ثابت) + تنبيه لو الأرقام الحية اختلفت بعد الاعتماد */
-export async function getSheet(month, projectId = 0) {
-  const saved = await getPeriod(month, 0);
-  const live = await computeLive(month, projectId);
+export async function getSheet(month, projectId = 0, kind = 'GRC') {
+  kind = kindOf(kind);
+  const saved = await getPeriod(month, 0, kind);
+  const live = await computeLive(month, projectId, null, kind);
   if (projectId) return { ...live, status: saved?.status === 'approved' ? 'approved_view' : saved ? 'draft' : 'new', project_view: true };   // عرض تحليلي لمشروع بنفس معدل الشهر
   if (saved?.status === 'approved' && saved.snapshot) {
     const snap = JSON.parse(saved.snapshot);
     const drift = snap.unit_cost?.total !== live.unit_cost.total || snap.pool_total !== live.pool_total;
-    return { ...snap, status: 'approved', approved_at: saved.approved_at, drift, live_unit_cost: live.unit_cost, live_pool_total: live.pool_total, config: live.config };
+    return { ...snap, kind, status: 'approved', approved_at: saved.approved_at, drift, live_unit_cost: live.unit_cost, live_pool_total: live.pool_total, config: live.config };
   }
   return { ...live, status: saved ? 'draft' : 'new' };
 }
 
 export async function savePeriod(b, user) {
-  const month = b.month, pid = 0;   // المدخلات شهرية فقط (مش لكل مشروع)
+  const month = b.month, pid = 0, kind = kindOf(b.kind);   // المدخلات شهرية فقط (مش لكل مشروع)
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح');
   const spread = b.spread_rate === '' || b.spread_rate === null || b.spread_rate === undefined ? 0 : Number(b.spread_rate);
   if (!(spread >= 0) || spread > 100) throw new AppError('معدل فرد الشيكارة غير صحيح');
-  const cur = await getPeriod(month, pid);
+  const cur = await getPeriod(month, pid, kind);
   if (cur?.status === 'approved') throw new AppError('الشهر معتمد — أعد فتحه أولاً لتعديل المدخلات');
   if (cur) await run('UPDATE unit_cost_periods SET spread_rate=? WHERE id=?', spread, cur.id);
-  else await run('INSERT INTO unit_cost_periods(month,project_id,spread_rate,created_by) VALUES(?,?,?,?)', month, pid, spread, user?.id ?? null);
-  return await getSheet(month, pid);
+  else await run('INSERT INTO unit_cost_periods(month,project_id,kind,spread_rate,created_by) VALUES(?,?,?,?,?)', month, pid, kind, spread, user?.id ?? null);
+  return await getSheet(month, pid, kind);
 }
 
-export async function approvePeriod(month, projectId, user) {
-  const pid = 0; const cur = await getPeriod(month, pid);
+export async function approvePeriod(month, projectId, user, kind = 'GRC') {
+  kind = kindOf(kind); const pid = 0; const cur = await getPeriod(month, pid, kind);
   if (!cur) throw new AppError('احفظ معدل فرد الشيكارة للشهر أولاً');
   if (cur.status === 'approved') throw new AppError('الشهر معتمد بالفعل');
-  const live = await computeLive(month, pid);
+  const live = await computeLive(month, pid, null, kind);
   if (!(live.inputs.spread_rate > 0)) throw new AppError('أدخل معدل فرد الشيكارة قبل الاعتماد');
   if (!(live.inputs.bags > 0)) throw new AppError('لا توجد شكاير أسمنت مصروفة للصب في هذا الشهر — تأكد من صنف الأسمنت أو أدخل العدد يدوياً');
   if (!live.config.cast_stage_id || !live.config.finish_stage_id) throw new AppError('اربط مرحلتي الصب والتشطيب من إعدادات التكاليف');
+  if (!live.stage_ids.cast.length || !live.stage_ids.finish.length) throw new AppError(`مفيش مراحل فرعية لنوع ${kind} تحت الصب والتشطيب — اسم المرحلة الفرعية لازم يحتوي على ${kind}`);
   await run(`UPDATE unit_cost_periods SET status='approved', snapshot=?, approved_by=?, approved_at=to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS') WHERE id=?`, JSON.stringify(live), user?.id ?? null, cur.id);
-  return await getSheet(month, pid);
+  return await getSheet(month, pid, kind);
 }
-export async function reopenPeriod(month, projectId) {
-  const pid = 0; const cur = await getPeriod(month, pid);
+export async function reopenPeriod(month, projectId, kind = 'GRC') {
+  kind = kindOf(kind); const pid = 0; const cur = await getPeriod(month, pid, kind);
   if (!cur || cur.status !== 'approved') throw new AppError('الشهر غير معتمد');
   await run(`UPDATE unit_cost_periods SET status='draft', snapshot=NULL, approved_by=NULL, approved_at=NULL WHERE id=?`, cur.id);
-  return await getSheet(month, pid);
+  return await getSheet(month, pid, kind);
 }
 
 /** سجل الأشهر المحفوظة: المعتمد من الـ snapshot، والمسودة بالحساب الحي */
 export async function history({ from, to } = {}) {
-  const rows = await all(`SELECT month, project_id FROM unit_cost_periods WHERE (?::text IS NULL OR month>=?) AND (?::text IS NULL OR month<=?) AND project_id=0 ORDER BY month DESC, project_id`, from || null, from || null, to || null, to || null);
+  const rows = await all(`SELECT month, project_id, kind FROM unit_cost_periods WHERE (?::text IS NULL OR month>=?) AND (?::text IS NULL OR month<=?) AND project_id=0 ORDER BY month DESC, kind, project_id`, from || null, from || null, to || null, to || null);
   const out = [];
   for (const r of rows) {
-    const s = await getSheet(r.month, r.project_id);
-    out.push({ month: s.month, project_id: s.project_id, project_name: s.project_id ? await val('SELECT name FROM projects WHERE id=?', s.project_id) : 'كل المشاريع', status: s.status,
+    const s = await getSheet(r.month, r.project_id, r.kind);
+    out.push({ month: s.month, kind: r.kind, project_id: s.project_id, project_name: s.project_id ? await val('SELECT name FROM projects WHERE id=?', s.project_id) : 'كل المشاريع', status: s.status,
       bags: s.inputs.bags, spread_rate: s.inputs.spread_rate, area: s.inputs.area, cast_total: s.cast?.total ?? 0, finish_total: s.finish?.total ?? 0,
       cast_per_m2: s.unit_cost.cast, finish_per_m2: s.unit_cost.finish, unit_cost: s.unit_cost.total, mold_total: s.mold?.total ?? 0, drift: !!s.drift });
   }

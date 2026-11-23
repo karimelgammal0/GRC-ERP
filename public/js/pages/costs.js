@@ -43,18 +43,18 @@ export async function configPage(root) {
     canEdit ? h('div', { style: { marginTop: '12px' } }, h('button.btn.primary', { onclick: save }, 'حفظ')) : null);
 }
 
-// ---------- تكلفة متر GRC (شهرياً) ----------
+// ---------- تكلفة المتر GRC / GRP (شهرياً) ----------
 export async function unitCostPage(root, params = {}) {
   const host = h('div');
-  let cur = { month: params.month || curMonth(), project_id: params.project_id ? Number(params.project_id) : null };
-  const bar = filterBar([{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, { k: 'spread_rate', l: 'معدل فرد الشيكارة (م² / شيكارة)', t: 'number', step: '0.01' }, { k: 'project_id', l: 'عرض مشروع محدد (اختياري — للاعتماد اتركه فاضي)', t: 'fk', ref: 'projects', combo: true }],
-    async (v) => { cur = { month: v.month || curMonth(), project_id: v.project_id || null }; await load(); }, { month: cur.month, project_id: cur.project_id });
+  let cur = { month: params.month || curMonth(), kind: params.kind === 'GRP' ? 'GRP' : 'GRC', project_id: params.project_id ? Number(params.project_id) : null };
+  const bar = filterBar([{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, { k: 'spread_rate', l: 'معدل فرد الشيكارة (م² / شيكارة)', t: 'number', step: '0.01' }, { k: 'kind', l: 'GRC / GRP', t: 'select', options: [['GRC', 'GRC'], ['GRP', 'GRP']], def: cur.kind }, { k: 'project_id', l: 'عرض مشروع محدد (اختياري — للاعتماد اتركه فاضي)', t: 'fk', ref: 'projects', combo: true }],
+    async (v) => { cur = { month: v.month || curMonth(), kind: v.kind || 'GRC', project_id: v.project_id || null }; await load(); }, { month: cur.month, kind: cur.kind, project_id: cur.project_id });
   bar.append(h('button.btn', { onclick: () => window.print() }, '🖨 طباعة'));
   const rateEl = () => bar.querySelectorAll('label.fld')[1]?.querySelector('input');
   const rateVal = () => { const v = rateEl()?.value; return v === '' || v === undefined ? 0 : Number(v); };
   const saveBtn = h('button.btn.primary', { onclick: () => doSave() }, 'حفظ');
   { const lab = bar.querySelectorAll('label.fld')[1], inp = lab.querySelector('input'); const row = h('div', { style: { display: 'flex', gap: '12px', alignItems: 'center' } }); inp.replaceWith(row); row.append(inp, saveBtn); inp.style.flex = '1'; }
-  const q = () => ({ month: cur.month, project_id: cur.project_id || 0 });
+  const q = () => ({ month: cur.month, kind: cur.kind, project_id: cur.project_id || 0 });
   const load = async () => draw(await GET('/costs/sheet', q()));
   const call = (fn) => guard(async () => { draw(await fn()); });
   let doSave = () => {};
@@ -85,7 +85,7 @@ export async function unitCostPage(root, params = {}) {
       acts.some(Boolean) ? h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '14px 0' } }, acts) : null,
     );
   };
-  root.replaceChildren(pageHead('تكلفة متر GRC'), bar, host);
+  root.replaceChildren(pageHead('تكلفة المتر GRC / GRP'), bar, host);
   await load();
 }
 unitCostPage.newInfo = null;
@@ -96,9 +96,9 @@ export async function historyPage(root) {
   const bar = filterBar([{ k: 'from', l: 'من شهر', t: 'month' }, { k: 'to', l: 'إلى شهر', t: 'month' }], async (v) => {
     const rows = await GET('/costs/history', { from: v.from, to: v.to });
     host.replaceChildren(
-      card('سعر المتر الإجمالي لكل شهر', barChart(rows.filter((r) => r.unit_cost).map((r) => ({ label: r.month + (r.project_id ? ` — ${r.project_name}` : ''), value: r.unit_cost })), { max: 12 })),
+      card('سعر المتر الإجمالي لكل شهر', barChart(rows.filter((r) => r.unit_cost).map((r) => ({ label: r.month + ' ' + (r.kind || 'GRC') + (r.project_id ? ` — ${r.project_name}` : ''), value: r.unit_cost })), { max: 12 })),
       table({ name: 'سجل أسعار المتر', rows, compact: true,
-        cols: [{ k: 'month', l: 'الشهر', render: (r) => h('a', { href: `#/costs/unit-cost?month=${r.month}${r.project_id ? '&project_id=' + r.project_id : ''}` }, r.month) , text: (r) => r.month }, { k: 'project_name', l: 'النطاق' },
+        cols: [{ k: 'month', l: 'الشهر', render: (r) => h('a', { href: `#/costs/unit-cost?month=${r.month}&kind=${r.kind || 'GRC'}${r.project_id ? '&project_id=' + r.project_id : ''}` }, r.month) , text: (r) => r.month }, { k: 'kind', l: 'النوع' }, { k: 'project_name', l: 'النطاق' },
           { k: 'status', l: 'الحالة', render: (r) => (r.status === 'approved' ? badge(r.drift ? 'معتمد — الأرقام اختلفت' : 'معتمد', r.drift ? 'warn' : 'ok') : badge('مسودة', 'warn')), text: (r) => (r.status === 'approved' ? 'معتمد' : 'مسودة') },
           { k: 'bags', l: 'الشكاير', num: true, fmt: (v) => fq(v) }, { k: 'spread_rate', l: 'معدل الفرد', num: true, fmt: (v) => fq(v) }, { k: 'area', l: 'المتر المنتج', num: true, fmt: (v) => fmt(v) },
           { k: 'cast_total', l: 'تكلفة الصب', num: true, fmt: (v) => fmt(v) }, { k: 'finish_total', l: 'تكلفة التشطيب', num: true, fmt: (v) => fmt(v) },

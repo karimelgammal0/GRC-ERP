@@ -26,7 +26,7 @@ export const CATALOG = [
     P('chart', 'دليل الحسابات', [...CRUD, ['import', 'استيراد CSV']]), P('periods', 'الفترات المالية', [['generate', 'إنشاء فترات سنة'], ['toggle', 'قفل / فتح فترة']]),
     P('journals', 'قيود اليومية', CRUD), P('templates', 'نماذج القيود', CRUD), P('account-links', 'ربط الحسابات', [['edit', 'تعديل الربط']]), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']])] },
   { id: 'costs', title: 'تكاليف', pages: [
-    P('unit-cost', 'تكلفة متر GRC', [['save', 'حفظ المدخلات'], ['approve', 'اعتماد الشهر'], ['reopen', 'إعادة فتح شهر معتمد']]), P('history', 'سجل أسعار المتر'), P('projects-cost', 'تكاليف مشروعات'), P('config', 'ربط المراحل والأسمنت', [['edit', 'تعديل']])] },
+    P('unit-cost', 'تكلفة المتر GRC / GRP', [['save', 'حفظ المدخلات'], ['approve', 'اعتماد الشهر'], ['reopen', 'إعادة فتح شهر معتمد']]), P('history', 'سجل أسعار المتر'), P('projects-cost', 'تكاليف مشروعات'), P('config', 'ربط المراحل والأسمنت', [['edit', 'تعديل']])] },
   { id: 'reports', title: 'التقارير', pages: [
     P('hub', 'كل التقارير'), P('project-stage', 'تكلفة المشاريع × المراحل'), P('stage-project', 'تكلفة المراحل × المشاريع'), P('project-analysis', 'تحليل مشروع (بنود)'), P('material-usage', 'استهلاك الأصناف'),
     P('factory-cost', 'تكاليف المصنع (مباشرة/غير مباشرة/إدارية)'), P('cost-detail', 'تفاصيل التكاليف'), P('expenses', 'المصروفات'), P('labor', 'العمالة'), P('trial-balance', 'ميزان المراجعة'), P('ledger', 'كشف حساب أستاذ'), P('income', 'قائمة الدخل')] },

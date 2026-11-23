@@ -559,3 +559,7 @@ CREATE TABLE IF NOT EXISTS unit_cost_periods (
   created_by INTEGER, created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS')),
   UNIQUE (month, project_id)
 );
+-- نوع الإنتاج (GRC / GRP): لكل نوع سعر متر مستقل في نفس الشهر
+ALTER TABLE unit_cost_periods ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'GRC';
+ALTER TABLE unit_cost_periods DROP CONSTRAINT IF EXISTS unit_cost_periods_month_project_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_ucp_month_proj_kind ON unit_cost_periods(month, project_id, kind);

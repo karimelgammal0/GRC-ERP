@@ -25,7 +25,7 @@ const NAV = [
     ['other', 'سندات المقبوضات', fin.otherVouchersPage], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
     ['custody-statement', 'كشف حساب عهد', fin.custodyStatementPage], ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage, true]] },
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
-  { id: 'costs', ico: '∑', title: 'تكاليف', items: [['unit-cost', 'تكلفة متر GRC', cst.unitCostPage], ['history', 'سجل أسعار المتر', cst.historyPage], ['projects-cost', 'تكاليف مشروعات', cst.projectsCostPage], ['config', 'ربط المراحل والأسمنت', cst.configPage]] },
+  { id: 'costs', ico: '∑', title: 'تكاليف', items: [['unit-cost', 'تكلفة المتر GRC / GRP', cst.unitCostPage], ['history', 'سجل أسعار المتر', cst.historyPage], ['projects-cost', 'تكاليف مشروعات', cst.projectsCostPage], ['config', 'ربط المراحل والأسمنت', cst.configPage]] },
   { id: 'reports', ico: '◔', title: 'التقارير', direct: true, items: [
     ['hub', 'كل التقارير', rep.hub], ['project-stage', 'تكلفة المشاريع × المراحل', rep.projectStagePage], ['stage-project', 'تكلفة المراحل × المشاريع', rep.stageProjectPage], ['project-analysis', 'تحليل مشروع (بنود)', rep.projectAnalysisPage],
     ['material-usage', 'استهلاك الأصناف', rep.materialUsagePage], ['factory-cost', 'تكاليف المصنع', rep.factoryCostPage], ['cost-detail', 'تفاصيل التكاليف', rep.costDetailPage], ['expenses', 'المصروفات', rep.expensesReport], ['labor', 'العمالة', rep.laborReport],
