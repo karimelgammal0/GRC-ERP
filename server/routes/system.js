@@ -60,6 +60,7 @@ export async function systemRouter() {
     const rows = await Promise.all(jobs.map(([, q]) => all(q)));
     const out = Object.fromEntries(jobs.map(([k], i) => [k, rows[i]]));
     out.warehouses = await withLinks('warehouses', out.warehouses);
+    { const sn = Object.fromEntries(out.stages.map((s) => [s.id, s.name])); out.stages = out.stages.map((s) => ({ ...s, full_name: s.parent_id ? `${sn[s.parent_id] || ''} › ${s.name}` : s.name })); }
     res.json(out);
   });
 

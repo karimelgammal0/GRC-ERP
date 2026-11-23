@@ -28,8 +28,8 @@ function stageTable(b, { perBag = false, bags = 0 } = {}) {
 export async function configPage(root) {
   const c = await GET('/costs/config'); const canEdit = can('costs.config.edit');
   const f = formGrid([
-    { k: 'cast_stage_id', l: 'مرحلة الصب', t: 'fk', ref: 'stages', req: 1, readonly: !canEdit }, { k: 'finish_stage_id', l: 'مرحلة التشطيب', t: 'fk', ref: 'stages', req: 1, readonly: !canEdit },
-    { k: 'mold_stage_id', l: 'مرحلة القوالب (على المشروع)', t: 'fk', ref: 'stages', readonly: !canEdit }], c, 3);
+    { k: 'cast_stage_id', l: 'مرحلة الصب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit }, { k: 'finish_stage_id', l: 'مرحلة التشطيب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit },
+    { k: 'mold_stage_id', l: 'مرحلة القوالب (على المشروع)', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, readonly: !canEdit }], c, 3);
   const rows = c.cement_candidates.map((m) => ({ m, cb: h('input', { type: 'checkbox', checked: m.selected, disabled: !canEdit }), kg: h('input', { type: 'number', step: 'any', min: 0, value: m.kg, disabled: !canEdit, style: { width: '90px' } }) }));
   const save = guard(async () => {
     const sel = rows.filter((r) => r.cb.checked); const all = sel.length === rows.length;

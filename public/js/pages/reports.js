@@ -4,7 +4,7 @@ import { barChart, donutChart, chartCard, chartsGrid } from '../charts.js';
 const CT = [['', 'الكل'], ['material', 'أصناف'], ['labor', 'عمالة'], ['expense', 'مصروفات']];
 const REP_CLASS = [...CLASS_OPTS, ['transfer', 'تحويلات للمواقع']];
 const SCOPES = [['manufacturing', 'تصنيع (بدون التحويلات للمواقع)'], ['transfer', 'تحويلات للمواقع'], ['all', 'الكل']];
-const COSTF = [{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'cost_type', l: 'نوع التكلفة', t: 'select', options: CT }, { k: 'scope', l: 'النطاق', t: 'select', options: SCOPES }, { k: 'product_type_id', l: 'خامة المنتج', t: 'fk', ref: 'product_types' }];
+const COSTF = [{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'cost_type', l: 'نوع التكلفة', t: 'select', options: CT }, { k: 'scope', l: 'النطاق', t: 'select', options: SCOPES }];
 
 // ---------- طباعة التقارير: ترويسة للطباعة بس + زر طباعة + ملخص الفلاتر ----------
 let PH = null;
@@ -30,7 +30,6 @@ export async function hub(root) {
     ['تكلفة المشاريع حسب المرحلة', 'كل مشروع وتكلفة كل مرحلة فيه (قوالب/صب/تشطيب)', '#/reports/project-stage'],
     ['تكلفة المراحل على كل المشاريع', 'كل مرحلة وتوزيعها على المشروعات', '#/reports/stage-project'],
     ['تحليل مشروع (بند × مرحلة)', 'تفصيل مشروع واحد على البنود والمراحل — بداية تكلفة البند', '#/reports/project-analysis'],
-    ['تكلفة خامة المنتج النهائي', 'GRC / GRP / GRG: تكلفة كل نوع منتج داخل المشروع موزعة على المراحل', '#/reports/product-type'],
     ['استهلاك الأصناف', 'الصنف × المشروع أو المرحلة', '#/reports/material-usage'],
     ['تكاليف المصنع', 'إجمالي تكاليف المصنع مصنفة مباشرة / غير مباشرة / إدارية (شهري أو حسب النوع)', '#/reports/factory-cost'],
     ['تفاصيل التكاليف', 'كل سطر تكلفة بفلاتر مشروع/بند/مرحلة/نوع', '#/reports/cost-detail'],
@@ -63,7 +62,7 @@ const docLink = (r) => {
   return pg && can(`${pg[0]}.${pg[1]}`) ? h('a', { href: `#/${pg[0]}/${pg[1]}?id=${r.source_id}`, title: 'فتح المستند' }, r.doc_no) : r.doc_no;
 };
 const costTable = (rows) => table({ name: 'تفاصيل التكلفة', compact: true, rows,
-  cols: [{ k: 'date', l: 'التاريخ' }, { k: 'doc_no', l: 'رقم المستند', render: docLink, text: (r) => r.doc_no || '' }, { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'product_type_name', l: 'خامة المنتج' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'cost_type', l: 'النوع', text: (r) => labelOf(CT, r.cost_type) },
+  cols: [{ k: 'date', l: 'التاريخ' }, { k: 'doc_no', l: 'رقم المستند', render: docLink, text: (r) => r.doc_no || '' }, { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'cost_type', l: 'النوع', text: (r) => labelOf(CT, r.cost_type) },
     { k: 'cost_class', l: 'التصنيف', text: (r) => labelOf(REP_CLASS, r.cost_class).split(' (')[0] }, { k: 'desc', l: 'البيان', text: (r) => r.material_name || r.employee_name || r.category_name || r.site_name || r.description || '' },
     { k: 'qty', l: 'الكمية', num: true, fmt: (v) => fq(v) }, { k: 'amount', l: 'المبلغ', num: true, fmt: (v) => fmt(v) }],
   foot: (c, rows) => (c.k === 'amount' ? fmt(rows.reduce((s, r) => s + r.amount, 0)) : c.k === 'date' ? 'الإجمالي' : '') });
@@ -73,7 +72,7 @@ function pivotPage({ title, row, col, rowRef, colRef, rowLbl, extra = [], note }
     const host = h('div');
     const run = async (v) => {
       const d = await GET('/reports/cost-pivot', { row, col, ...v });
-      const dimKey = (dim) => ({ project: 'project_id', stage: 'stage_id', item: 'item_id', material: 'material_id', product_type: 'product_type_id' }[dim]);
+      const dimKey = (dim) => ({ project: 'project_id', stage: 'stage_id', item: 'item_id', material: 'material_id' }[dim]);
       const drill = (r, c) => { const f = { ...v }; if (r != null) f[dimKey(row)] = r; if (c != null) f[dimKey(col)] = c; return () => openDrill(f, `${r != null ? nameOf(rowRef, r) || '' : ''} ${c != null ? nameOf(colRef, c) || '' : ''}`); };
       const cell = (val, fn) => (val ? h('a', { href: '#', onclick: (e) => { e.preventDefault(); fn(); } }, fmt(val)) : '');
       const cols = [{ k: 'name', l: rowLbl, render: (r) => h('b', r.name || 'غير محدد') },
@@ -98,7 +97,6 @@ export const projectAnalysisPage = async (root, params) => {
   const inner = pivotPage({ title: 'تحليل مشروع (بند × مرحلة)', row: 'item', col: 'stage', rowRef: 'project_items', colRef: 'stages', rowLbl: 'البند', extra: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, req: 1 }], note: 'اختر المشروع لعرض تكلفة كل بند داخله موزعة على المراحل. السطور «غير محدد» هي تكلفة غير مربوطة ببند.' });
   await inner(root, { project_id: pid });
 };
-export const productTypePage = pivotPage({ title: 'تكلفة خامة المنتج النهائي (GRC / GRP / GRG)', row: 'product_type', col: 'stage', rowRef: 'product_types', colRef: 'stages', rowLbl: 'خامة المنتج', extra: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }], note: 'اختر المشروع لعرض تكلفة كل نوع منتج نهائي داخله موزعة على المراحل، واضغط على أي رقم لعرض البنود والحركات.' });
 export const materialUsagePage = pivotPage({ title: 'استهلاك الأصناف', row: 'material', col: 'stage', rowRef: 'materials', colRef: 'stages', rowLbl: 'الصنف', extra: [{ k: 'project_id', l: 'مشروع', t: 'fk', ref: 'projects', combo: true }] });
 
 export async function costDetailPage(root) {
