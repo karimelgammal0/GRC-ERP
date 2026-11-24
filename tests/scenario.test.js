@@ -192,11 +192,11 @@ const E = async (c) => await val('SELECT id FROM employees WHERE code=?', c);
 await throws(async () => await saveDoc('labor_sheet', { date: '2026-11-10', period_from: '2026-11-10', period_to: '2026-11-10', lines: [{ employee_id: await E('EMP-T1'), days: 1 }] }, null, U), /مرحلة/, 'عمالة مباشرة بدون مرحلة');
 const sheet = await saveDoc('labor_sheet', { date: '2026-11-10', period_from: '2026-11-10', period_to: '2026-11-10', lines: [
   { employee_id: await E('EMP-T1'), days: 1, project_id: prj, item_id: item1, stage_id: stage.cast },
-  { employee_id: await E('EMP-T1'), days: 0.5, rate: 220, project_id: prj, item_id: item2, stage_id: stage.cast },
+  { employee_id: await E('EMP-T1'), days: 0.5, project_id: prj, item_id: item2, stage_id: stage.cast },
   { employee_id: await E('EMP-T2'), days: 1 }] }, null, U);
-near(sheet.total, 200 + 110 + 150, 'إجمالي اليومية');
-near(await cl(`cost_type='labor' AND stage_id=${stage.cast}`), 310, 'عمالة مرحلة الصب'); near(await glBal('5100'), 150, 'أجور غير مباشرة');
-near(await glBal('2130'), -460, 'أجور مستحقة');
+near(sheet.total, 200 + 100 + 150, 'إجمالي اليومية (أجر واحد للعامل على كل أسطره)');
+near(await cl(`cost_type='labor' AND stage_id=${stage.cast}`), 300, 'عمالة مرحلة الصب'); near(await glBal('5100'), 150, 'أجور غير مباشرة');
+near(await glBal('2130'), -450, 'أجور مستحقة');
 const sheet2 = await saveDoc('labor_sheet', { date: '2026-11-20', period_from: '2026-11-07', period_to: '2026-11-20', lines: [{ employee_id: await E('EMP-T2'), days: 2, ot_days: 1, rate: 100, other_additions: 50, other_deductions: 20, advance: 30 }] }, null, U);
 near(sheet2.total, 300, 'صافي المنصرف = أساسي + سهرات + إضافات − خصومات − سلفة');
 if (!/^2026\/\d\d$/.test(sheet2.period_name)) throw new Error('صيغة اسم المدة غلط: ' + sheet2.period_name);
@@ -212,8 +212,8 @@ const pr1 = await saveDoc('payroll', { month: '2026-11', date: '2026-11-30', lin
 near(pr1.gross, 11500, 'إجمالي المرتبات'); near(pr1.net, 11400, 'الصافي');
 near(await cl(`cost_type='labor' AND item_id=${item1} AND stage_id=${stage.mold}`), 3900, 'توزيع 60% من 6500'); near(await glBal('6100'), 5000, 'مرتبات إدارية');
 await throws(async () => await saveDoc('payroll', { month: '2026-11', date: '2026-11-30', lines: [{ employee_id: await E('EMP-T4'), base: 5000 }] }, null, U), /نفس الشهر/, 'راتب مكرر لنفس الشهر');
-const wp = await saveDoc('voucher', { date: '2026-11-11', kind: 'wage_payment', treasury_id: treasury, amount: 460, wage_links: [{ sheet_id: sheet.id, amount: 460 }] }, null, U);
-near((await get('SELECT paid_amount FROM labor_sheets WHERE id=?', sheet.id)).paid_amount, 460, 'الكشف اتسدد');
+const wp = await saveDoc('voucher', { date: '2026-11-11', kind: 'wage_payment', treasury_id: treasury, amount: 450, wage_links: [{ sheet_id: sheet.id, amount: 450 }] }, null, U);
+near((await get('SELECT paid_amount FROM labor_sheets WHERE id=?', sheet.id)).paid_amount, 450, 'الكشف اتسدد');
 await throws(async () => await voidDoc('labor_sheet', sheet.id, U), /صرف أجور/, 'إلغاء كشف مسدد');
 const ex = await saveDoc('voucher', { date: '2026-11-11', kind: 'expense', category_id: await val(`SELECT id FROM expense_categories WHERE cost_class='direct'`), custodian_id: cust, amount: 300, project_id: prj, item_id: item1, stage_id: stage.cast, description: 'نقل قوالب' }, null, U);
 near(await cl(`cost_type='expense' AND stage_id=${stage.cast}`), 300, 'مصروف مباشر على مرحلة'); near(await glBal('1213'), -170 - 300, 'العهدة نقصت بالمصروف');

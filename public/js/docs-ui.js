@@ -70,14 +70,23 @@ export function docScreen(cfg) {
         if (!hasLines) { linesHost.replaceChildren(); return; }
         calcCells = []; const cols = typeof E.lines.cols === 'function' ? E.lines.cols(ctx) : E.lines.cols;
         const tb = h('tbody');
+        // تجميع الأسطر: لو E.lines.groupKey متحدد، الأعمدة اللي عليها merge بتتدمج على أسطر نفس المجموعة (rowspan) وبتتعرض مرة واحدة
+        const gk = E.lines.groupKey; let serial = 0;
         st.lines.forEach((l, i) => {
+          const key = gk ? gk(l) : null;
+          const first = !key || i === 0 || gk(st.lines[i - 1]) !== key;
+          let span = 1; if (key) for (let j = i + 1; j < st.lines.length && gk(st.lines[j]) === key; j++) span++;
+          if (first) serial++;
           const tr = h('tr', cols.map((c) => {
+            if (c.merge && !first) return null;
             const td = h('td', { style: c.w ? { width: c.w } : null });
+            if (c.merge && span > 1) td.rowSpan = span;
+            if (c.serial) { td.className = 'ro'; td.textContent = serial; return td; }
             if (c.calc) { td.className = 'ro'; calcCells.push({ td, c, l }); td.textContent = c.fmt ? c.fmt(c.calc(l, ctx)) : (c.calc(l, ctx) ?? ''); return td; }
             if (c.render) { td.append(c.render(l, ctx, readonly)); return td; }
             const inp = fieldInput({ ...c, blankIfEmpty: true, filter: c.filter ? (x) => c.filter(x, l, ctx) : undefined, readonly: c.readonly || readonly, combo: c.combo ?? (c.t === 'fk' && c.ref === 'materials'), onChange: (v) => { l[c.k] = v; c.onChange?.(v, l, ctx); E.onLine?.(i, c.k, v, ctx); refreshComputed(); updateTotals(); } }, l[c.k]);
             td.append(inp); return td;
-          }), readonly || E.lines.fixed ? null : h('td', h('button.del', { title: 'حذف البند', onclick: () => { st.lines.splice(i, 1); if (!st.lines.length) st.lines.push(E.lines.blank?.() || {}); drawLines(); updateTotals(); } }, '×')));
+          }), readonly || E.lines.fixed ? null : h('td', h('button.del', { title: 'حذف البند', onclick: () => { E.lines.onDelete?.(l, i, ctx); st.lines.splice(i, 1); if (!st.lines.length) st.lines.push(E.lines.blank?.() || {}); drawLines(); updateTotals(); } }, '×')));
           tb.append(tr);
         });
         linesHost.replaceChildren(h('table.lines', h('thead', h('tr', cols.map((c) => h('th', c.l)), readonly || E.lines.fixed ? null : h('th'))), tb),

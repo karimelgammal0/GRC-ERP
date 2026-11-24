@@ -540,6 +540,16 @@ DOCS.labor_sheet = {
       const mx = (await all(`SELECT period_name FROM labor_sheets WHERE period_name LIKE ?`, `${yr}/%`)).reduce((m, r) => Math.max(m, parseInt(String(r.period_name).split('/')[1], 10) || 0), 0);
       p.period_name = `${yr}/${String(mx + 1).padStart(2, '0')}`;
     }
+    // العامل الواحد ممكن يظهر في أكتر من سطر (مرحلة لكل سطر): الأجر واحد للعامل، والسلفة بتتجمع على أول سطر له
+    const firstOf = new Map();
+    for (const l of lines) {
+      const f = firstOf.get(Number(l.employee_id));
+      if (!f) {
+        if (l.rate === undefined || l.rate === null || l.rate === '') l.rate = await val('SELECT daily_rate FROM employees WHERE id=?', l.employee_id);
+        firstOf.set(Number(l.employee_id), l); continue;
+      }
+      f.advance = r2(num(f.advance) + num(l.advance)); l.advance = 0; l.rate = f.rate;
+    }
     for (const l of lines) {
       const e = await get('SELECT * FROM employees WHERE id=?', l.employee_id);
       if (!e) throw new AppError('عامل غير موجود');
@@ -551,25 +561,28 @@ DOCS.labor_sheet = {
       if (l.rate === undefined || l.rate === null || l.rate === '') l.rate = e.daily_rate;
       // قيمة الأساسي = أيام الأساسي × اليومية، قيمة السهرات = أيام السهرات × اليومية، والصافي = الأساسي + السهرات + إضافات أخرى − خصومات أخرى − سلفة المدة
       l.rate = num(l.rate); l.amount = r2(l.days * l.rate + l.ot_days * l.rate + l.other_additions - l.other_deductions - l.advance);
-      if (l.amount < 0) throw new AppError(`صافي المنصرف للعامل «${e.name}» سالب`);
       if (e.cost_class !== 'direct') { l.stage_id = l.stage_id || null; }
       await checkDims(l.project_id, l.item_id, l.stage_id, e.cost_class === 'direct');
     }
+    // الصافي بيتراجع على مستوى العامل (مجموع أسطره) مش السطر الواحد
+    const net = new Map(); for (const l of lines) net.set(Number(l.employee_id), r2((net.get(Number(l.employee_id)) || 0) + l.amount));
+    for (const [eid, v] of net) if (v < 0) throw new AppError(`صافي المنصرف للعامل «${await nm('employees', eid)}» سالب`);
   },
   async post(doc) {
-    const out = []; let total = 0, ded = 0;
+    const out = []; let total = 0, ded = 0; const netByEmp = new Map();
     for (const l of doc.lines) {
       // التكلفة = الأساسي + السهرات + إضافات أخرى، والمستحق للعامل = الصافي، وخصومات أخرى تروح لاستقطاعات العاملين
       const cost = r2(l.days * l.rate + l.ot_days * l.rate + l.other_additions);
       total += l.amount; ded += l.other_deductions;
       const dims = { project_id: l.project_id, item_id: l.item_id, stage_id: l.stage_id };
       out.push(dc(await laborAccount(l.cost_class, l.stage_id), cost, { ...dims, employee_id: l.employee_id }));
-      out.push(cr(await acc('acc_wages_payable'), l.amount, { employee_id: l.employee_id }));
+      netByEmp.set(l.employee_id, r2((netByEmp.get(l.employee_id) || 0) + l.amount));
       if (l.advance) out.push(cr(await acc('acc_employee_advances'), l.advance, { employee_id: l.employee_id }));
       await insertRow('cost_lines', { date: doc.date, source_type: 'labor', source_id: doc.id, source_line_id: l.id, cost_type: 'labor', cost_class: l.cost_class, ...dims,
         employee_id: l.employee_id, qty: r2(l.days + l.ot_days), amount: cost, description: doc.no },
       ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'project_id', 'item_id', 'stage_id', 'employee_id', 'qty', 'amount', 'description']);
     }
+    for (const [employee_id, v] of netByEmp) out.push(cr(await acc('acc_wages_payable'), v, { employee_id }));
     if (ded) out.push(cr(await acc('acc_deductions_payable'), r2(ded)));
     await run('UPDATE labor_sheets SET total=? WHERE id=?', r2(total), doc.id);
     await postJournal({ date: doc.date, source_type: 'labor', source_id: doc.id, description: `كشف يومية ${doc.no}`, lines: out });

@@ -68,7 +68,7 @@ const LISTS = {
       LEFT JOIN stages st ON st.id=d.stage_id LEFT JOIN sites si ON si.id=d.site_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   stock_adjustment: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, w.name warehouse_name,
       (SELECT COALESCE(SUM(value),0) FROM stock_adjustment_lines WHERE adjustment_id=d.id) net_value FROM stock_adjustments d JOIN warehouses w ON w.id=d.warehouse_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
-  labor_sheet: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, (SELECT COUNT(*) FROM labor_sheet_lines WHERE sheet_id=d.id) n_lines FROM labor_sheets d ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
+  labor_sheet: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, (SELECT COUNT(DISTINCT employee_id) FROM labor_sheet_lines WHERE sheet_id=d.id) n_lines FROM labor_sheets d ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   labor_advance: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, t.name treasury_name, c.name custodian_name, (SELECT COUNT(*) FROM labor_advance_lines WHERE advance_id=d.id) n_lines
       FROM labor_advances d LEFT JOIN treasuries t ON t.id=d.treasury_id LEFT JOIN custodians c ON c.id=d.custodian_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   payroll: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, (SELECT COUNT(*) FROM payroll_lines WHERE run_id=d.id) n_lines FROM payroll_runs d ${sql} ORDER BY d.month DESC, d.id DESC LIMIT 500`, ...p); },
