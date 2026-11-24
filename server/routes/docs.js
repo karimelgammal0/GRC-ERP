@@ -61,8 +61,6 @@ const LISTS = {
   stock_issue: async (q) => {
     const base = []; if (q.only === 'issues') base.push(`d.kind IN ('production','overhead')`); if (q.only === 'site_transfers') base.push(`d.kind IN ('site','site_in')`); if (q.only === 'returns') base.push(`d.kind='return'`);
     if (q.stage_id) base.push(`(d.stage_id=${Number(q.stage_id)} OR EXISTS (SELECT 1 FROM stock_issue_lines x WHERE x.issue_id=d.id AND x.stage_id=${Number(q.stage_id)}))`); if (q.item_id) base.push(`(d.item_id=${Number(q.item_id)} OR EXISTS (SELECT 1 FROM stock_issue_lines x WHERE x.issue_id=d.id AND x.item_id=${Number(q.item_id)}))`);
-    // «بدون مرحلة»: إذن فيه سطر واحد على الأقل من غير مرحلة (ولا مرحلة في رأس الإذن)، وغير ملغي
-    if (q.no_stage) base.push(`d.status<>'void' AND d.kind IN ('production','overhead') AND d.stage_id IS NULL AND EXISTS (SELECT 1 FROM stock_issue_lines x WHERE x.issue_id=d.id AND x.stage_id IS NULL)`);
     const { sql, p } = where(q, base);
     return await all(`SELECT d.*, pr.name project_name, COALESCE(st.name, (SELECT string_agg(DISTINCT sx.name, '، ') FROM stock_issue_lines x JOIN stages sx ON sx.id=x.stage_id WHERE x.issue_id=d.id)) stage_name, COALESCE(it.name, (SELECT string_agg(DISTINCT pi.name, '، ') FROM stock_issue_lines x JOIN project_items pi ON pi.id=x.item_id WHERE x.issue_id=d.id)) item_name, si.name site_name, COALESCE(rc.name, (SELECT string_agg(DISTINCT ex.name, '، ') FROM stock_issue_lines x JOIN employees ex ON ex.id=x.received_by_id WHERE x.issue_id=d.id), d.received_by) received_by,
       (SELECT COALESCE(SUM(total),0) FROM stock_issue_lines WHERE issue_id=d.id) total
