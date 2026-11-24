@@ -93,7 +93,9 @@ export const siteTransfersPage = docScreen({ perm: 'inventory.site-transfers', l
   note: 'تحويل صادر: أصناف من المخزن لمشروع. تحويل وارد: استلام أصناف راجعة من مشروع/موقع للمخزن بتكلفة المتوسط (قابلة للتعديل). لو المشروع ليه مواقع مكوّدة في الإعدادات بيظهر حقل الموقع للاختيار منها، ولو مفيهوش مواقع الحقل مبيظهرش.',
   filters: (() => { let fp = null; return [
     { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true, onChange: (v) => { fp = v; } },
-    { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, showIf: (vals) => sitesOf(vals.project_id).length > 0, filter: (x) => !fp || x.project_id === Number(fp) }]; })(),
+    { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, showIf: (vals) => sitesOf(vals.project_id).length > 0, filter: (x) => !fp || x.project_id === Number(fp) },
+    { k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses' },
+    { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ['site', 'صادر'], ['site_in', 'وارد']] }]; })(),
   listCols: [
     { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'kind', l: 'النوع', text: (r) => (r.kind === 'site_in' ? 'وارد' : 'صادر') }, { k: 'project_name', l: 'المشروع' }, { k: 'site_name', l: 'الموقع' },
     { k: 'total', l: 'التكلفة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
