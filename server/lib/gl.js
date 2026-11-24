@@ -7,11 +7,12 @@ const DIMS = ['client_id', 'supplier_id', 'treasury_id', 'custodian_id', 'employ
  * ترحيل قيد يومية. كل سطر: {account_id, debit, credit, description, + أبعاد التحليل}
  * القيد لازم يتوازن، والفترة لازم تكون مفتوحة، والحساب لازم يكون فرعي (postable).
  */
-export async function postJournal({ date, type = 'auto', source_type = null, source_id = null, description = '', lines, user, no = null }) {
+export async function postJournal({ date, type = 'auto', source_type = null, source_id = null, description = '', lines, user, no = null, allowZero = false }) {
   await assertOpenPeriod(date);
-  const ls = lines
-    .map((l) => ({ ...l, debit: r2(l.debit || 0), credit: r2(l.credit || 0) }))
-    .filter((l) => l.debit !== 0 || l.credit !== 0);
+  const norm = lines.map((l) => ({ ...l, debit: r2(l.debit || 0), credit: r2(l.credit || 0) }));
+  let ls = norm.filter((l) => l.debit !== 0 || l.credit !== 0);
+  // قيد تحويل بقيمة صفر (مثلاً سقالات): بنسيب سطر مدين وسطر دائن بصفر عشان القيد يظهر في القايمة وبيانه موجود
+  if (!ls.length && allowZero && norm.length >= 2) ls = norm;
   if (ls.length < 2) throw new AppError('القيد لازم يحتوي على سطرين على الأقل');
   for (const l of ls) {
     if (l.debit < 0 || l.credit < 0) throw new AppError('المبالغ في القيد لازم تكون موجبة');

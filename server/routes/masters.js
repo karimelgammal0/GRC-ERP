@@ -25,7 +25,8 @@ export const MASTERS = {
     used: [['stock_moves', 'material_id'], ['purchase_request_lines', 'material_id'], ['purchase_order_lines', 'material_id'], ['goods_receipt_lines', 'material_id'], ['purchase_invoice_lines', 'material_id'], ['stock_issue_lines', 'material_id'], ['stock_adjustment_lines', 'material_id'], ['purchase_return_lines', 'material_id']],
   },
   warehouses: { title: 'المخازن', table: 'warehouses', seq: 'warehouse', fields: [T('name', 'الاسم', 'text', { req: 1 }), T('type', 'النوع', 'select', { options: [['raw', 'مخزن أصناف'], ['finished', 'مخزن منتجات تامة (لاحقاً)']] }),
-      T('category_ids', 'فئات الأصناف المسموحة في المخزن', 'multifk', { ref: 'material_categories', wide: true, help: 'الأصناف اللي فئتها مختارة هنا بس هي اللي هتظهر عند الصرف والتحويل من المخزن ده. سيبها فاضية = كل الأصناف.' })], cols: ['code', 'name', 'type', 'category_ids'], used: [['stock_moves', 'warehouse_id']] },
+      T('zero_cost_transfer', 'تحويل بدون تكلفة (سقالات / معدات بترجع)', 'select', { options: [['0', 'لا'], ['1', 'نعم']], help: 'لو «نعم»: التحويل لموقع من المخزن ده والتحويل الوارد ليه بيتسجل بقيد بقيمة صفر (بيان: تحويل) ومبيتحمّلش على تكلفة المشروع.' }),
+      T('category_ids', 'فئات الأصناف المسموحة في المخزن', 'multifk', { ref: 'material_categories', wide: true, help: 'الأصناف اللي فئتها مختارة هنا بس هي اللي هتظهر عند الصرف والتحويل من المخزن ده. سيبها فاضية = كل الأصناف.' })], cols: ['code', 'name', 'type', 'zero_cost_transfer', 'category_ids'], used: [['stock_moves', 'warehouse_id']] },
   suppliers: {
     title: 'الموردين', table: 'suppliers', seq: 'supplier',
     fields: [T('name', 'اسم المورد', 'text', { req: 1 }), T('phone', 'الهاتف'), T('address', 'العنوان'), T('tax_no', 'الرقم الضريبي'), T('credit_days', 'مدة الائتمان (يوم)', 'number', { def: 0 }), T('notes', 'ملاحظات', 'textarea')],

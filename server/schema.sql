@@ -470,6 +470,8 @@ CREATE TABLE IF NOT EXISTS clients (
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS client_id INTEGER REFERENCES clients(id);
 ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS client_id INTEGER;
 ALTER TABLE custodians ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES employees(id);
+-- مخزن معدات راجعة (سقالات): التحويل منه/إليه بقيد صفري (تحويل مش تكلفة)
+ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS zero_cost_transfer INTEGER NOT NULL DEFAULT 0;
 
 -- نماذج القيود (قيود النظام الجاهزة + نماذج يضيفها المستخدم مربوطة بالدليل والموديول)
 CREATE TABLE IF NOT EXISTS journal_templates (

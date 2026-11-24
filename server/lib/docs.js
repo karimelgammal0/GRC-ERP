@@ -329,8 +329,10 @@ async function buildIssue(id) {
   total = r2(total);
   const inv = await acc('acc_inventory_raw');
   const label = { production: 'إنتاج', site: 'تحويل لموقع', overhead: 'تشغيل غير مباشر' }[kind];
+  const zeroXfer = (kind === 'site') && total === 0 && !!Number(await val('SELECT zero_cost_transfer FROM warehouses WHERE id=?', h.warehouse_id));
   await replaceJournal({
-    date: h.date, source_type: 'issue', source_id: id, description: `${h.kind === 'return' ? 'مرتجع صرف' : h.kind === 'site_in' ? 'تحويل وارد' : 'صرف'} ${h.no} — ${label}`,
+    allowZero: zeroXfer,
+    date: h.date, source_type: 'issue', source_id: id, description: `${h.kind === 'return' ? 'مرتجع صرف' : h.kind === 'site_in' ? 'تحويل وارد' : 'صرف'} ${h.no} — ${label}${zeroXfer ? ' (تحويل بدون تكلفة)' : ''}`,
     lines: (await Promise.all([...byItem.values()].map(async ({ it: item_id, sg, amt }) => ({ item_id, sg, amt, costAcc: await issueAccount(kind, sg) })))).flatMap(({ item_id, sg, amt, costAcc }) => {
       const dims = { project_id: h.project_id, item_id, stage_id: sg };
       return sign === 1 ? [dc(costAcc, amt, dims), cr(inv, amt)] : [dc(inv, amt), cr(costAcc, amt, dims)];
@@ -416,7 +418,7 @@ DOCS.stock_issue = {
         if (uc === null) {
           uc = Number(await val('SELECT avg_cost FROM material_stock WHERE warehouse_id=? AND material_id=? AND qty>0', doc.warehouse_id, l.material_id))
             || Number(await val('SELECT CASE WHEN SUM(qty)>0 THEN SUM(value)/SUM(qty) ELSE 0 END FROM material_stock WHERE material_id=?', l.material_id)) || 0;
-          if (!(uc > 0)) throw new AppError(`حدد تكلفة الوحدة للصنف «${await nm('materials', l.material_id)}» — مفيش متوسط تكلفة ليه في المخزن`);
+          if (!(uc > 0) && !Number(await val('SELECT zero_cost_transfer FROM warehouses WHERE id=?', doc.warehouse_id))) throw new AppError(`حدد تكلفة الوحدة للصنف «${await nm('materials', l.material_id)}» — مفيش متوسط تكلفة ليه في المخزن`);
         }
         await addMove({ date: doc.date, warehouse_id: doc.warehouse_id, material_id: l.material_id, direction: 'in', qty: l.qty, value: r2(l.qty * uc),
           doc_type: 'issue', doc_id: doc.id, line_id: l.id, party: `تحويل وارد من ${party}`, notes: doc.notes });
