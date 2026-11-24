@@ -91,7 +91,18 @@ export function docScreen(cfg) {
           }), readonly || E.lines.fixed ? null : h('td', h('button.del', { title: 'حذف البند', onclick: () => { E.lines.onDelete?.(l, i, ctx); st.lines.splice(i, 1); if (!st.lines.length) st.lines.push(E.lines.blank?.() || {}); drawLines(); updateTotals(); } }, '×')));
           tb.append(tr);
         });
-        const tbl = h('table.lines', h('thead', h('tr', cols.map((c) => h('th', c.l)), readonly || E.lines.fixed ? null : h('th'))), tb);
+        // ترتيب الأسطر بالضغط على عنوان العمود (لو E.lines.sortable). الأسطر المجمّعة لنفس العامل بتتنقل مع بعض وبتترتب بقيمة أول سطر
+        const sortBy = (c) => {
+          const dir = st.sort?.c === c.l && st.sort.dir === 1 ? -1 : 1; st.sort = { c: c.l, dir };
+          const val = (l) => (c.calc ? c.calc(l, ctx) : c.t === 'fk' ? (byId(c.ref, l[c.k])?.name || '') : c.t === 'number' ? (Number(l[c.k]) || 0) : (l[c.k] ?? ''));
+          const groups = []; st.lines.forEach((l, i) => { const k = gk ? gk(l) : null; if (k && i > 0 && gk(st.lines[i - 1]) === k) groups[groups.length - 1].push(l); else groups.push([l]); });
+          const cmp = (a, b) => { const x = val(a[0]), y = val(b[0]); return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ar', { numeric: true })) * dir; };
+          st.lines = groups.sort(cmp).flat(); drawLines(); updateTotals();
+        };
+        const sortable = (c) => E.lines.sortable && c.l && !c.serial && !c.render;
+        const tbl = h('table.lines', h('thead', h('tr', cols.map((c) => (sortable(c)
+          ? h('th.sortable', { title: 'اضغط للترتيب', onclick: () => sortBy(c) }, c.l, st.sort?.c === c.l ? (st.sort.dir === 1 ? ' ▲' : ' ▼') : '')
+          : h('th', c.l))), readonly || E.lines.fixed ? null : h('th'))), tb);
         linesHost.replaceChildren(E.lines.scrollX ? h('div.lines-scroll', tbl) : tbl,
           readonly || E.lines.fixed ? null : h('div.actions', h('button.btn.sm', { onclick: () => { st.lines.push(E.lines.blank?.() || {}); drawLines(); } }, E.lines.addLabel || '＋ بند'),
             ...(E.tools || []).map((t) => h('button.btn.sm', { onclick: guard(async () => { await t.run(ctx); }) }, t.label))));

@@ -77,7 +77,7 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
     onHeader: (k, v, ctx) => { if (k === 'period_from' || k === 'period_to') pullAdvances(ctx); },
     cols: 3, header: [dateF, { k: 'period_from', l: 'مدة الأجور: من تاريخ', t: 'date', req: 1 }, { k: 'period_to', l: 'إلى تاريخ', t: 'date', req: 1 }, { k: 'period_name', l: 'اسم المدة', t: 'text', readonly: true, ph: 'يتولّد تلقائياً عند الحفظ (YYYY/01)' }, { ...notesF, wide: false }],
     tools: [{ label: '⇩ استيراد العمال والسلف من كشوف السلف', run: importAdvanceSheets }],
-    lines: { title: 'العاملين', scrollX: true, addLabel: '＋ عامل جديد', blank: () => ({ days: 1, _g: ++gSeq }), groupKey: gKey,
+    lines: { title: 'العاملين', scrollX: true, sortable: true, addLabel: '＋ عامل جديد', blank: () => ({ days: 1, _g: ++gSeq }), groupKey: gKey,
       onDelete: (l, i, ctx) => { if (l.employee_id) { const nx = ctx.lines.find((x, j) => j !== i && x.employee_id && x._g === l._g); if (nx) for (const k of ['advance', 'other_additions', 'other_deductions']) nx[k] = Math.round(((Number(nx[k]) || 0) + (Number(l[k]) || 0)) * 100) / 100; } },
       cols: [
       { l: 'م', serial: true, merge: true, w: '38px' },
