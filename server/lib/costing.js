@@ -13,6 +13,10 @@ export const STD_BAG_KG = 50;   // الوحدة المعيارية: شيكارة
 const json = (v, d) => { try { return v ? JSON.parse(v) : d; } catch { return d; } };
 /** وزن وحدة الصنف بالكيلو: المحدد في الإعدادات، وإلا من الاسم (مثال «*30ك»)، وإلا 50 */
 export const kgOf = (m, map = {}) => Number(map[m.id]) || Number(/(\d+(?:\.\d+)?)\s*ك(?:جم|ج)?/.exec(m.name || '')?.[1]) || STD_BAG_KG;
+/** الوزن متخمّن (مش محدد في الإعدادات ولا مكتوب في الاسم) — لازم يتنبّه له المستخدم */
+export const kgGuessed = (m, map = {}) => !Number(map[m.id]) && !/(\d+(?:\.\d+)?)\s*ك(?:جم|ج)?/.test(m.name || '');
+// «اسمنت» بأي كتابة (اسمنت / أسمنت / إسمنت)
+const NORM = (col) => `REPLACE(REPLACE(REPLACE(${col},'أ','ا'),'إ','ا'),'آ','ا')`;
 
 /** ربط المراحل والأسمنت: من الإعدادات، وإلا بالاسم (صب / تشطيب / قوالب) */
 export async function getConfig() {
@@ -26,8 +30,8 @@ export async function getConfig() {
 }
 /** أصناف الأسمنت المرشحة (الاسم فيه «اسمنت») مع الوزن الحالي لكل وحدة */
 export async function cementCandidates(cfg) {
-  const rows = await all(`SELECT id, name FROM materials WHERE name LIKE '%اسمنت%' AND active=1 ORDER BY name`);
-  return rows.map((m) => ({ id: m.id, name: m.name, kg: kgOf(m, cfg.cement_kg), selected: !cfg.cement_material_ids.length || cfg.cement_material_ids.includes(m.id) }));
+  const rows = await all(`SELECT id, name FROM materials WHERE ${NORM('name')} LIKE '%اسمنت%' AND active=1 ORDER BY name`);
+  return rows.map((m) => ({ id: m.id, name: m.name, kg: kgOf(m, cfg.cement_kg), kg_guessed: kgGuessed(m, cfg.cement_kg), selected: !cfg.cement_material_ids.length || cfg.cement_material_ids.includes(m.id) }));
 }
 export async function saveConfig(b) {
   for (const [k, f] of [['cast', 'cast_stage_id'], ['finish', 'finish_stage_id'], ['mold', 'mold_stage_id']]) {
@@ -106,9 +110,9 @@ async function systemBags(cfg, castIds, month, projectId) {
   const pw = projectId ? ' AND c.project_id=?' : ''; const pp = projectId ? [projectId] : [];
   const ids = cfg.cement_material_ids; const iw = ids.length ? ` AND c.material_id IN (${ids.map(() => '?').join(',')})` : '';
   const rows = await all(`SELECT m.id, m.name, SUM(c.qty) qty FROM cost_lines c JOIN materials m ON m.id=c.material_id
-    WHERE substr(c.date,1,7)=? AND c.stage_id IN (${castIds.map(() => '?').join(',')}) AND c.cost_type='material' AND c.cost_class<>'transfer' AND m.name LIKE '%اسمنت%'${iw}${pw}
+    WHERE substr(c.date,1,7)=? AND c.stage_id IN (${castIds.map(() => '?').join(',')}) AND c.cost_type='material' AND c.cost_class<>'transfer' AND ${NORM('m.name')} LIKE '%اسمنت%'${iw}${pw}
     GROUP BY m.id, m.name ORDER BY m.name`, month, ...castIds, ...ids, ...pp);
-  const lines = rows.map((r) => { const kg = kgOf(r, cfg.cement_kg); return { material_id: r.id, name: r.name, qty: r4(r.qty), kg, std_bags: r4(r.qty * kg / STD_BAG_KG) }; });
+  const lines = rows.map((r) => { const kg = kgOf(r, cfg.cement_kg); return { material_id: r.id, name: r.name, qty: r4(r.qty), kg, kg_guessed: kgGuessed(r, cfg.cement_kg), std_bags: r4(r.qty * kg / STD_BAG_KG) }; });
   return { lines, bags: r4(lines.reduce((t, l) => t + l.std_bags, 0)) };
 }
 

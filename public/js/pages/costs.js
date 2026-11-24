@@ -38,8 +38,9 @@ export async function configPage(root) {
   root.replaceChildren(pageHead('ربط المراحل والأسمنت'),
     card('المراحل', f.el),
     card('أصناف الأسمنت المحسوبة في المتر المنتج (الوحدة المعيارية شيكارة 50 كجم)', rows.length
-      ? h('table.tbl.compact', h('thead', h('tr', ['', 'الصنف', 'وزن الوحدة (كجم)'].map((x) => h('th', x)))), h('tbody', rows.map((r) => h('tr', h('td', r.cb), h('td', r.m.name), h('td', r.kg)))))
-      : h('div', 'لا توجد أصناف اسمها فيه «اسمنت».')),
+      ? h('table.tbl.compact', h('thead', h('tr', ['', 'الصنف', 'وزن الوحدة (كجم)'].map((x) => h('th', x)))), h('tbody', rows.map((r) => h('tr', h('td', r.cb), h('td', r.m.name, r.m.kg_guessed ? h('span.badge.warn', { style: { marginInlineStart: '8px' } }, 'الوزن متخمّن — راجعه') : null), h('td', r.kg)))))
+      : h('div', 'لا توجد أصناف اسمها فيه «اسمنت». لإضافة صنف جديد: الإعدادات ← الأصناف، واكتب «اسمنت» في الاسم مع الوزن (مثال: اسمنت ابيض *50ك).')),
+    rows.some((r) => r.m.kg_guessed) ? h('div.note.bad', '⚠ في أصناف أسمنت وزنها متخمّن 50 كجم لأنه مش مكتوب في الاسم ولا محفوظ هنا. لو الوزن مختلف عدّله واضغط حفظ، لأنه بيأثر على عدد الشكاير وسعر المتر.') : null,
     canEdit ? h('div', { style: { marginTop: '12px' } }, h('button.btn.primary', { onclick: save }, 'حفظ')) : null);
 }
 
@@ -77,6 +78,7 @@ export async function unitCostPage(root, params = {}) {
       approved && s.drift ? h('div.note.bad', `تنبيه: الأرقام الحالية اختلفت عن وقت الاعتماد (السعر الحالي ${blank(s.live_unit_cost?.total)} مقابل المعتمد ${blank(u.total)}) — السعر المعتمد لسه ثابت. أعد فتح الشهر لو عايز تحدّثه.`) : null,
       h('div.kpis', kpi('شكاير الأسمنت للصب (معيارية 50 كجم)', fq(i.bags), 'من المنصرف بالنظام'), kpi('معدل فرد الشيكارة', i.spread_rate ? fq(i.spread_rate) : '—', 'م² / شيكارة'),
         kpi('المتر المسطح المنتج', i.area ? fmt(i.area) : '—', 'م²'), kpi('تكلفة الصب / م²', blank(u.cast)), kpi('تكلفة التشطيب / م²', blank(u.finish)), kpi('سعر المتر الإجمالي', blank(u.total), 'صب + تشطيب', 'ok')),
+      i.cement_lines?.some((x) => x.kg_guessed) ? h('div.note.bad', '⚠ وزن الوحدة متخمّن (50 كجم) للأصناف: ' + i.cement_lines.filter((x) => x.kg_guessed).map((x) => x.name).join('، ') + ' — راجعه من «ربط المراحل والأسمنت» لأنه بيأثر على المتر المنتج.') : null,
       i.cement_lines?.length ? card('أسمنت الصب محوّل لشكاير 50 كجم', table({ name: 'أسمنت الصب', search: false, compact: true, rows: i.cement_lines, cols: [{ k: 'name', l: 'الصنف', render: (r) => matLink(r.material_id, r.name), text: (r) => r.name }, { k: 'qty', l: 'الكمية المصروفة', num: true, fmt: (v) => fq(v) }, { k: 'kg', l: 'وزن الوحدة (كجم)', num: true, fmt: (v) => fq(v) }, { k: 'std_bags', l: 'ما يعادل شكاير 50 كجم', num: true, fmt: (v) => fq(v) }], foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'std_bags' ? fq(i.bags_system) : '') })) : null,
       h('div.chart-grid', stageTable(s.cast, { perBag: true }), stageTable(s.finish)),
       card(`مرحلة ${s.mold?.name || 'القوالب'} — محمّلة على المشروع (لا تدخل في سعر المتر)`, s.mold ? table({ name: 'القوالب', search: false, compact: true, rows: s.mold.by_project,
