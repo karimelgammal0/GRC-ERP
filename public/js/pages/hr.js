@@ -14,15 +14,17 @@ const lbNet = (l) => Math.round((lbBasic(l) + lbOt(l) + (Number(l.other_addition
 let gSeq = 0;
 const gKey = (l) => (l.employee_id ? (l._g ??= ++gSeq) : null);
 const grpOf = (ctx, l) => (l.employee_id ? ctx.lines.filter((x) => x.employee_id && x._g === l._g) : [l]);
-const mainStageOf = (id) => { const st = byId('stages', id); return st ? (st.parent_id || st.id) : null; };
+// المرحلة الافتراضية للعامل: لو ليها مراحل فرعية بيختار المستخدم الفرعية بنفسه، ولو مالهاش بتتحط زي ما هي
+const mainStageOf = (id) => { const st = byId('stages', id); return st && leafStage(st) ? st.id : null; };
 // السلفة بتتسجل على أول سطر للعامل بس
-const zeroNonFirst = (lines) => { const seen = new Set(); lines.forEach((l) => { if (!l.employee_id) return; const k = gKey(l); if (seen.has(k)) l.advance = 0; else seen.add(k); }); };
+const zeroNonFirst = (lines) => { const seen = new Set(); lines.forEach((l) => { if (!l.employee_id) return; const k = gKey(l); if (seen.has(k)) l.advance = l.other_additions = l.other_deductions = 0; else seen.add(k); }); };
 // تجميع أسطر كشف قديم/محمّل: كل عامل أسطره ورا بعض، والسلفة مجمّعة على أول سطر
 const groupLines = (lines) => {
   const order = []; const m = new Map();
   lines.forEach((l, i) => { const k = l.employee_id ? `e${l.employee_id}` : `x${i}`; if (!m.has(k)) { m.set(k, []); order.push(k); } m.get(k).push(l); });
   const out = [];
-  for (const k of order) { const g = ++gSeq; const ls = m.get(k); const adv = ls.reduce((a, l) => a + (Number(l.advance) || 0), 0); ls.forEach((l, i) => { l._g = g; l.rate = ls[0].rate; l.advance = i === 0 ? Math.round(adv * 100) / 100 : 0; out.push(l); }); }
+  for (const k of order) { const g = ++gSeq; const ls = m.get(k); const sum = (k) => Math.round(ls.reduce((a, l) => a + (Number(l[k]) || 0), 0) * 100) / 100; const adv = sum('advance'), add = sum('other_additions'), ded = sum('other_deductions');
+    ls.forEach((l, i) => { l._g = g; l.rate = ls[0].rate; l.advance = i === 0 ? adv : 0; l.other_additions = i === 0 ? add : 0; l.other_deductions = i === 0 ? ded : 0; out.push(l); }); }
   return out;
 };
 const grpNet = (l, ctx) => Math.round(grpOf(ctx, l).reduce((a, x) => a + lbNet(x), 0) * 100) / 100;
@@ -76,7 +78,7 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
     cols: 3, header: [dateF, { k: 'period_from', l: 'مدة الأجور: من تاريخ', t: 'date', req: 1 }, { k: 'period_to', l: 'إلى تاريخ', t: 'date', req: 1 }, { k: 'period_name', l: 'اسم المدة', t: 'text', readonly: true, ph: 'يتولّد تلقائياً عند الحفظ (YYYY/01)' }, { ...notesF, wide: false }],
     tools: [{ label: '⇩ استيراد العمال والسلف من كشوف السلف', run: importAdvanceSheets }],
     lines: { title: 'العاملين', scrollX: true, addLabel: '＋ عامل جديد', blank: () => ({ days: 1, _g: ++gSeq }), groupKey: gKey,
-      onDelete: (l, i, ctx) => { if (Number(l.advance) && l.employee_id) { const nx = ctx.lines.find((x, j) => j !== i && x.employee_id && x._g === l._g); if (nx) nx.advance = Math.round(((Number(nx.advance) || 0) + Number(l.advance)) * 100) / 100; } },
+      onDelete: (l, i, ctx) => { if (l.employee_id) { const nx = ctx.lines.find((x, j) => j !== i && x.employee_id && x._g === l._g); if (nx) for (const k of ['advance', 'other_additions', 'other_deductions']) nx[k] = Math.round(((Number(nx[k]) || 0) + (Number(l[k]) || 0)) * 100) / 100; } },
       cols: [
       { l: 'م', serial: true, merge: true, w: '38px' },
       { ...empCol, w: '300px', minW: '300px', merge: true, filter: (x) => x.emp_type === 'daily', onChange: (v, l, ctx) => { const e = byId('employees', v); if (!e) return;
@@ -88,13 +90,12 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
       { k: 'days', l: 'أيام أساسي', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'ot_days', l: 'أيام سهرات', t: 'number', w: '75px', step: '0.25', blankZero: true },
       { k: 'rate', l: 'اليومية', t: 'number', w: '120px', minW: '120px', merge: true, readonly: true, onChange: (v, l, ctx) => { grpOf(ctx, l).forEach((x) => { x.rate = v; }); } },
       { l: 'قيمة الأساسي', calc: (l) => lbBasic(l), fmt: (v) => fmt(v), w: '90px' }, { l: 'قيمة السهرات', calc: (l) => lbOt(l), fmt: (v) => fmt(v), w: '90px' },
-      { k: 'other_additions', l: 'إضافات أخرى', t: 'number', w: '90px', blankZero: true }, { k: 'other_deductions', l: 'خصومات أخرى', t: 'number', w: '90px', blankZero: true },
+      { k: 'other_additions', l: 'إضافات أخرى', t: 'number', w: '100px', minW: '100px', blankZero: true, merge: true }, { k: 'other_deductions', l: 'خصومات أخرى', t: 'number', w: '100px', minW: '100px', blankZero: true, merge: true },
       { k: 'advance', l: 'سلفة المدة', t: 'number', w: '100px', minW: '100px', blankZero: true, merge: true, readonly: true },
       { l: 'صافي المنصرف', calc: (l, ctx) => grpNet(l, ctx), fmt: (v) => fmt(v), w: '100px', merge: true },
       { k: 'project_id', l: 'المشروع (اختياري)', t: 'fk', ref: 'projects', combo: true, w: '15%', onChange: (v, l, ctx) => { const it = byId('project_items', l.item_id); if (it && it.project_id !== v) { l.item_id = null; ctx.setLines(ctx.lines); } } },
       { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, w: '15%', filter: (x, l) => !l.project_id || x.project_id === l.project_id },
-      { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, w: '110px' },
-      { l: 'التصنيف', minW: '130px', calc: (l) => labelOf(CLASS_OPTS, classOf(l.employee_id)).split(' (')[0] }] },
+      { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', filter: leafStage, w: '240px', minW: '240px' }] },
     totals: (ctx) => [['إجمالي أيام الأساسي', fq(total(ctx.lines, (l) => l.days))], ['إجمالي أيام السهرات', fq(total(ctx.lines, (l) => l.ot_days))], ['صافي المنصرف', fmt(total(ctx.lines, (l) => lbNet(l))), 'ok']],
   },
 });

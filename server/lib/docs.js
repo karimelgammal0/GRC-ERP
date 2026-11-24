@@ -549,6 +549,8 @@ DOCS.labor_sheet = {
         firstOf.set(Number(l.employee_id), l); continue;
       }
       f.advance = r2(num(f.advance) + num(l.advance)); l.advance = 0; l.rate = f.rate;
+      f.other_additions = r2(num(f.other_additions) + num(l.other_additions)); l.other_additions = 0;
+      f.other_deductions = r2(num(f.other_deductions) + num(l.other_deductions)); l.other_deductions = 0;
     }
     for (const l of lines) {
       const e = await get('SELECT * FROM employees WHERE id=?', l.employee_id);
