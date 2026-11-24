@@ -102,11 +102,17 @@ export function combo({ list, value, onChange, filter, placeholder = 'ابحث �
       ...shown.map((x, i) => h('div.opt' + (i === hi ? '.hi' : ''), { onmousedown: (e) => { e.preventDefault(); pick(x.id); } }, h('b', x.code), ' ', x.name, x.sub ? h('small', ' ' + x.sub) : null)),
       shown.length ? null : h('div.opt.none', 'لا نتائج'));
     box.style.display = 'block';
+    // جوه جدول بيتحرك بالعرض (lines-scroll) القايمة بتتثبّت بالإحداثيات عشان متتقصش
+    if (input.closest('.lines-scroll')) {
+      const r = input.getBoundingClientRect(); const w = Math.max(r.width, 300);
+      Object.assign(box.style, { position: 'fixed', top: `${r.bottom + 2}px`, width: `${w}px`, insetInline: 'auto', left: `${Math.max(4, Math.min(r.right - w, window.innerWidth - w - 4))}px` });
+    }
   };
   const pick = (id) => { cur = id; show(id); box.style.display = 'none'; onChange?.(id); };
   input.addEventListener('focus', () => { input.select(); typed = false; hi = 0; render(); });
   input.addEventListener('input', () => { typed = true; hi = 0; render(); });
   input.addEventListener('blur', () => { box.style.display = 'none'; show(cur); });
+  window.addEventListener('scroll', () => { if (box.style.position === 'fixed') box.style.display = 'none'; }, true);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') { hi = Math.min(hi + 1, shown.length - 1); render(); e.preventDefault(); }
     else if (e.key === 'ArrowUp') { hi = Math.max(hi - 1, 0); render(); e.preventDefault(); }

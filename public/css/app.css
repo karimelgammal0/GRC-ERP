@@ -240,3 +240,18 @@ table.perm td.pg { width: 34%; font-weight: 600; } table.perm label.act { displa
 .tbl tr.tot td { background: #e2f0ee; font-weight: 800; }
 
 .lines td .combo { min-width: 100%; } .lines .combo-list { min-width: 300px; }
+
+/* جدول بيتحرك بالعرض جوه الكارت بدل ما يخرج منه */
+.lines-scroll { overflow-x: auto; max-width: 100%; padding-bottom: 6px; border: 1px solid var(--line2); border-radius: 8px; }
+.lines-scroll .lines { width: max-content; min-width: 100%; margin-top: 0; }
+.lines-scroll .lines td, .lines-scroll .lines th { white-space: nowrap; }
+.lines-scroll::-webkit-scrollbar { height: 12px; } .lines-scroll::-webkit-scrollbar-thumb { background: #b9c7c6; border-radius: 6px; } .lines-scroll::-webkit-scrollbar-track { background: #eef2f1; }
+/* تلوين مجموعات العامل الواحد (أكتر من مرحلة) */
+.lines tr.grp-b td { background: #f7faf9; }
+.lines tr.grp-first td { border-top: 2px solid #9db9b6; }
+.lines tr.grp-multi td { background: #eef6f5; }
+.lines tr.grp-multi.grp-cont td { border-top: 1px dashed #9db9b6; }
+.lines tr.grp-multi.grp-cont td:not([rowspan]):first-child { box-shadow: inset -4px 0 0 var(--brand); }
+.lines tr.grp-multi.grp-first td:first-child { box-shadow: inset -4px 0 0 var(--brand); }
+.lines td[rowspan] { vertical-align: middle; font-weight: 600; }
+.lines td input[readonly], .lines td input:disabled { background: #eef1f1; color: var(--ink); font-weight: 600; }

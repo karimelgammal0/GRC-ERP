@@ -71,13 +71,15 @@ export function docScreen(cfg) {
         calcCells = []; const cols = typeof E.lines.cols === 'function' ? E.lines.cols(ctx) : E.lines.cols;
         const tb = h('tbody');
         // تجميع الأسطر: لو E.lines.groupKey متحدد، الأعمدة اللي عليها merge بتتدمج على أسطر نفس المجموعة (rowspan) وبتتعرض مرة واحدة
-        const gk = E.lines.groupKey; let serial = 0;
+        const gk = E.lines.groupKey; let serial = 0, gIdx = 0;
         st.lines.forEach((l, i) => {
           const key = gk ? gk(l) : null;
           const first = !key || i === 0 || gk(st.lines[i - 1]) !== key;
           let span = 1; if (key) for (let j = i + 1; j < st.lines.length && gk(st.lines[j]) === key; j++) span++;
           if (first) serial++;
-          const tr = h('tr', cols.map((c) => {
+          if (first) gIdx++;
+          const multi = span > 1 || (key && i > 0 && gk(st.lines[i - 1]) === key);
+          const tr = h('tr' + (gk ? `.grp-${gIdx % 2 ? 'a' : 'b'}${first ? '.grp-first' : '.grp-cont'}${multi ? '.grp-multi' : ''}` : ''), cols.map((c) => {
             if (c.merge && !first) return null;
             const td = h('td', { style: c.w || c.minW ? { ...(c.w ? { width: c.w } : {}), ...(c.minW ? { minWidth: c.minW } : {}) } : null });
             if (c.merge && span > 1) td.rowSpan = span;
@@ -89,7 +91,8 @@ export function docScreen(cfg) {
           }), readonly || E.lines.fixed ? null : h('td', h('button.del', { title: 'حذف البند', onclick: () => { E.lines.onDelete?.(l, i, ctx); st.lines.splice(i, 1); if (!st.lines.length) st.lines.push(E.lines.blank?.() || {}); drawLines(); updateTotals(); } }, '×')));
           tb.append(tr);
         });
-        linesHost.replaceChildren(h('table.lines', h('thead', h('tr', cols.map((c) => h('th', c.l)), readonly || E.lines.fixed ? null : h('th'))), tb),
+        const tbl = h('table.lines', h('thead', h('tr', cols.map((c) => h('th', c.l)), readonly || E.lines.fixed ? null : h('th'))), tb);
+        linesHost.replaceChildren(E.lines.scrollX ? h('div.lines-scroll', tbl) : tbl,
           readonly || E.lines.fixed ? null : h('div.actions', h('button.btn.sm', { onclick: () => { st.lines.push(E.lines.blank?.() || {}); drawLines(); } }, E.lines.addLabel || '＋ بند'),
             ...(E.tools || []).map((t) => h('button.btn.sm', { onclick: guard(async () => { await t.run(ctx); }) }, t.label))));
       };
