@@ -49,7 +49,7 @@ const recvCol = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'emplo
 const itemCol = { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', req: 1, combo: true, w: '24%', filter: (x, l, c) => !c.header.project_id || x.project_id === Number(c.header.project_id) };
 const stageCol = (req) => ({ k: 'stage_id', l: req ? 'المرحلة' : 'المرحلة (اختياري)', t: 'fk', ref: 'stages', filter: leafStage, req, w: '16%' });
 const issueLinesItems = { ...issueLines, blank: () => ({ material_id: null, item_id: null, stage_id: null, received_by_id: null, qty: null }),
-  cols: (ctx) => (ctx.header.kind === 'production' ? [{ ...issueLines.cols[0], w: '18%' }, { ...itemCol, w: '15%' }, stageCol(true), recvCol, ...issueLines.cols.slice(1)] : [issueLines.cols[0], stageCol(false), recvCol, ...issueLines.cols.slice(1)]) };
+  cols: (ctx) => (ctx.header.kind === 'production' ? [{ ...issueLines.cols[0], w: '18%' }, { ...itemCol, w: '15%' }, stageCol(true), recvCol, ...issueLines.cols.slice(1)] : [issueLines.cols[0], stageCol(true), recvCol, ...issueLines.cols.slice(1)]) };
 const issueTotals = (ctx) => { const t = total(ctx.lines, (l) => l.total ?? (Number(l.qty) || 0) * (ctx.stock?.[l.material_id]?.avg_cost ?? 0)); return [[ctx.doc ? 'إجمالي تكلفة الصرف' : 'تكلفة تقديرية (الفعلية تُحسب عند الحفظ)', fmt(t)]]; };
 const whF = (ctx) => ({ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, filter: (x) => x.type === 'raw', onChange: (v) => {
   const ok = whAllows(v); let n = 0;

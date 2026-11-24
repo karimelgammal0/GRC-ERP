@@ -386,6 +386,7 @@ DOCS.stock_issue = {
       for (const l of lines) l.stage_id = null;
     }
     if (p.kind === 'overhead') { p.project_id = null; p.site_id = null; for (const l of lines) l.item_id = null; }
+    if (p.kind === 'overhead') for (const l of lines) if (!l.stage_id) throw new AppError(`حدد المرحلة للصنف «${await nm('materials', l.material_id)}»`);
     if (p.kind !== 'return') { p.item_id = null; p.stage_id = null; if (p.kind === 'site' || p.kind === 'site_in') for (const l of lines) l.item_id = null; }
     for (const l of lines) { if (p.kind === 'site_in') { if (l.in_cost === '' || l.in_cost === undefined || l.in_cost === null) l.in_cost = null; else if (!(Number(l.in_cost) >= 0)) throw new AppError('تكلفة الوحدة غير صحيحة'); } else l.in_cost = null; }
     if (p.project_id) await must('projects', p.project_id, 'المشروع');

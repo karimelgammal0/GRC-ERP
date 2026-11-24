@@ -126,7 +126,8 @@ if (prj3) {
   const s2 = await get('SELECT qty,value FROM material_stock WHERE material_id=? AND warehouse_id=?', T1, wh);
   near(s2.qty - s0.qty, 0, 'إلغاء الوارد بيرجع الرصيد'); near(s2.value - s0.value, 0, 'إلغاء الوارد بيرجع القيمة');
 }
-const iss4 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, qty: 5 }] }, null, U);
+const iss4 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, stage_id: stage.cast, qty: 5 }] }, null, U);
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, qty: 1 }] }, null, U), /حدد المرحلة/, 'صرف تشغيل بدون مرحلة');
 const avgNow = r2(3470 / 210);
 near((await get('SELECT avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 16.5238, 'الصرف لا يغيّر المتوسط', 0.001);
 near((await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty, 125, 'الرصيد بعد الصرف 125');
@@ -225,7 +226,7 @@ await saveDoc('voucher', { date: '2026-11-12', kind: 'transfer', treasury_id: tr
 
 section('11) الفترات المالية والتكامل المحاسبي');
 await run(`UPDATE fiscal_periods SET status='closed' WHERE name LIKE 'نوفمبر%'`);
-await throws(async () => await saveDoc('stock_issue', { date: '2026-11-15', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, qty: 1 }] }, null, U), /مقفلة/, 'فترة مقفلة');
+await throws(async () => await saveDoc('stock_issue', { date: '2026-11-15', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, stage_id: stage.cast, qty: 1 }] }, null, U), /مقفلة/, 'فترة مقفلة');
 await throws(async () => await voidDoc('voucher', ci.id, U), /مقفلة/, 'إلغاء في فترة مقفلة');
 await run(`UPDATE fiscal_periods SET status='open'`);
 const tb = (await all(`SELECT COALESCE(SUM(debit),0) d, COALESCE(SUM(credit),0) c FROM journal_lines`))[0];
@@ -369,7 +370,7 @@ const mk = async (uname, perms) => { await run(`INSERT INTO users(username,name,
 const ckView = await mk('p_view', ['inventory.issues']);                       // عرض أذون الصرف فقط
 const ckCreate = await mk('p_create', ['inventory.issues', 'inventory.issues.create']);
 const ckVoid = await mk('p_void', ['inventory.issues', 'inventory.issues.void', 'inventory.issues.edit']);
-const issueBody = { date: '2026-11-09', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: await val('SELECT material_id FROM material_stock WHERE qty>5 LIMIT 1'), qty: 1 }] };
+const issueBody = { date: '2026-11-09', kind: 'overhead', warehouse_id: wh, lines: [{ stage_id: stage.cast, material_id: await val('SELECT material_id FROM material_stock WHERE qty>5 LIMIT 1'), qty: 1 }] };
 ok((await send('POST', '/api/doc/stock_issue', issueBody, ckView)).status === 403, 'عرض فقط: الإنشاء مرفوض');
 const made = await send('POST', '/api/doc/stock_issue', issueBody, ckCreate); ok(made.status === 200, 'بصلاحية الإنشاء: مقبول');
 ok((await send('POST', `/api/doc/stock_issue/${made.j.id}/void`, {}, ckCreate)).status === 403, 'إنشاء بدون إلغاء: الإلغاء مرفوض');
