@@ -85,7 +85,7 @@ export const labelOf = (opts, v) => (opts.find(([k]) => k === v) || [])[1] ?? v 
 export const CLASS_OPTS = [['direct', 'مباشرة (مرحلة تصنيع)'], ['indirect', 'تكلفة غير مباشرة'], ['admin', 'مصروفات إدارية']];
 
 // ---------- حقل بحث (Combo) للقوائم الطويلة ----------
-export function combo({ list, value, onChange, filter, placeholder = 'ابحث بالاسم أو الكود…', allowEmpty = true, items }) {
+export function combo({ list, value, onChange, filter, placeholder = 'ابحث بالاسم أو الكود…', allowEmpty = true, items, readonly = false }) {
   const getItems = () => (items ? items() : (L[list] || []).filter((x) => x.active !== 0 && (!filter || filter(x))));
   let cur = value ? Number(value) : null;
   const input = h('input.combo-in', { type: 'text', placeholder, autocomplete: 'off' });
@@ -120,6 +120,8 @@ export function combo({ list, value, onChange, filter, placeholder = 'ابحث �
     else if (e.key === 'Escape') { box.style.display = 'none'; }
   });
   wrap.get = () => cur; wrap.set = (v) => { cur = v ? Number(v) : null; show(cur); };
+  // مقفول (مستند معتمد/عرض فقط): مفيش فتح للقايمة ولا تعديل
+  if (readonly) { input.readOnly = true; input.disabled = true; input.placeholder = ''; caret.style.display = 'none'; wrap.classList.add('ro'); }
   return wrap;
 }
 
@@ -129,7 +131,7 @@ export function fieldInput(f, value) {
   let el;
   if (f.t === 'fk' || f.t === 'lookup') {
     const long = (L[f.ref] || []).length > 14 || f.combo;
-    if (long) el = combo({ list: f.ref, value, filter: f.filter, allowEmpty: !f.req, onChange: (v) => f.onChange?.(v) });
+    if (long) el = combo({ list: f.ref, value, filter: f.filter, allowEmpty: !f.req, readonly: !!f.readonly, onChange: (v) => f.onChange?.(v) });
     else {
       el = h('select', { onchange: () => f.onChange?.(el.get()) }, f.req ? (f.blankIfEmpty && (value === null || value === undefined || value === '') ? h('option', { value: '', selected: true }, '— اختر —') : null) : h('option', { value: '' }, '—'),
         (() => {

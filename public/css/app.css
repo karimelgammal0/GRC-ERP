@@ -259,3 +259,5 @@ table.perm td.pg { width: 34%; font-weight: 600; } table.perm label.act { displa
 .lines th.sortable { cursor: pointer; user-select: none; } .lines th.sortable:hover { background: #ebe7dc; color: var(--ink); }
 
 .tbl th.sortable { cursor: pointer; user-select: none; white-space: nowrap; } .tbl th.sortable:hover { color: var(--brand-d); }
+
+.combo.ro .combo-in { background: #eef1f1; color: var(--ink); cursor: default; }
