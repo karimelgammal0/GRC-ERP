@@ -81,7 +81,7 @@ export const ordersPage = docScreen({ perm: 'purchases.orders',
 // ---------------- إذن الاستلام ----------------
 export const receiptsPage = docScreen({ perm: 'purchases.receipts',
   print: (doc) => printSheet({ title: 'إذن استلام', no: doc.no, date: doc.date,
-    meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['المخزن', nameOf('warehouses', doc.warehouse_id)], ['مرجع المورد', doc.supplier_ref], ['نوع الشراء', doc.payment_type === 'cash' ? 'نقدي' : 'آجل']],
+    meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['المخزن', nameOf('warehouses', doc.warehouse_id)], ['مرجع المورد', doc.supplier_ref], ['نوع الشراء', doc.payment_type === 'cash' ? 'نقدي' : 'آجل'], doc.payment_type === 'cash' ? ['الدفع من', nameOf('treasuries', doc.treasury_id) || nameOf('custodians', doc.custodian_id)] : null].filter(Boolean),
     cols: ['الصنف', 'الوحدة', 'الكمية المستلمة', 'السعر', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true), totals: [['إجمالي قيمة الاستلام', fmt((doc.lines || []).reduce((s, l) => s + l.qty * l.unit_price, 0))]], notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['أمين المخزن', 'المورد / المندوب', 'مدير المشتريات'] }),
   print2: { label: '🖨 طباعة كميات (بدون أسعار)', short: '🖨 كميات', title: 'طباعة الإذن كميات فقط بدون أسعار',
     fn: (doc) => printSheet({ title: 'إذن استلام (كميات)', no: doc.no, date: doc.date,
@@ -127,7 +127,7 @@ const invCalc = (ctx) => {
 };
 export const invoicesPage = docScreen({ perm: 'purchases.invoices',
   print: (doc) => printSheet({ title: 'فاتورة شراء', no: doc.no, date: doc.date,
-    meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['المخزن', nameOf('warehouses', doc.warehouse_id)], ['فاتورة المورد', doc.supplier_inv_no], ['نوع الشراء', doc.payment_type === 'cash' ? 'نقدي' : 'آجل'], ['الاستحقاق', doc.payment_type === 'cash' ? '' : doc.due_date]],
+    meta: [['المورد', nameOf('suppliers', doc.supplier_id)], ['المخزن', nameOf('warehouses', doc.warehouse_id)], ['فاتورة المورد', doc.supplier_inv_no], ['نوع الشراء', doc.payment_type === 'cash' ? 'نقدي' : 'آجل'], doc.payment_type === 'cash' ? ['الدفع من', nameOf('treasuries', doc.treasury_id) || nameOf('custodians', doc.custodian_id)] : null, ['الاستحقاق', doc.payment_type === 'cash' ? '' : doc.due_date]].filter(Boolean),
     cols: ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي', 'ملاحظة'], rows: lineRows(doc, true),
     totals: [['الإجمالي قبل الخصم', fmt(doc.subtotal)], Number(doc.discount) ? ['الخصم', fmt(doc.discount)] : null, Number(doc.freight) ? ['نقل وتحميل', fmt(doc.freight)] : null, Number(doc.vat_amount) ? ['الضريبة', fmt(doc.vat_amount)] : null, ['إجمالي الفاتورة', fmt(doc.total)]].filter(Boolean),
     notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['أمين المخزن', 'مدير المشتريات', 'المحاسب'] }),
