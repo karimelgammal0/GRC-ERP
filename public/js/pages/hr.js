@@ -51,7 +51,7 @@ async function importAdvanceSheets(ctx) {
       const chosen = checks.filter((x) => x.cb.checked).map((x) => x.s);
       if (!chosen.length) { toast('اختر كشف سلف واحد على الأقل', 'err'); return false; }
       const adv = {}; chosen.forEach((s) => s.lines.forEach((l) => { adv[l.employee_id] = Math.round(((adv[l.employee_id] || 0) + l.amount) * 100) / 100; }));
-      let lines = ctx.lines.filter((l) => l.employee_id || Number(l.days) || Number(l.ot_days)); let added = 0, updated = 0;
+      let lines = ctx.lines.filter((l) => l.employee_id); let added = 0, updated = 0;
       for (const [empId, amount] of Object.entries(adv)) {
         const id = Number(empId); const ex = lines.find((l) => Number(l.employee_id) === id);
         if (ex) { ex.advance = amount; updated++; continue; }
