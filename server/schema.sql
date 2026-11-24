@@ -567,3 +567,89 @@ CREATE TABLE IF NOT EXISTS unit_cost_periods (
 ALTER TABLE unit_cost_periods ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'GRC';
 ALTER TABLE unit_cost_periods DROP CONSTRAINT IF EXISTS unit_cost_periods_month_project_id_key;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_ucp_month_proj_kind ON unit_cost_periods(month, project_id, kind);
+
+-- ============================================================
+--  المرحلة 3: الإنتاج التام ← تكلفة المشروع ← التسليم ← المستخلص
+-- ============================================================
+ALTER TABLE project_items ADD COLUMN IF NOT EXISTS area_m2 NUMERIC;                      -- المتر المسطح للقطعة الواحدة
+ALTER TABLE project_items ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'GRC';     -- GRC | GRP (تحدد سعر المتر المستخدم)
+ALTER TABLE project_items ADD COLUMN IF NOT EXISTS fg_material_id INTEGER;               -- صنف المنتج التام المقابل في دفتر المخزون
+ALTER TABLE materials ADD COLUMN IF NOT EXISTS fg_item_id INTEGER;                       -- لو الصنف ده «منتج تام» لبند مشروع (مش بيظهر في كود الأصناف)
+
+CREATE TABLE IF NOT EXISTS production_logs (     -- سجل الإنتاج التام (كميات فقط، القيمة بتتحدد في تشغيل نهاية الشهر)
+  id SERIAL PRIMARY KEY,
+  no TEXT NOT NULL UNIQUE, date TEXT NOT NULL,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  notes TEXT, status TEXT NOT NULL DEFAULT 'posted',
+  created_by INTEGER, created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS'))
+);
+CREATE TABLE IF NOT EXISTS production_log_lines (
+  id SERIAL PRIMARY KEY,
+  log_id INTEGER NOT NULL REFERENCES production_logs(id) ON DELETE CASCADE,
+  item_id INTEGER NOT NULL REFERENCES project_items(id),
+  qty NUMERIC NOT NULL DEFAULT 0, area_m2 NUMERIC NOT NULL DEFAULT 0,   -- area_m2 = متر القطعة وقت التسجيل
+  notes TEXT
+);
+CREATE TABLE IF NOT EXISTS costing_runs (        -- تشغيل تكلفة المنتج التام لمشروع وشهر
+  id SERIAL PRIMARY KEY,
+  month TEXT NOT NULL, project_id INTEGER NOT NULL REFERENCES projects(id),
+  carry NUMERIC NOT NULL DEFAULT 0,              -- تكلفة نصف المصنّع المرحّلة للشهر الجاي (تفضل في الإنتاج تحت التشغيل)
+  status TEXT NOT NULL DEFAULT 'draft',          -- draft | approved
+  snapshot TEXT, approved_by INTEGER, approved_at TEXT,
+  UNIQUE (month, project_id)
+);
+CREATE TABLE IF NOT EXISTS costing_run_items (   -- قيمة كل بند تام اتحسب في التشغيل (بتدخل مخزن التام)
+  id SERIAL PRIMARY KEY,
+  run_id INTEGER NOT NULL REFERENCES costing_runs(id) ON DELETE CASCADE,
+  item_id INTEGER NOT NULL REFERENCES project_items(id),
+  qty NUMERIC NOT NULL DEFAULT 0, meters NUMERIC NOT NULL DEFAULT 0, value NUMERIC NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS delivery_notes (      -- إذن تسليم للعميل (الإيراد + التكلفة بيتسجلوا مع كل إذن)
+  id SERIAL PRIMARY KEY,
+  no TEXT NOT NULL UNIQUE, date TEXT NOT NULL,
+  project_id INTEGER NOT NULL REFERENCES projects(id), client_id INTEGER REFERENCES clients(id),
+  profit_pct NUMERIC NOT NULL DEFAULT 0,         -- نسبة الربح وقت الإذن (من الإعدادات)
+  total_cost NUMERIC NOT NULL DEFAULT 0, total NUMERIC NOT NULL DEFAULT 0,
+  notes TEXT, status TEXT NOT NULL DEFAULT 'posted',
+  created_by INTEGER, created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS'))
+);
+CREATE TABLE IF NOT EXISTS delivery_note_lines (
+  id SERIAL PRIMARY KEY,
+  note_id INTEGER NOT NULL REFERENCES delivery_notes(id) ON DELETE CASCADE,
+  item_id INTEGER NOT NULL REFERENCES project_items(id),
+  qty NUMERIC NOT NULL DEFAULT 0,
+  unit_cost NUMERIC NOT NULL DEFAULT 0, cost NUMERIC NOT NULL DEFAULT 0,
+  unit_price NUMERIC NOT NULL DEFAULT 0, amount NUMERIC NOT NULL DEFAULT 0,
+  notes TEXT
+);
+CREATE TABLE IF NOT EXISTS deduction_types (     -- كود الخصومات والإضافات على المستخلص (المستخدم بيكوّدها)
+  id SERIAL PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'deduction',        -- deduction | addition
+  method TEXT NOT NULL DEFAULT 'percent',        -- percent (من إجمالي المستخلص) | amount (رقم ثابت)
+  value NUMERIC NOT NULL DEFAULT 0,
+  account_id INTEGER REFERENCES accounts(id),    -- الحساب المقابل (محتجز، دفعة مقدمة، منبع، ضريبة...)
+  seq INTEGER NOT NULL DEFAULT 1, notes TEXT, active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS client_certificates ( -- مستخلص العميل
+  id SERIAL PRIMARY KEY,
+  no TEXT NOT NULL UNIQUE, date TEXT NOT NULL,
+  client_id INTEGER NOT NULL REFERENCES clients(id), project_id INTEGER NOT NULL REFERENCES projects(id),
+  period_from TEXT, period_to TEXT,
+  gross NUMERIC NOT NULL DEFAULT 0, deductions_total NUMERIC NOT NULL DEFAULT 0, additions_total NUMERIC NOT NULL DEFAULT 0, net NUMERIC NOT NULL DEFAULT 0,
+  notes TEXT, status TEXT NOT NULL DEFAULT 'posted',
+  created_by INTEGER, created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS'))
+);
+CREATE TABLE IF NOT EXISTS client_certificate_lines (
+  id SERIAL PRIMARY KEY,
+  cert_id INTEGER NOT NULL REFERENCES client_certificates(id) ON DELETE CASCADE,
+  delivery_line_id INTEGER NOT NULL REFERENCES delivery_note_lines(id),
+  item_id INTEGER, qty NUMERIC NOT NULL DEFAULT 0, unit_price NUMERIC NOT NULL DEFAULT 0, amount NUMERIC NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS client_certificate_adjustments (
+  id SERIAL PRIMARY KEY,
+  cert_id INTEGER NOT NULL REFERENCES client_certificates(id) ON DELETE CASCADE,
+  type_id INTEGER, name TEXT NOT NULL, kind TEXT NOT NULL, method TEXT NOT NULL,
+  rate NUMERIC NOT NULL DEFAULT 0, amount NUMERIC NOT NULL DEFAULT 0, account_id INTEGER
+);
+CREATE INDEX IF NOT EXISTS ix_ccl_dl ON client_certificate_lines(delivery_line_id);

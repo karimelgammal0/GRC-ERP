@@ -19,6 +19,11 @@ export const ACC_KEYS = {
   acc_overhead_materials: 'أصناف تشغيل غير مباشرة',
   acc_indirect_labor: 'أجور غير مباشرة',
   acc_admin_labor: 'مرتبات وأجور إدارية',
+  acc_fg: 'مخزن المنتجات التامة',
+  acc_cogs: 'تكلفة المبيعات',
+  acc_revenue: 'إيرادات المبيعات (توريد)',
+  acc_vat_out: 'ضريبة القيمة المضافة — مبيعات',
+  acc_overhead_absorbed: 'أعباء غير مباشرة محمّلة على الإنتاج',
 };
 export async function acc(key) {
   const id = Number(await getSetting(key));
@@ -65,6 +70,8 @@ const SEQ_TABLE = {
   stock_return: { t: 'stock_issues', c: 'no' }, stock_site_in: { t: 'stock_issues', c: 'no' }, stock_adjustment: { t: 'stock_adjustments', c: 'no' },
   labor_sheet: { t: 'labor_sheets', c: 'no' }, labor_advance: { t: 'labor_advances', c: 'no' }, payroll: { t: 'payroll_runs', c: 'no' },
   journal: { t: 'journal_entries', c: 'no' },
+  production_log: { t: 'production_logs', c: 'no' }, delivery_note: { t: 'delivery_notes', c: 'no' }, client_certificate: { t: 'client_certificates', c: 'no' },
+  deduction_type: { t: 'deduction_types', c: 'code' },
   v_supplier_payment: { t: 'vouchers', c: 'no' }, v_expense: { t: 'vouchers', c: 'no' }, v_wage_payment: { t: 'vouchers', c: 'no' },
   v_custody_issue: { t: 'vouchers', c: 'no' }, v_custody_return: { t: 'vouchers', c: 'no' }, v_transfer: { t: 'vouchers', c: 'no' },
   v_receipt: { t: 'vouchers', c: 'no' }, v_payment_other: { t: 'vouchers', c: 'no' },
@@ -83,6 +90,7 @@ export const DEFAULT_SEQUENCES = [
   ['v_supplier_payment', 'سداد موردين', 'SP-', 5], ['v_expense', 'سندات مصروفات', 'EXP-', 5], ['v_wage_payment', 'صرف أجور', 'WP-', 5],
   ['v_custody_issue', 'صرف عهدة', 'CI-', 5], ['v_custody_return', 'رد عهدة', 'CR-', 5], ['v_transfer', 'تحويل بين الخزن', 'TRF-', 5],
   ['v_receipt', 'سندات قبض', 'RCV-', 5], ['v_payment_other', 'سندات صرف أخرى', 'PYO-', 5],
+  ['production_log', 'سجلات الإنتاج التام', 'PRD-', 5], ['delivery_note', 'أذون تسليم للعميل', 'DLV-', 5], ['client_certificate', 'مستخلصات العملاء', 'CERT-', 4], ['deduction_type', 'الخصومات والإضافات', 'DED-', 3],
 ];
 
 // ---------- الفترات المالية ----------
