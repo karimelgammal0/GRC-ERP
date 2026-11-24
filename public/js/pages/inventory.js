@@ -63,7 +63,9 @@ const receivedF = { k: 'received_by_id', l: 'المستلم', t: 'fk', ref: 'emp
 export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true, print: issuePrint,
   type: 'stock_issue', nextNoKey: 'stock_issue', title: 'أذون الصرف', noun: 'إذن صرف', newLabel: 'إذن صرف جديد', fixed: { only: 'issues' }, defaultFrom: monthStart, defaultTo: today,
   note: 'كل صرف من المخزن بيتحدد له: المشروع، والبند والمرحلة بيتحددوا لكل صنف في سطرها (إذن واحد يخدم أكتر من بند ومرحلة) — ومنها بتتجمّع تكلفة كل مشروع وكل مرحلة تلقائياً بالمتوسط المرجح. (تحويل الأصناف لمواقع المشاريع له شاشة منفصلة.)',
-  filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages' }, { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...ISSUE_KINDS] }],
+  filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses' },
+    { k: 'stage_id', l: 'المرحلة', t: 'select', get options() { return [['', 'الكل'], ['none', 'بدون مرحلة'], ...(L.stages || []).filter((x) => x.active !== 0).map((x) => [String(x.id), codeName(x)])]; } },
+    { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...ISSUE_KINDS] }],
   listCols: [
     { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'kind', l: 'النوع', text: (r) => labelOf(KINDS, r.kind).split(' (')[0] },
     { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'received_by', l: 'المستلم' },
