@@ -59,6 +59,9 @@ export function userPerms(u) {
 /** مفتاح واحد أو مصفوفة (أي واحد منها يكفي) */
 export const can = (u, key) => { if (u?.role === 'admin') return true; const s = userPerms(u); return (Array.isArray(key) ? key : [key]).some((k) => s.has(k)); };
 export const canModule = (u, mod) => u?.role === 'admin' || [...userPerms(u)].some((k) => k.startsWith(mod + '.'));
+/** المرتبات والأجور اليومية: لا تُعرض إلا لمن عنده صلاحية على الموارد البشرية أو كود العاملين */
+export const canSeeSalaries = (u) => can(u, ['hr.labor', 'hr.payroll', 'hr.employees', 'settings.employees']);
+export const maskEmployees = (rows, u) => (canSeeSalaries(u) ? rows : rows.map((r) => ({ ...r, daily_rate: 0, monthly_salary: 0 })));
 export const need = (u, key, msg = 'ليس لديك صلاحية لهذا الإجراء') => { if (!can(u, key)) throw new AppError(msg, 403); };
 /** يطبّع قائمة جاية من الواجهة: مفاتيح معروفة فقط، وأي إجراء يستلزم مفتاح صفحته */
 export function cleanPerms(list) {

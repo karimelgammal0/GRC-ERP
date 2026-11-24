@@ -243,6 +243,7 @@ ok(bad === 0, 'الأرصدة التراكمية في كارت الصنف سلي
 section('12) التقارير');
 const app = (await import('../server/index.js')).app;
 const server = app.listen(0); const base = `http://127.0.0.1:${server.address().port}`;
+await run('UPDATE users SET must_change=0');   // تغيير كلمة المرور الإجباري بيتفرض في السيرفر دلوقتي
 const login = await fetch(base + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'admin123' }) });
 const cookie = login.headers.get('set-cookie').split(';')[0];
 const api = async (p) => { const r = await fetch(base + p, { headers: { cookie } }); const j = await r.json(); if (!r.ok) throw new Error(p + ' → ' + j.error); return j; };
@@ -294,7 +295,7 @@ ok(qi1.status === 200 && qi1.j.project_id === prjQ && qi1.j.code, 'إضافة ب
 ok((await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: ' بند سريع ' })).status === 400, 'منع تكرار اسم البند في نفس المشروع');
 await run(`INSERT INTO users(username,name,pass_hash,role,modules) VALUES('u_inv','x',(SELECT pass_hash FROM users WHERE username='admin'),'user','["inventory"]')`);
 await run(`INSERT INTO users(username,name,pass_hash,role,modules) VALUES('u_perm','y',(SELECT pass_hash FROM users WHERE username='admin'),'user','["inventory","perm_add_items"]')`);
-const ckOf = async (u) => (await fetch(base + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: 'admin123' }) })).headers.get('set-cookie').split(';')[0];
+const ckOf = async (u) => (await run('UPDATE users SET must_change=0 WHERE username=?', u), await fetch(base + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: 'admin123' }) })).headers.get('set-cookie').split(';')[0];
 ok((await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: 'بند ممنوع' }, await ckOf('u_inv'))).status === 403, 'مستخدم بدون صلاحية مرفوض');
 ok((await send('POST', '/api/helpers/quick-item', { project_id: prjQ, name: 'بند مسموح' }, await ckOf('u_perm'))).status === 200, 'مستخدم بصلاحية الإضافة مقبول');
 

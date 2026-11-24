@@ -11,6 +11,7 @@ import { docRouter, helperRouter } from './routes/docs.js';
 import { reportRouter } from './routes/reports.js';
 import { accountsRouter } from './routes/accounts.js';
 import { costsRouter } from './routes/costs.js';
+import { writeQueue } from './lib/queue.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 await initSchema();
@@ -23,6 +24,7 @@ if (await isEmpty()) { await seedAll(); console.log('تمت تهيئة قاعد�
 await loadOpeningStockSeed();
 
 export const app = express();
+app.set('trust proxy', 1);          // Railway بيمرّر الطلب عبر proxy (للـ IP وSecure)
 app.use(express.json({ limit: '5mb' }));
 app.use('/api', (req, res, next) => { // تسجيل الطلبات البطيئة في لوج Railway
   const s0 = performance.now();
@@ -34,12 +36,7 @@ app.use(express.static(path.join(here, '..', 'public'), { setHeaders: (res, f) =
 // تنفيذ طلبات التعديل واحد تلو الآخر (إعادة التقييم بالمتوسط المرجح لازم تكون متسلسلة)
 // فحص الصحة: بيلمس قاعدة البيانات (بيستخدمه Railway للـ Healthcheck)
 app.get('/api/health', async (req, res) => { await get('SELECT 1 AS ok'); res.json({ ok: true, t: new Date().toISOString() }); });
-let chain = Promise.resolve();
-app.use('/api', (req, res, next) => {
-  if (req.method === 'GET') return next();
-  const prev = chain; let done; chain = new Promise((r) => { done = r; });
-  prev.then(() => { res.on('close', done); next(); });
-});
+app.use('/api', writeQueue());
 
 const cookies = (req) => Object.fromEntries((req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).filter((x) => x[0]));
 const wrap = (router) => {  // الأخطاء المتزامنة بتتحول لرد JSON
@@ -50,7 +47,10 @@ app.use('/api', async (req, res, next) => {
   const token = cookies(req).sid;
   const u = token && await get(`SELECT u.*, e.name employee_name FROM sessions s JOIN users u ON u.id=s.user_id LEFT JOIN employees e ON e.id=u.employee_id WHERE s.token=? AND u.active=1`, token);
   if (!u) return res.status(401).json({ error: 'سجّل الدخول أولاً' });
-  req.user = u; req.token = token; next();
+  req.user = u; req.token = token;
+  // تغيير كلمة المرور الإجباري بيتفرض هنا في السيرفر مش في الواجهة بس
+  if (u.must_change && !['/me', '/change-password', '/logout'].includes(req.path)) return res.status(403).json({ error: 'لازم تغيّر كلمة المرور أولاً', must_change: true });
+  next();
 });
 
 app.use('/api', await systemRouter());

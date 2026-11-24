@@ -2,7 +2,7 @@ import { Router } from 'express';
 import ExcelJS from 'exceljs';
 import { all, get, run, val, tx, insertRow, updateRow, AppError } from '../db.js';
 import { nextNo, audit } from '../lib/core.js';
-import { can } from '../lib/perms.js';
+import { can, maskEmployees } from '../lib/perms.js';
 
 // صفحة الصلاحيات لكل كود (العاملين ليهم صفحتين: الموارد البشرية والإعدادات)
 const PAGE_OF = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', payment_types: 'payment-types', receipt_types: 'receipt-types', employees: 'employees' };
@@ -259,7 +259,8 @@ export async function masterRouter() {
   });
   r.get('/:name', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);
-    res.json(await withLinks(req.params.name, await all(`SELECT * FROM ${M.table} ORDER BY code`)));
+    const rows = await withLinks(req.params.name, await all(`SELECT * FROM ${M.table} ORDER BY code`));
+    res.json(req.params.name === 'employees' ? maskEmployees(rows, req.user) : rows);
   });
   await r.post('/:name', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);

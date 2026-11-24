@@ -3,7 +3,7 @@ import { all, get, run, val, AppError, r2 } from '../db.js';
 import { DOCS, saveDoc, voidDoc, getDoc, invoiceOpenAmount, VOUCHER_KINDS } from '../lib/docs.js';
 import { stockOf } from '../lib/stock.js';
 import { nextNo, peekNo, audit } from '../lib/core.js';
-import { can, need } from '../lib/perms.js';
+import { can, need, canModule, maskEmployees } from '../lib/perms.js';
 import { insertRow } from '../db.js';
 
 const MODULE_OF = {
@@ -133,6 +133,11 @@ export async function docRouter() {
 /** استعلامات مساعدة لشاشات الإدخال (ربط المستندات ببعضها) */
 export function helperRouter() {
   const r = Router();
+  // المساعدات خاصة بشاشات المستندات: لازم المستخدم يكون له صلاحية على موديول مستندات واحد على الأقل
+  r.use((req, res, next) => {
+    if (!['inventory', 'purchases', 'hr', 'finance', 'accounts'].some((m) => canModule(req.user, m))) return res.status(403).json({ error: 'ليس لديك صلاحية' });
+    next();
+  });
   r.get('/request-lines', async (req, res) => res.json(await all(`SELECT l.*, m.name material_name, l.qty-l.ordered_qty remaining FROM purchase_request_lines l JOIN materials m ON m.id=l.material_id
       WHERE l.request_id=? AND l.qty-l.ordered_qty>0.000001`, req.query.request_id)));
   r.get('/open-requests', async (req, res) => res.json(await all(`SELECT id,no,date FROM purchase_requests WHERE status IN ('open') ORDER BY id DESC`)));
@@ -206,7 +211,7 @@ export function helperRouter() {
   r.get('/next-no', async (req, res) => res.json({ no: await peekNo(String(req.query.key || '')) }));
   r.get('/stock-all', async (req, res) => res.json(await all(`SELECT material_id, qty, value, avg_cost FROM material_stock WHERE warehouse_id=?`, req.query.warehouse_id)));
   r.get('/project-items', async (req, res) => res.json(await all(`SELECT id,code,name FROM project_items WHERE project_id=? AND active=1 ORDER BY code`, req.query.project_id)));
-  r.get('/employee-rates', async (req, res) => res.json(await all(`SELECT id, code, name, emp_type, daily_rate, monthly_salary, cost_class, default_stage_id FROM employees WHERE active=1 ORDER BY code`)));
+  r.get('/employee-rates', async (req, res) => res.json(maskEmployees(await all(`SELECT id, code, name, emp_type, daily_rate, monthly_salary, cost_class, default_stage_id FROM employees WHERE active=1 ORDER BY code`), req.user)));
   return r;
 }
 export { VOUCHER_KINDS };

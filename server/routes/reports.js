@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { can } from '../lib/perms.js';
+import { can, canModule } from '../lib/perms.js';
 import { all, get, val, AppError, r2 } from '../db.js';
 import { acc, getSetting } from '../lib/core.js';
 
@@ -65,7 +65,7 @@ const REPORT_PAGES = {
 export function reportRouter() {
   const r = Router();
   r.use((req, res, next) => {
-    const name = req.path.split('/')[1]; if (name === 'dashboard') return next();
+    const name = req.path.split('/')[1]; if (name === 'dashboard') return canModule(req.user, 'dashboard') ? next() : res.status(403).json({ error: 'ليس لديك صلاحية على لوحة التحكم' });
     const keys = REPORT_PAGES[name]; if (keys && can(req.user, keys)) return next();
     res.status(403).json({ error: 'ليس لديك صلاحية على هذا التقرير' });
   });

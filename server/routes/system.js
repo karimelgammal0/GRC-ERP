@@ -6,7 +6,7 @@ import { applyOpening, lockOpening, unlockOpening, openingLocked } from '../lib/
 import { MASTERS, withLinks } from './masters.js';
 import { hashPassword, checkPassword } from '../lib/seed.js';
 import { COST_CLASS, VOUCHER_KINDS } from '../lib/docs.js';
-import { CATALOG, userPerms, can, need, cleanPerms, modulesOf } from '../lib/perms.js';
+import { CATALOG, userPerms, can, need, cleanPerms, modulesOf, maskEmployees } from '../lib/perms.js';
 
 export const MODULES = [
   ['dashboard', 'لوحة التحكم'], ['settings', 'الإعدادات'], ['inventory', 'المخازن'], ['purchases', 'المشتريات'],
@@ -14,14 +14,23 @@ export const MODULES = [
 ];
 const adminOnly = (req) => { if (req.user.role !== 'admin') throw new AppError('للمدير فقط', 403); };
 
+// حد محاولات الدخول: 8 محاولات فاشلة لكل (IP + اسم مستخدم) خلال 15 دقيقة
+const FAILS = new Map(); const WINDOW = 15 * 60 * 1000, MAX_FAILS = 8;
+const failKey = (req) => `${req.ip}|${String(req.body?.username || '').trim().toLowerCase()}`;
+const recentFails = (k) => { const a = (FAILS.get(k) || []).filter((t) => Date.now() - t < WINDOW); if (a.length) FAILS.set(k, a); else FAILS.delete(k); return a; };
+const secureCookie = (req) => (req.secure || process.env.NODE_ENV === 'production' ? '; Secure' : '');
+
 export async function authRoutes() {
   const r = Router();
   await r.post('/login', async (req, res) => {
+    const k = failKey(req);
+    if (recentFails(k).length >= MAX_FAILS) throw new AppError('محاولات كتير غلط — جرّب بعد 15 دقيقة', 429);
     const u = await get('SELECT * FROM users WHERE username=? AND active=1', String(req.body.username || '').trim());
-    if (!u || !checkPassword(String(req.body.password || ''), u.pass_hash)) throw new AppError('اسم المستخدم أو كلمة المرور غير صحيحة', 401);
+    if (!u || !checkPassword(String(req.body.password || ''), u.pass_hash)) { FAILS.set(k, [...recentFails(k), Date.now()]); throw new AppError('اسم المستخدم أو كلمة المرور غير صحيحة', 401); }
+    FAILS.delete(k);
     const token = crypto.randomBytes(24).toString('hex');
     await run('INSERT INTO sessions(token,user_id) VALUES(?,?)', token, u.id);
-    res.setHeader('Set-Cookie', `sid=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 14}`);
+    res.setHeader('Set-Cookie', `sid=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 14}${secureCookie(req)}`);
     await audit(u, 'login', 'users', u.id);
     res.json({ ok: true });
   });
@@ -30,7 +39,7 @@ export async function authRoutes() {
 
 export async function systemRouter() {
   const r = Router();
-  await r.post('/logout', async (req, res) => { await run('DELETE FROM sessions WHERE token=?', req.token); res.setHeader('Set-Cookie', 'sid=; Path=/; Max-Age=0'); res.json({ ok: true }); });
+  await r.post('/logout', async (req, res) => { await run('DELETE FROM sessions WHERE token=?', req.token); res.setHeader('Set-Cookie', `sid=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secureCookie(req)}`); res.json({ ok: true }); });
   r.get('/me', (req, res) => { const { pass_hash, ...u } = req.user; const perms = [...userPerms(req.user)]; res.json({ ...u, perms, modules: [...new Set(perms.map((k) => k.split('.')[0]))] }); });
   // الوصول السريع في لوحة التحكم: قائمة مفاتيح صفحات/أزرار لكل مستخدم (null = الافتراضي)
   await r.put('/me/shortcuts', async (req, res) => {
@@ -60,6 +69,7 @@ export async function systemRouter() {
     const rows = await Promise.all(jobs.map(([, q]) => all(q)));
     const out = Object.fromEntries(jobs.map(([k], i) => [k, rows[i]]));
     out.warehouses = await withLinks('warehouses', out.warehouses);
+    out.employees = maskEmployees(out.employees, req.user);
     { const sn = Object.fromEntries(out.stages.map((s) => [s.id, s.name])); out.stages = out.stages.map((s) => ({ ...s, full_name: s.parent_id ? `${sn[s.parent_id] || ''} › ${s.name}` : s.name })); }
     res.json(out);
   });
