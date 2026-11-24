@@ -175,10 +175,18 @@ export function table({ cols, rows, onRow, empty = 'لا توجد بيانات',
   const wrap = h('div.tbl-wrap');
   let q = '';
   const text = (r, c) => (c.text ? c.text(r) : c.fmt ? c.fmt(r[c.k], r) : r[c.k]);
+  // ترتيب بالضغط على عنوان العمود (تصاعدي ← تنازلي ← الترتيب الأصلي)
+  let sort = null;
+  const sortable = (c) => c.l && !String(c.k || '').startsWith('_') && c.sortable !== false;
+  const sval = (r, c) => { let v = c.sortVal ? c.sortVal(r) : (c.k && r[c.k] !== undefined && r[c.k] !== null ? r[c.k] : text(r, c)); if (c.num && typeof v !== 'number') { const n = Number(String(v ?? '').replace(/[^\d.\-]/g, '')); v = Number.isNaN(n) ? 0 : n; } return v ?? ''; };
+  const clickSort = (i) => { sort = !sort || sort.i !== i ? { i, dir: 1 } : sort.dir === 1 ? { i, dir: -1 } : null; draw(); };
   const draw = () => {
-    const shown = rows.filter((r) => !q || cols.some((c) => String(text(r, c) ?? '').toLowerCase().includes(q)));
+    let shown = rows.filter((r) => !q || cols.some((c) => String(text(r, c) ?? '').toLowerCase().includes(q)));
+    if (sort) { const c = cols[sort.i]; shown = [...shown].sort((a, b) => { const x = sval(a, c), y = sval(b, c); return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ar', { numeric: true })) * sort.dir; }); }
     const limited = shown.slice(0, maxRows);
-    const tb = h('table.tbl' + (compact ? '.compact' : '') + (center ? '.ctr' : ''), h('thead', h('tr', cols.map((c) => h('th' + (c.num ? '.num' : ''), { style: c.w ? { width: c.w } : null }, c.l)))),
+    const tb = h('table.tbl' + (compact ? '.compact' : '') + (center ? '.ctr' : ''), h('thead', h('tr', cols.map((c, i) => (sortable(c)
+      ? h('th.sortable' + (c.num ? '.num' : ''), { style: c.w ? { width: c.w } : null, title: 'اضغط للترتيب', onclick: () => clickSort(i) }, c.l, sort?.i === i ? (sort.dir === 1 ? ' ▲' : ' ▼') : '')
+      : h('th' + (c.num ? '.num' : ''), { style: c.w ? { width: c.w } : null }, c.l))))),
       h('tbody', limited.length ? limited.map((r) => h('tr' + (onRow ? '.click' : '') + (rowClass && rowClass(r) ? '.' + rowClass(r) : ''), { onclick: onRow ? () => onRow(r) : null },
         cols.map((c) => { const v = c.render ? c.render(r) : text(r, c); return h('td' + (c.num ? '.num' : '') + (c.cls ? '.' + c.cls : ''), v === null || v === undefined ? '' : v); })))
         : h('tr', h('td.empty', { colspan: cols.length }, empty))),
