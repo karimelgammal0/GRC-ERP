@@ -79,14 +79,14 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
       onDelete: (l, i, ctx) => { if (Number(l.advance) && l.employee_id) { const nx = ctx.lines.find((x, j) => j !== i && x.employee_id && x._g === l._g); if (nx) nx.advance = Math.round(((Number(nx.advance) || 0) + Number(l.advance)) * 100) / 100; } },
       cols: [
       { l: 'م', serial: true, merge: true, w: '38px' },
-      { ...empCol, w: '280px', merge: true, filter: (x) => x.emp_type === 'daily', onChange: (v, l, ctx) => { const e = byId('employees', v); if (!e) return;
+      { ...empCol, w: '300px', minW: '300px', merge: true, filter: (x) => x.emp_type === 'daily', onChange: (v, l, ctx) => { const e = byId('employees', v); if (!e) return;
         grpOf(ctx, l).forEach((x) => { x.employee_id = v; x.rate = e.daily_rate; if (e.cost_class !== 'direct') x.stage_id = null; });
         l.stage_id = e.cost_class === 'direct' ? mainStageOf(e.default_stage_id) : null; l.advance = ctx.advMap ? (ctx.advMap[v] || 0) : 0; if (!ctx.advMap) pullAdvances(ctx); ctx.setLines(ctx.lines); } },
       { l: '', merge: true, w: '40px', render: (l, ctx, readonly) => (readonly || !l.employee_id ? h('span') : h('button.btn.sm', { title: 'إضافة سطر لنفس العامل على مرحلة تانية', onclick: () => {
         const g = grpOf(ctx, l); const last = ctx.lines.indexOf(g[g.length - 1]);
         ctx.lines.splice(last + 1, 0, { days: 1, _g: l._g, employee_id: l.employee_id, rate: l.rate, advance: 0, project_id: g[g.length - 1].project_id || null }); ctx.setLines(ctx.lines); } }, '＋')) },
       { k: 'days', l: 'أيام أساسي', t: 'number', w: '75px', step: '0.25', blankZero: true }, { k: 'ot_days', l: 'أيام سهرات', t: 'number', w: '75px', step: '0.25', blankZero: true },
-      { k: 'rate', l: 'اليومية', t: 'number', w: '120px', merge: true, onChange: (v, l, ctx) => { grpOf(ctx, l).forEach((x) => { x.rate = v; }); } },
+      { k: 'rate', l: 'اليومية', t: 'number', w: '120px', minW: '120px', merge: true, onChange: (v, l, ctx) => { grpOf(ctx, l).forEach((x) => { x.rate = v; }); } },
       { l: 'قيمة الأساسي', calc: (l) => lbBasic(l), fmt: (v) => fmt(v), w: '90px' }, { l: 'قيمة السهرات', calc: (l) => lbOt(l), fmt: (v) => fmt(v), w: '90px' },
       { k: 'other_additions', l: 'إضافات أخرى', t: 'number', w: '90px', blankZero: true }, { k: 'other_deductions', l: 'خصومات أخرى', t: 'number', w: '90px', blankZero: true },
       { k: 'advance', l: 'سلفة المدة', t: 'number', w: '90px', blankZero: true, merge: true },

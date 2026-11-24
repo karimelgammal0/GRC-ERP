@@ -79,7 +79,7 @@ export function docScreen(cfg) {
           if (first) serial++;
           const tr = h('tr', cols.map((c) => {
             if (c.merge && !first) return null;
-            const td = h('td', { style: c.w ? { width: c.w } : null });
+            const td = h('td', { style: c.w || c.minW ? { ...(c.w ? { width: c.w } : {}), ...(c.minW ? { minWidth: c.minW } : {}) } : null });
             if (c.merge && span > 1) td.rowSpan = span;
             if (c.serial) { td.className = 'ro'; td.textContent = serial; return td; }
             if (c.calc) { td.className = 'ro'; calcCells.push({ td, c, l }); td.textContent = c.fmt ? c.fmt(c.calc(l, ctx)) : (c.calc(l, ctx) ?? ''); return td; }

@@ -238,3 +238,5 @@ table.perm td.pg { width: 34%; font-weight: 600; } table.perm label.act { displa
 /* موديول التكاليف: صفوف الإجماليات في جدول المرحلة */
 .tbl tr.sub td { background: #f1f5f9; font-weight: 700; }
 .tbl tr.tot td { background: #e2f0ee; font-weight: 800; }
+
+.lines td .combo { min-width: 100%; } .lines .combo-list { min-width: 300px; }
