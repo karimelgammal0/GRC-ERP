@@ -76,14 +76,28 @@ async function stageBlock(stageId, ids, month, projectId) {
 
 async function moldBlock(stageId, month, projectId) {
   if (!stageId) return null;
-  const pw = projectId ? ' AND c.project_id=?' : ''; const pp = projectId ? [projectId] : [];
+  // بنحسب الشهر كله (كل المشروعات) الأول عشان نوزّع القيم اللي من غير مشروع، وبعدها لو طالب مشروع معين بنفلتر
   const rows = await all(`SELECT COALESCE(c.project_id,0) pid, p.name pname,
       SUM(CASE WHEN c.cost_type='material' THEN c.amount ELSE 0 END) mat, SUM(CASE WHEN c.cost_type='labor' THEN c.amount ELSE 0 END) lab,
       SUM(CASE WHEN c.cost_type='expense' THEN c.amount ELSE 0 END) exp, SUM(c.amount) total
     FROM cost_lines c LEFT JOIN projects p ON p.id=c.project_id
-    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_class<>'transfer'${pw} GROUP BY COALESCE(c.project_id,0), p.name ORDER BY total DESC`, month, stageId, ...pp);
-  const by_project = rows.map((r) => ({ project_id: r.pid, name: r.pname || 'غير محدد', material: r2(r.mat), labor: r2(r.lab), expense: r2(r.exp), total: r2(r.total) }));
-  return { stage_id: stageId, name: await val('SELECT name FROM stages WHERE id=?', stageId), by_project, total: r2(by_project.reduce((s, r) => s + r.total, 0)) };
+    WHERE substr(c.date,1,7)=? AND c.stage_id=? AND c.cost_class<>'transfer' GROUP BY COALESCE(c.project_id,0), p.name ORDER BY total DESC`, month, stageId);
+  let list = rows.map((r) => ({ project_id: r.pid, name: r.pname || 'غير محدد', material: r2(r.mat), labor: r2(r.lab), expense: r2(r.exp), total: r2(r.total), direct: r2(r.total), allocated: 0 }));
+  // تكلفة القوالب اللي من غير مشروع بتتوزع على باقي المشروعات بنسبة تكلفة قوالب كل مشروع من إجمالي القوالب المحمّلة على مشروعات في الشهر
+  const un = list.find((r) => r.project_id === 0);
+  const base = list.filter((r) => r.project_id !== 0 && r.direct > 0);
+  const baseSum = r2(base.reduce((t, r) => t + r.direct, 0));
+  if (un && base.length && baseSum > 0 && (un.material || un.labor || un.expense)) {
+    for (const f of ['material', 'labor', 'expense']) {
+      let left = un[f];
+      base.forEach((r, i) => { const part = i === base.length - 1 ? left : r2(un[f] * r.direct / baseSum); r[f] = r2(r[f] + part); left = r2(left - part); r.allocated = r2(r.allocated + part); });
+    }
+    base.forEach((r) => { r.total = r2(r.total + r.allocated); });
+    list = list.filter((r) => r.project_id !== 0);
+  }
+  const total = r2(list.reduce((t, r) => t + r.total, 0));
+  const by_project = projectId ? list.filter((r) => r.project_id === Number(projectId)) : list;
+  return { stage_id: stageId, name: await val('SELECT name FROM stages WHERE id=?', stageId), by_project, total: projectId ? r2(by_project.reduce((t, r) => t + r.total, 0)) : total, allocated_unassigned: !!(un && base.length && baseSum > 0) };
 }
 
 /** شكاير الأسمنت المصروفة للصب في الشهر محوّلة لشكاير معيارية 50 كجم (الأصناف 30 كجم وغيرها بتتحول بالوزن) */

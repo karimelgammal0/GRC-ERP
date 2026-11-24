@@ -80,8 +80,9 @@ export async function unitCostPage(root, params = {}) {
       i.cement_lines?.length ? card('أسمنت الصب محوّل لشكاير 50 كجم', table({ name: 'أسمنت الصب', search: false, compact: true, rows: i.cement_lines, cols: [{ k: 'name', l: 'الصنف', render: (r) => matLink(r.material_id, r.name), text: (r) => r.name }, { k: 'qty', l: 'الكمية المصروفة', num: true, fmt: (v) => fq(v) }, { k: 'kg', l: 'وزن الوحدة (كجم)', num: true, fmt: (v) => fq(v) }, { k: 'std_bags', l: 'ما يعادل شكاير 50 كجم', num: true, fmt: (v) => fq(v) }], foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'std_bags' ? fq(i.bags_system) : '') })) : null,
       h('div.chart-grid', stageTable(s.cast, { perBag: true }), stageTable(s.finish)),
       card(`مرحلة ${s.mold?.name || 'القوالب'} — محمّلة على المشروع (لا تدخل في سعر المتر)`, s.mold ? table({ name: 'القوالب', search: false, compact: true, rows: s.mold.by_project,
-        cols: [{ k: 'name', l: 'المشروع' }, { k: 'material', l: 'أصناف', num: true, fmt: (v) => fmt(v) }, { k: 'labor', l: 'عمالة', num: true, fmt: (v) => fmt(v) }, { k: 'expense', l: 'مصروفات', num: true, fmt: (v) => fmt(v) }, { k: 'total', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }],
+        cols: [{ k: 'name', l: 'المشروع' }, { k: 'material', l: 'أصناف', num: true, fmt: (v) => fmt(v) }, { k: 'labor', l: 'عمالة', num: true, fmt: (v) => fmt(v) }, { k: 'expense', l: 'مصروفات', num: true, fmt: (v) => fmt(v) }, { k: 'direct', l: 'مباشر', num: true, fmt: (v) => fmt(v) }, { k: 'allocated', l: 'موزّع من «غير محدد»', num: true, fmt: (v) => (v ? fmt(v) : '') }, { k: 'total', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }],
         foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'total' ? fmt(s.mold.total) : ''), empty: 'لا توجد تكاليف قوالب في هذا الشهر' }) : h('div.note', 'مرحلة القوالب غير مربوطة.')),
+      s.mold?.allocated_unassigned ? h('div.note', 'تكلفة القوالب اللي من غير مشروع اتوزعت على المشروعات بنسبة تكلفة قوالب كل مشروع من إجمالي الشهر.') : null,
       acts.some(Boolean) ? h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '14px 0' } }, acts) : null,
     );
   };

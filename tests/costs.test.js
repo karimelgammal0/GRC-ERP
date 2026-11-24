@@ -41,6 +41,18 @@ near(s.cast.per_m2, 415.03, 'تكلفة المتر — صب'); near(s.finish.per
 near(s.cast.materials.find((m) => m.material_id === fiber).per_bag, 249.88 / 289, 'معيار الشيكارة للفيبر', 0.0001);
 near(s.mold.total, 5000, 'القوالب على المشروع'); ok(s.mold.by_project[0].project_id === prj, 'القوالب موزعة على المشروع');
 near(s.pool_total, 179913.6 + 31282, 'تجمع الصب+التشطيب بدون القوالب');
+// قوالب من غير مشروع (3000 مواد + 1000 أجور) بتتوزع على المشروعات بنسبة تكلفة قوالب كل مشروع
+const prj2 = await insertRow('projects', { code: 'P-X2', name: 'مشروع تاني' }, ['code', 'name']);
+await line({ date: '2026-06-16', source_type: 'issue', cost_type: 'material', stage_id: st['القوالب'], material_id: seal, qty: 1, amount: 5000, project_id: prj2 });
+await line({ date: '2026-06-17', source_type: 'issue', cost_type: 'material', stage_id: st['القوالب'], material_id: seal, qty: 1, amount: 3000, project_id: null });
+await line({ date: '2026-06-17', source_type: 'labor', cost_type: 'labor', stage_id: st['القوالب'], qty: 1, amount: 1000, project_id: null });
+s = await computeLive('2026-06', 0, { spread_rate: 1.5 });
+ok(!s.mold.by_project.some((r) => r.project_id === 0), 'صف «غير محدد» اتشال بعد التوزيع');
+near(s.mold.total, 5000 + 5000 + 4000, 'إجمالي القوالب ثابت بعد التوزيع');
+near(s.mold.by_project.find((r) => r.project_id === prj).total, 7000, 'المشروع الأول 50% من غير المحدد'); near(s.mold.by_project.find((r) => r.project_id === prj2).total, 7000, 'المشروع التاني 50%');
+near(s.mold.by_project.find((r) => r.project_id === prj).allocated, 2000, 'الموزّع للمشروع الأول');
+s = await computeLive('2026-06', prj2, { spread_rate: 1.5 }); near(s.mold.total, 7000, 'عرض مشروع واحد بيشمل نصيبه من الموزّع');
+await run(`DELETE FROM cost_lines WHERE project_id IS NULL OR project_id=?`, prj2); s = await computeLive('2026-06', 0, { spread_rate: 1.5 });
 s = await computeLive('2026-06', 0, { spread_rate: 1.5, bags_override: 300 }); near(s.inputs.bags, 289, 'الشكاير دايماً من النظام (مفيش تعديل يدوي)');
 s = await computeLive('2026-06', 0, { spread_rate: 0 }); ok(s.unit_cost.total === null, 'بدون معدل فرد: لا سعر');
 
