@@ -22,7 +22,7 @@ export async function getDoc(type, id) {
   if (!h) return null;
   if (D.lines) h.lines = await all(`SELECT * FROM ${D.lines} WHERE ${D.fk}=? ORDER BY id`, id);
   h.created_by_name = h.created_by ? await val('SELECT COALESCE(e.name, u.name) FROM users u LEFT JOIN employees e ON e.id=u.employee_id WHERE u.id=?', h.created_by) : null;
-  await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.enrich?.(h);
+  await D.enrich?.(h);
   return h;
 }
 
@@ -39,19 +39,19 @@ export async function saveDoc(type, p, id, user) {
       if (!cur) throw new AppError('المستند غير موجود', 404);
       if (cur.status === 'void') throw new AppError('المستند ملغي ولا يمكن تعديله');
       if (D.locked?.(cur)) throw new AppError('الإذن معتمد ومقفول — أضف البنود في إذن جديد، أو اطلب إعادة فتحه بصلاحية');
-      await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.unpost?.(cur);
+      await D.unpost?.(cur);
       if (D.lines) await run(`DELETE FROM ${D.lines} WHERE ${D.fk}=?`, id);
-      await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.validate?.(p, lines, id);
+      await D.validate?.(p, lines, id);
       await updateRow(D.table, id, p, D.cols);
     } else {
-      await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.validate?.(p, lines, null);
+      await D.validate?.(p, lines, null);
       const no = await nextNo(typeof D.seq === 'function' ? D.seq(p) : D.seq);
       docId = await insertRow(D.table, { ...p, no, created_by: user?.id ?? null }, [...D.cols, 'no', 'created_by']);
     }
     for (const l of lines) l.id = await insertRow(D.lines, { ...l, [D.fk]: docId }, [...D.lineCols, D.fk]);
     if (id && D.relock) await D.relock(id);
     const doc = await getDoc(type, docId);
-    await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.post?.(doc, user, p);
+    await D.post?.(doc, user, p);
     await audit(user, id ? 'edit' : 'create', type, docId, { no: doc.no });
     return await getDoc(type, docId);
   });
@@ -63,7 +63,7 @@ export async function voidDoc(type, id, user) {
     const cur = await get(`SELECT * FROM ${D.table} WHERE id=?`, id);
     if (!cur) throw new AppError('المستند غير موجود', 404);
     if (cur.status === 'void') throw new AppError('المستند ملغي بالفعل');
-    await await await await await await await await await await await await await await await await await await await await await await await await await await await await await D.unpost?.(cur);
+    await D.unpost?.(cur);
     await run(`UPDATE ${D.table} SET status='void' WHERE id=?`, id);
     await audit(user, 'void', type, id, { no: cur.no });
     return await getDoc(type, id);
@@ -269,6 +269,29 @@ DOCS.purchase_invoice = {
 // ============================================================
 //  مرتجع مشتريات
 // ============================================================
+// قيد المرتجع: الموردين مدين بسعر المورد، والمخزن دائن بتكلفة المتوسط، والفرق (لو في) بيروح للتكلفة غير المباشرة زي فروق الجرد
+async function buildPurchaseReturn(id) {
+  const h = await get('SELECT * FROM purchase_returns WHERE id=?', id);
+  if (!h || h.status === 'void') return;
+  const supplier = await nm('suppliers', h.supplier_id);
+  let price = 0, cost = 0;
+  await run(`DELETE FROM cost_lines WHERE source_type='preturn' AND source_id=?`, id);
+  for (const l of await all('SELECT * FROM purchase_return_lines WHERE return_id=?', id)) {
+    const mv = await get(`SELECT value FROM stock_moves WHERE doc_type='preturn' AND doc_id=? AND line_id=?`, id, l.id);
+    const lp = r2(l.qty * l.unit_price), lc = r2(mv.value); price += lp; cost += lc;
+    if (Math.abs(lp - lc) > 0.004)
+      await insertRow('cost_lines', { date: h.date, source_type: 'preturn', source_id: id, source_line_id: l.id, cost_type: 'material', cost_class: 'indirect',
+        material_id: l.material_id, qty: 0, amount: r2(lc - lp), description: `فرق سعر مرتجع مشتريات ${h.no}` },
+      ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'material_id', 'qty', 'amount', 'description']);
+  }
+  price = r2(price); cost = r2(cost); const diff = r2(price - cost);
+  await run('UPDATE purchase_returns SET total=? WHERE id=?', price, id);
+  const lines = [dc(await acc('acc_ap'), price, { supplier_id: h.supplier_id }), cr(await acc('acc_inventory_raw'), cost)];
+  if (diff > 0) lines.push(cr(await acc('acc_overhead_materials'), diff)); else if (diff < 0) lines.push(dc(await acc('acc_overhead_materials'), -diff));
+  await replaceJournal({ date: h.date, source_type: 'preturn', source_id: id, description: `مرتجع مشتريات ${h.no} — ${supplier}`, lines });
+}
+onRecost.preturn = buildPurchaseReturn;
+
 DOCS.purchase_return = {
   table: 'purchase_returns', lines: 'purchase_return_lines', fk: 'return_id', seq: 'purchase_return',
   cols: ['date', 'supplier_id', 'warehouse_id', 'invoice_id', 'notes'], lineCols: ['material_id', 'qty', 'unit_price', 'notes'],
@@ -278,20 +301,17 @@ DOCS.purchase_return = {
     for (const l of lines) { await must('materials', l.material_id, 'الصنف'); posQty(l); if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً'); }
   },
   async post(doc) {
-    const supplier = await nm('suppliers', doc.supplier_id); const pairs = []; let total = 0;
+    const supplier = await nm('suppliers', doc.supplier_id); const pairs = [];
     for (const l of doc.lines) {
-      const value = r2(l.qty * l.unit_price); total += value;
-      await addMove({ date: doc.date, warehouse_id: doc.warehouse_id, material_id: l.material_id, direction: 'out', qty: l.qty, value,
+      // المرتجع بيخرج من المخزن بالمتوسط المرجح (مش بسعر المورد) عشان متوسط الصنف ما يتخرّبش
+      await addMove({ date: doc.date, warehouse_id: doc.warehouse_id, material_id: l.material_id, direction: 'out', qty: l.qty,
         doc_type: 'preturn', doc_id: doc.id, line_id: l.id, party: supplier, notes: 'مرتجع مشتريات' });
       pairs.push([doc.warehouse_id, l.material_id]);
     }
     await settle(pairs, { type: 'preturn', id: doc.id });
-    total = r2(total);
-    await run('UPDATE purchase_returns SET total=? WHERE id=?', total, doc.id);
-    await postJournal({ date: doc.date, source_type: 'preturn', source_id: doc.id, description: `مرتجع مشتريات ${doc.no} — ${supplier}`,
-      lines: [dc(await acc('acc_ap'), total, { supplier_id: doc.supplier_id }), cr(await acc('acc_inventory_raw'), total)] });
+    await buildPurchaseReturn(doc.id);
   },
-  async unpost(cur) { await deleteJournals('preturn', cur.id); await removeMoves('preturn', cur.id); },
+  async unpost(cur) { await deleteJournals('preturn', cur.id); await run(`DELETE FROM cost_lines WHERE source_type='preturn' AND source_id=?`, cur.id); await removeMoves('preturn', cur.id); },
 };
 
 // ============================================================
@@ -625,7 +645,18 @@ DOCS.labor_advance = {
     await run('UPDATE labor_advances SET total=? WHERE id=?', total, doc.id);
     await postJournal({ date: doc.date, source_type: 'labor_advance', source_id: doc.id, description: `سلف عمال يومية ${doc.no}`, lines: out });
   },
-  async unpost(cur) { await deleteJournals('labor_advance', cur.id); },
+  async unpost(cur) {
+    // ممنوع إلغاء/تعديل سلفة اتخصمت (كلها أو جزء منها) من كشف يومية: رصيد سلف العامل كان هيبقى بالسالب
+    const adv = await acc('acc_employee_advances');
+    for (const l of await all('SELECT * FROM labor_advance_lines WHERE advance_id=?', cur.id)) {
+      const bal = r2(await val('SELECT COALESCE(SUM(debit-credit),0) FROM journal_lines WHERE account_id=? AND employee_id=?', adv, l.employee_id));
+      if (bal - l.amount < -0.004) {
+        const e = await nm('employees', l.employee_id);
+        throw new AppError(`سلفة «${e}» (${r2(l.amount)}) اتخصم منها في كشف يومية — ألغِ الخصم من الكشف أولاً`);
+      }
+    }
+    await deleteJournals('labor_advance', cur.id);
+  },
 };
 
 // ============================================================
