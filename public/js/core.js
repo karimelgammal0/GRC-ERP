@@ -132,7 +132,13 @@ export function fieldInput(f, value) {
     if (long) el = combo({ list: f.ref, value, filter: f.filter, allowEmpty: !f.req, onChange: (v) => f.onChange?.(v) });
     else {
       el = h('select', { onchange: () => f.onChange?.(el.get()) }, f.req ? (f.blankIfEmpty && (value === null || value === undefined || value === '') ? h('option', { value: '', selected: true }, '— اختر —') : null) : h('option', { value: '' }, '—'),
-        (L[f.ref] || []).filter((x) => x.active !== 0 && (!f.filter || f.filter(x))).map((x) => h('option', { value: x.id, selected: Number(value) === x.id }, codeName(x))));
+        (() => {
+          // لو القيمة المحفوظة مش ضمن الخيارات المفلترة (مرحلة رئيسية قديمة بقى ليها فرعية مثلاً) بنضيفها عشان تظهر صح بدل ما تظهر أول خيار
+          const opts = (L[f.ref] || []).filter((x) => x.active !== 0 && (!f.filter || f.filter(x)));
+          const cur = value === null || value === undefined || value === '' ? null : (L[f.ref] || []).find((x) => x.id === Number(value));
+          if (cur && !opts.some((x) => x.id === cur.id)) opts.unshift(cur);
+          return opts.map((x) => h('option', { value: x.id, selected: Number(value) === x.id }, codeName(x)));
+        })());
       el.get = () => (el.value === '' ? null : Number(el.value)); el.set = (v) => { el.value = v ?? ''; };
     }
   } else if (f.t === 'select') {
