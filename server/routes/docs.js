@@ -28,7 +28,9 @@ function where(q, base = []) {
   if (q.to) { w.push('d.date<=?'); p.push(q.to); }
   eq('d.status', 'status'); eq('d.supplier_id', 'supplier_id'); eq('d.project_id', 'project_id'); eq('d.kind', 'kind');
   eq('d.client_id', 'client_id'); eq('d.warehouse_id', 'warehouse_id'); eq('d.site_id', 'site_id'); eq('d.treasury_id', 'treasury_id'); eq('d.custodian_id', 'custodian_id');
-  if (/^[tc]\d+$/.test(q.src || '')) { w.push(q.src[0] === 't' ? 'd.treasury_id=?' : 'd.custodian_id=?'); p.push(Number(q.src.slice(1))); }
+  if (q.src_kind === 'custody') w.push('d.custodian_id IS NOT NULL');
+  else if (q.src_kind === 'bank' || q.src_kind === 'treasury') w.push(`d.treasury_id IN (SELECT id FROM treasuries WHERE type${q.src_kind === 'bank' ? '=' : '<>'}'bank')`);
+  eq('d.treasury_id', 'bank_id');
   if (q.q) { w.push('d.no LIKE ?'); p.push(`%${q.q}%`); }
   return { sql: w.length ? 'WHERE ' + w.join(' AND ') : '', p };
 }
