@@ -61,7 +61,7 @@ const SEQ_TABLE = {
   material: { t: 'materials', c: 'code' }, warehouse: { t: 'warehouses', c: 'code' },
   supplier: { t: 'suppliers', c: 'code' }, project: { t: 'projects', c: 'code' },
   project_item: { t: 'project_items', c: 'code' }, stage: { t: 'stages', c: 'code' },
-  site: { t: 'sites', c: 'code' }, treasury: { t: 'treasuries', c: 'code' },
+  site: { t: 'sites', c: 'code' }, fg_type: { t: 'finished_types', c: 'code' }, treasury: { t: 'treasuries', c: 'code' },
   custodian: { t: 'custodians', c: 'code' }, expense_category: { t: 'expense_categories', c: 'code' },
   employee: { t: 'employees', c: 'code' }, payment_type: { t: 'payment_types', c: 'code' }, receipt_type: { t: 'receipt_types', c: 'code' },
   purchase_request: { t: 'purchase_requests', c: 'no' }, purchase_order: { t: 'purchase_orders', c: 'no' },
@@ -80,7 +80,7 @@ const SEQ_TABLE = {
 export const DEFAULT_SEQUENCES = [
   ['unit', 'الوحدات', 'UN-', 3], ['material_category', 'فئات الأصناف', 'MC-', 3], ['material', 'الأصناف', 'RM-', 4],
   ['warehouse', 'المخازن', 'WH-', 2], ['supplier', 'الموردين', 'SUP-', 4], ['project', 'المشروعات', 'PRJ-', 3],
-  ['project_item', 'بنود المشروعات', 'BND-', 4], ['stage', 'المراحل', 'STG-', 2], ['site', 'المواقع', 'SITE-', 3],
+  ['project_item', 'بنود المشروعات', 'BND-', 4], ['stage', 'المراحل', 'STG-', 2], ['site', 'المواقع', 'SITE-', 3], ['fg_type', 'أنواع المنتج التام', 'FGT-', 2],
   ['treasury', 'الخزن والبنوك', 'TR-', 2], ['custodian', 'العهد', 'CUS-', 3], ['client', 'العملاء', 'CL-', 3], ['expense_category', 'المصروفات', 'EXC-', 3],
   ['employee', 'العاملين', 'EMP-', 4], ['payment_type', 'أنواع المدفوعات', 'PT-', 3], ['receipt_type', 'أنواع المقبوضات', 'RT-', 3],
   ['purchase_request', 'طلبات الشراء', 'PR-', 5], ['purchase_order', 'أوامر التوريد', 'PO-', 5], ['goods_receipt', 'إذون الاستلام', 'GRN-', 5],

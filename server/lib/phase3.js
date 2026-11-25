@@ -86,16 +86,16 @@ export async function computeRun(month, projectId, carryIn = null) {
   const out = { month, project_id: projectId, project_name: project.name, status: saved?.status || 'new', carry, items: [], problems: [], total_meters: meters, month_meters: allMeters };
   if (!prod.length) { out.problems.push('لا يوجد إنتاج تام مسجّل لهذا المشروع في الشهر'); return out; }
   const kinds = [...new Set(prod.map((r) => r.kind || 'GRC'))];
-  const cfg = (await computeLive(month, 0, null, 'GRC')).config;
+  const cfg = (await computeLive(month, 0, null, '')).config;
   // سعر المتر لكل نوع (لازم يكون معتمد)
   const unit = {};
   for (const k of kinds) {
     const p = await getPeriod(month, 0, k);
-    if (p?.status !== 'approved') { out.problems.push(`اعتمد سعر متر ${k} لشهر ${month} من «تكلفة المتر GRC / GRP» أولاً`); continue; }
+    if (p?.status !== 'approved') { out.problems.push(`اعتمد سعر متر ${k} لشهر ${month} من «تكلفة المتر» أولاً`); continue; }
     const s = await getSheet(month, 0, k); unit[k] = { cast: num(s.unit_cost.cast), finish: num(s.unit_cost.finish) };
   }
   // قوالب المشروع (شامل نصيبه من القوالب غير المسنَدة)
-  const live = await computeLive(month, 0, null, 'GRC');
+  const live = await computeLive(month, 0, null, '');
   const mold = r2(num(live.mold?.by_project?.find((r) => r.project_id === Number(projectId))?.total));
   // المباشر خارج المتر المجمّع: مراحل غير (صب/تشطيب/قوالب)
   const fam = [cfg.cast_stage_id, cfg.finish_stage_id, cfg.mold_stage_id].filter(Boolean);

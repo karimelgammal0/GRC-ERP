@@ -211,6 +211,10 @@ export async function stockCardPage(root, params) {
     const N = (k, f = (n) => fmt(n)) => ({ num: true, fmt: f });
     host.replaceChildren(h('div.kpis', kpi('الصنف', r.material.name, `${r.material.code} — الوحدة: ${unit}`), kpi('الرصيد الحالي', fq(r.closing.qty), unit), kpi('متوسط التكلفة', fmt(r.closing.avg, 4)), kpi('قيمة الرصيد', fmt(r.closing.value))),
       table({ name: `كارت-${r.material.code}`, compact: true, rows, maxRows: 2000, rowClass: (x) => (x._open ? 'low' : ''),
+        // سطر التجميع: مجموع الوارد والصادر (كمية وقيمة) + الرصيد الختامي
+        foot: (c, shown) => { const mv = shown.filter((x) => !x._open); const s = (k) => mv.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+          if (c.k === 'party') return 'التجميع'; if (c.k === 'iq' || c.k === 'oq') return fq(s(c.k)); if (c.k === 'iv' || c.k === 'ov') return fmt(s(c.k));
+          if (c.k === 'bq') return fq(r.closing.qty); if (c.k === 'bv') return fmt(r.closing.value); return ''; },
         cols: [{ k: 'date', l: 'التاريخ' }, { k: 'doc_no', l: 'رقم الإذن', render: docLink, text: (x) => x.doc_no || '' }, { k: 'party', l: 'الجهة' }, { k: 'site_name', l: 'الموقع' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'notes', l: 'البيان' },
           { k: 'iq', l: 'وارد: كمية', ...N(), fmt: fq }, { k: 'ip', l: 'سعر', ...N(), fmt: (n) => fmt(n, 3) }, { k: 'iv', l: 'قيمة', ...N() },
           { k: 'oq', l: 'صادر: كمية', ...N(), fmt: fq }, { k: 'op', l: 'سعر', ...N(), fmt: (n) => fmt(n, 3) }, { k: 'ov', l: 'قيمة', ...N() },

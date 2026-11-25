@@ -99,5 +99,5 @@ near(pp.unit_cost.total, (12000 + 2000) / 80, 'سعر متر GRP');
 await savePeriod({ month: '2026-09', kind: 'GRP', spread_rate: 2 }, { id: 1 }); await savePeriod({ month: '2026-09', kind: 'GRC', spread_rate: 3 }, { id: 1 });
 near((await getSheet('2026-09', 0, 'GRP')).inputs.spread_rate, 2, 'معدل GRP مستقل'); near((await getSheet('2026-09', 0, 'GRC')).inputs.spread_rate, 3, 'معدل GRC مستقل');
 const ap = await approvePeriod('2026-09', 0, { id: 1 }, 'GRP'); ok(ap.status === 'approved' && ap.kind === 'GRP', 'اعتماد GRP'); ok((await getSheet('2026-09', 0, 'GRC')).status === 'draft', 'GRC لسه مسودة');
-await throws(() => computeLive('2026-09', 0, null, 'XYZ'), /نوع الإنتاج/, 'نوع غير صحيح');
+await throws(() => computeLive('2026-09', 0, null, 'XYZ'), /نوع المنتج التام/, 'نوع غير صحيح');
 console.log(`\n${fail ? '✗' : '✓'} costs: ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

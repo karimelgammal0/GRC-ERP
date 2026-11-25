@@ -50,14 +50,21 @@ export async function saveConfig(b) {
   return c;
 }
 
-export const KINDS = ['GRC', 'GRP'];
-const kindOf = (k) => { const v = String(k || 'GRC').toUpperCase(); if (!KINDS.includes(v)) throw new AppError('نوع الإنتاج غير صحيح (GRC / GRP)'); return v; };
+/** أنواع المنتج التام المتاحة (من الإعدادات ← نوع المنتج التام) */
+export const productKinds = async () => (await all('SELECT name FROM finished_types WHERE active=1 ORDER BY id')).map((x) => x.name);
+/** يتحقق من النوع ويرجّع اسمه كما هو متكوّد؛ فاضي ← أول نوع نشط */
+const kindOf = async (k) => {
+  const names = await productKinds(); const v = String(k || '').trim();
+  if (!v) { if (!names.length) throw new AppError('كوّد نوع منتج تام واحد على الأقل من الإعدادات'); return names[0]; }
+  const hit = names.find((n) => n.toUpperCase() === v.toUpperCase());
+  if (!hit) throw new AppError(`نوع المنتج التام «${v}» غير متكوّد أو معطّل`); return hit;
+};
 /** مراحل نوع إنتاج تحت مرحلة رئيسية (صب/تشطيب): المراحل الفرعية اللي اسمها فيه GRC أو GRP؛ ولو مفيش فرعية للنوع GRC بنرجع للمرحلة الرئيسية نفسها (توافق مع البيانات القديمة) */
 async function kindStageIds(parentId, kind) {
   if (!parentId) return [];
-  const subs = await all(`SELECT id FROM stages WHERE parent_id=? AND active=1 AND UPPER(name) LIKE ?`, parentId, `%${kind}%`);
+  const subs = await all(`SELECT id FROM stages WHERE parent_id=? AND active=1 AND UPPER(name) LIKE ?`, parentId, `%${String(kind).toUpperCase()}%`);
   if (subs.length) return subs.map((s) => s.id);
-  return kind === 'GRC' ? [parentId] : [];
+  return String(kind).toUpperCase() === 'GRC' ? [parentId] : [];
 }
 
 /** أسطر تكلفة مرحلة في شهر مجمّعة: أصناف بالصنف + أجور يومية + مرتبات شهرية + مصروفات مباشرة */
@@ -116,11 +123,11 @@ async function systemBags(cfg, castIds, month, projectId) {
   return { lines, bags: r4(lines.reduce((t, l) => t + l.std_bags, 0)) };
 }
 
-export const getPeriod = async (month, projectId, kind = 'GRC') => await get('SELECT * FROM unit_cost_periods WHERE month=? AND project_id=? AND kind=?', month, projectId || 0, kindOf(kind));
+export const getPeriod = async (month, projectId, kind = '') => await get('SELECT * FROM unit_cost_periods WHERE month=? AND project_id=? AND kind=?', month, projectId || 0, await kindOf(kind));
 
 /** الحساب الحي من أسطر التكلفة + المدخلات المحفوظة (معدل الفرد). لا يقرأ الـ snapshot */
-export async function computeLive(month, projectId = 0, inputs = null, kind = 'GRC') {
-  kind = kindOf(kind);
+export async function computeLive(month, projectId = 0, inputs = null, kind = '') {
+  kind = await kindOf(kind);
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح (YYYY-MM)');
   const cfg = await getConfig(); const saved = await getPeriod(month, 0, kind);   // معدل الفرد والإعدادات شهرية واحدة لكل المشروعات
   const spread = num(inputs?.spread_rate ?? saved?.spread_rate);
@@ -139,8 +146,8 @@ export async function computeLive(month, projectId = 0, inputs = null, kind = 'G
 }
 
 /** الشيت الكامل: المعتمد بيرجع من الـ snapshot (ثابت) + تنبيه لو الأرقام الحية اختلفت بعد الاعتماد */
-export async function getSheet(month, projectId = 0, kind = 'GRC') {
-  kind = kindOf(kind);
+export async function getSheet(month, projectId = 0, kind = '') {
+  kind = await kindOf(kind);
   const saved = await getPeriod(month, 0, kind);
   const live = await computeLive(month, projectId, null, kind);
   if (projectId) return { ...live, status: saved?.status === 'approved' ? 'approved_view' : saved ? 'draft' : 'new', project_view: true };   // عرض تحليلي لمشروع بنفس معدل الشهر
@@ -153,7 +160,7 @@ export async function getSheet(month, projectId = 0, kind = 'GRC') {
 }
 
 export async function savePeriod(b, user) {
-  const month = b.month, pid = 0, kind = kindOf(b.kind);   // المدخلات شهرية فقط (مش لكل مشروع)
+  const month = b.month, pid = 0, kind = await kindOf(b.kind);   // المدخلات شهرية فقط (مش لكل مشروع)
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح');
   const spread = b.spread_rate === '' || b.spread_rate === null || b.spread_rate === undefined ? 0 : Number(b.spread_rate);
   if (!(spread >= 0) || spread > 100) throw new AppError('معدل فرد الشيكارة غير صحيح');
@@ -164,8 +171,8 @@ export async function savePeriod(b, user) {
   return await getSheet(month, pid, kind);
 }
 
-export async function approvePeriod(month, projectId, user, kind = 'GRC') {
-  kind = kindOf(kind); const pid = 0; const cur = await getPeriod(month, pid, kind);
+export async function approvePeriod(month, projectId, user, kind = '') {
+  kind = await kindOf(kind); const pid = 0; const cur = await getPeriod(month, pid, kind);
   if (!cur) throw new AppError('احفظ معدل فرد الشيكارة للشهر أولاً');
   if (cur.status === 'approved') throw new AppError('الشهر معتمد بالفعل');
   const live = await computeLive(month, pid, null, kind);
@@ -176,8 +183,8 @@ export async function approvePeriod(month, projectId, user, kind = 'GRC') {
   await run(`UPDATE unit_cost_periods SET status='approved', snapshot=?, approved_by=?, approved_at=to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS') WHERE id=?`, JSON.stringify(live), user?.id ?? null, cur.id);
   return await getSheet(month, pid, kind);
 }
-export async function reopenPeriod(month, projectId, kind = 'GRC') {
-  kind = kindOf(kind); const pid = 0; const cur = await getPeriod(month, pid, kind);
+export async function reopenPeriod(month, projectId, kind = '') {
+  kind = await kindOf(kind); const pid = 0; const cur = await getPeriod(month, pid, kind);
   if (!cur || cur.status !== 'approved') throw new AppError('الشهر غير معتمد');
   const used = await get(`SELECT p.name FROM costing_runs r JOIN projects p ON p.id=r.project_id WHERE r.month=? AND r.status='approved' LIMIT 1`, month);
   if (used) throw new AppError(`تكلفة المنتج التام لمشروع «${used.name}» معتمدة على سعر المتر ده — أعد فتحها من «تكاليف مشروعات» أولاً`);

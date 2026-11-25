@@ -47,9 +47,10 @@ export async function configPage(root) {
 // ---------- تكلفة المتر GRC / GRP (شهرياً) ----------
 export async function unitCostPage(root, params = {}) {
   const host = h('div');
-  let cur = { month: params.month || curMonth(), kind: params.kind === 'GRP' ? 'GRP' : 'GRC', project_id: params.project_id ? Number(params.project_id) : null };
-  const bar = filterBar([{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, { k: 'spread_rate', l: 'معدل فرد الشيكارة (م² / شيكارة)', t: 'number', step: '0.01' }, { k: 'kind', l: 'GRC / GRP', t: 'select', options: [['GRC', 'GRC'], ['GRP', 'GRP']], def: cur.kind }, { k: 'project_id', l: 'عرض مشروع محدد (اختياري — للاعتماد اتركه فاضي)', t: 'fk', ref: 'projects', combo: true }],
-    async (v) => { cur = { month: v.month || curMonth(), kind: v.kind || 'GRC', project_id: v.project_id || null }; await load(); }, { month: cur.month, kind: cur.kind, project_id: cur.project_id });
+  const kinds = () => (L.finished_types || []).filter((x) => x.active).map((x) => x.name);   // أنواع المنتج التام من الإعدادات
+  let cur = { month: params.month || curMonth(), kind: params.kind || kinds()[0] || 'GRC', project_id: params.project_id ? Number(params.project_id) : null };
+  const bar = filterBar([{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, { k: 'spread_rate', l: 'معدل فرد الشيكارة (م² / شيكارة)', t: 'number', step: '0.01' }, { k: 'kind', l: 'نوع المنتج التام', t: 'select', options: kinds().map((k) => [k, k]), def: cur.kind }, { k: 'project_id', l: 'عرض مشروع محدد (اختياري — للاعتماد اتركه فاضي)', t: 'fk', ref: 'projects', combo: true }],
+    async (v) => { cur = { month: v.month || curMonth(), kind: v.kind || kinds()[0] || 'GRC', project_id: v.project_id || null }; await load(); }, { month: cur.month, kind: cur.kind, project_id: cur.project_id });
   bar.append(h('button.btn', { onclick: () => window.print() }, '🖨 طباعة'));
   const rateEl = () => bar.querySelectorAll('label.fld')[1]?.querySelector('input');
   const rateVal = () => { const v = rateEl()?.value; return v === '' || v === undefined ? 0 : Number(v); };

@@ -2,10 +2,10 @@ import { h, GET, POST, PUT, DEL, L, META, loadLookups, loadMeta, fmt, fq, table,
 
 const ACCOUNT_FILTER = (x) => x.postable === 1 && x.active !== 0;
 const fieldDefs = (M) => M.fields.map((f) => ({
-  ...f, filter: f.ref === 'accounts' ? ACCOUNT_FILTER : f.filter, combo: f.t === 'fk' && f.ref !== 'accounts' && (L[f.ref] || []).length > 14,
+  ...f, options: f.optionsFrom ? (L[f.optionsFrom] || []).filter((x) => x.active).map((x) => [x.name, x.name]) : f.options, filter: f.ref === 'accounts' ? ACCOUNT_FILTER : f.filter, combo: f.t === 'fk' && f.ref !== 'accounts' && (L[f.ref] || []).length > 14,
 }));
 
-const MASTER_PAGE = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', employees: 'employees' };
+const MASTER_PAGE = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', stages: 'stages', finished_types: 'finished-types', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', employees: 'employees' };
 /** شاشة تكويد عامة مبنية من مواصفات السيرفر */
 export function masterPage(name, opts = {}) {
   return async (root) => {

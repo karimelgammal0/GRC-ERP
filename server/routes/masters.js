@@ -5,7 +5,7 @@ import { nextNo, audit } from '../lib/core.js';
 import { can, maskEmployees } from '../lib/perms.js';
 
 // صفحة الصلاحيات لكل كود (العاملين ليهم صفحتين: الموارد البشرية والإعدادات)
-const PAGE_OF = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', deduction_types: 'deduction-types', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', payment_types: 'payment-types', receipt_types: 'receipt-types', employees: 'employees' };
+const PAGE_OF = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', deduction_types: 'deduction-types', stages: 'stages', finished_types: 'finished-types', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', payment_types: 'payment-types', receipt_types: 'receipt-types', employees: 'employees' };
 const masterKeys = (name, action) => [`settings.${PAGE_OF[name]}.${action}`, ...(name === 'employees' ? [`hr.employees.${action}`] : [])];
 
 const T = (k, l, t = 'text', extra = {}) => ({ k, l, t, ...extra });
@@ -42,7 +42,7 @@ export const MASTERS = {
     title: 'بنود المشروعات', table: 'project_items', seq: 'project_item',
     fields: [T('project_id', 'المشروع', 'fk', { ref: 'projects', req: 1 }), T('name', 'اسم البند', 'text', { req: 1 }), T('qty', 'الكمية', 'number'), T('unit_id', 'الوحدة', 'fk', { ref: 'units' }),
       T('area_m2', 'المتر المسطح للقطعة الواحدة (م²)', 'number', { help: 'بيتحسب عليه توزيع التكلفة ومتر الإنتاج التام — مطلوب لأي بند هيتسجّل له إنتاج' }),
-      T('kind', 'نوع الخامة (يحدد سعر المتر)', 'select', { options: [['GRC', 'GRC'], ['GRP', 'GRP']], def: 'GRC' }), T('notes', 'ملاحظات', 'textarea')],
+      T('kind', 'نوع المنتج التام (يحدد سعر المتر)', 'select', { optionsFrom: 'finished_types', req: 1 }), T('notes', 'ملاحظات', 'textarea')],
     cols: ['code', 'name', 'project_id', 'qty', 'unit_id', 'area_m2', 'kind'], used: [['production_log_lines', 'item_id'], ['delivery_note_lines', 'item_id'], ['stock_issues', 'item_id'], ['stock_issue_lines', 'item_id'], ['cost_lines', 'item_id'], ['labor_sheet_lines', 'item_id']],
   },
   deduction_types: {
@@ -56,6 +56,11 @@ export const MASTERS = {
     title: 'مراحل التصنيع', table: 'stages', seq: 'stage',
     fields: [T('name', 'اسم المرحلة', 'text', { req: 1 }), T('parent_id', 'المرحلة الرئيسية (للمرحلة الفرعية فقط — مثلاً الصب أو التشطيب)', 'fk', { ref: 'stages' }), T('seq', 'الترتيب', 'number', { def: 1 }), T('account_id', 'حساب إنتاج تحت التشغيل (للفرعية: بيتاخد من الرئيسية لو سيبته فاضي)', 'fk', { ref: 'accounts' })],
     cols: ['code', 'name', 'parent_id', 'seq', 'account_id'], used: [['stages', 'parent_id'], ['stock_issues', 'stage_id'], ['stock_issue_lines', 'stage_id'], ['cost_lines', 'stage_id'], ['employees', 'default_stage_id'], ['labor_sheet_lines', 'stage_id']],
+  },
+  finished_types: {
+    title: 'نوع المنتج التام', table: 'finished_types', seq: 'fg_type',
+    fields: [T('name', 'نوع المنتج التام (مثلاً GRC / GRP)', 'text', { req: 1 }), T('notes', 'ملاحظات', 'textarea')],
+    cols: ['code', 'name', 'notes'], used: [],
   },
   sites: {
     title: 'المواقع', table: 'sites', seq: 'site',
@@ -152,6 +157,8 @@ export async function checkUnitConversion(o, id) {
   if (id && s.sub_unit_id !== null && Number(s.sub_unit_id) === Number(id)) throw new AppError(`«${s.name}» نفسها وحدتها الفرعية هي هذه الوحدة — التحويل دائري`);
 }
 
+/** نوع المنتج مستخدم لو بند مشروع أو سعر متر شهري بيحمل نفس الاسم */
+const ptUsed = async (nm) => (await val('SELECT COUNT(*) FROM project_items WHERE kind=?', nm)) > 0 || (await val('SELECT COUNT(*) FROM unit_cost_periods WHERE kind=?', nm)) > 0;
 async function extraChecks(name, o, id) {
   if (name === 'stages') {
     const cur = id ? await get('SELECT * FROM stages WHERE id=?', id) : {}; const m = { ...cur, ...o };
@@ -163,6 +170,19 @@ async function extraChecks(name, o, id) {
       if (id && await val('SELECT COUNT(*) FROM stages WHERE parent_id=?', id) > 0) throw new AppError('المرحلة دي ليها مراحل فرعية — مينفعش تبقى فرعية من مرحلة تانية');
     }
     if (!m.account_id) throw new AppError('الحقل «حساب إنتاج تحت التشغيل» مطلوب');
+  }
+  if (name === 'project_items' && o.kind !== undefined) {
+    const prev = id ? await val('SELECT kind FROM project_items WHERE id=?', id) : null;
+    if (o.kind !== prev && !(await val('SELECT COUNT(*) FROM finished_types WHERE active=1 AND name=?', o.kind))) throw new AppError('اختر نوع منتج تام متكوّد (الإعدادات ← نوع المنتج التام)');
+  }
+  if (name === 'finished_types') {
+    const nm = String(o.name ?? '').trim();
+    if (o.name !== undefined) {
+      if (await val('SELECT COUNT(*) FROM finished_types WHERE UPPER(name)=UPPER(?) AND id<>?', nm, id || 0) > 0) throw new AppError('نوع المنتج ده متكوّد بالفعل');
+      const cur = id ? await get('SELECT name FROM finished_types WHERE id=?', id) : null;
+      if (cur && cur.name !== nm && await ptUsed(cur.name)) throw new AppError(`«${cur.name}» مستخدم في بنود مشروعات أو أسعار متر — مينفعش تغيّر اسمه (عطّله وكوّد نوع جديد)`);
+      o.name = nm;
+    }
   }
   if (name === 'units') await checkUnitConversion(o, id);
   if (name === 'custodians') {
@@ -300,7 +320,8 @@ export async function masterRouter() {
   r.delete('/:name/:id', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);
     const id = Number(req.params.id);
-    let used = false; for (const [t, c] of M.used || []) if (await val(`SELECT COUNT(*) FROM ${t} WHERE ${c}=?`, id) > 0) { used = true; break; }
+    let used = req.params.name === 'finished_types' && await ptUsed(await val('SELECT name FROM finished_types WHERE id=?', id));
+    if (!used) for (const [t, c] of M.used || []) if (await val(`SELECT COUNT(*) FROM ${t} WHERE ${c}=?`, id) > 0) { used = true; break; }
     if (used) { await run(`UPDATE ${M.table} SET active=0 WHERE id=?`, id); await audit(req.user, 'deactivate', M.table, id); return res.json({ deactivated: true, message: 'الكود مستخدم في حركات — تم تعطيله بدلاً من حذفه' }); }
     await run(`DELETE FROM ${M.table} WHERE id=?`, id); await audit(req.user, 'delete', M.table, id);
     res.json({ deleted: true });

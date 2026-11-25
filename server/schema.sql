@@ -666,3 +666,12 @@ CREATE TABLE IF NOT EXISTS doc_drafts (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS ix_doc_drafts_user ON doc_drafts(user_id, scope);
+
+-- نوع المنتج التام (GRC / GRP / ...): كود في الإعدادات؛ منه بيتحدد نوع بنود المشروعات وسعر المتر في «تكلفة المتر»
+CREATE TABLE IF NOT EXISTS finished_types (
+  id SERIAL PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+  notes TEXT, active INTEGER NOT NULL DEFAULT 1
+);
+INSERT INTO finished_types (code, name) SELECT 'FGT-01', 'GRC' WHERE NOT EXISTS (SELECT 1 FROM finished_types);
+INSERT INTO finished_types (code, name) SELECT 'FGT-02', 'GRP' WHERE (SELECT COUNT(*) FROM finished_types) = 1 AND NOT EXISTS (SELECT 1 FROM finished_types WHERE name='GRP');
