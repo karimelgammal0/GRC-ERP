@@ -12,7 +12,7 @@ const CFG_KEYS = { cast: 'cost_stage_cast', finish: 'cost_stage_finish', mold: '
 export const STD_BAG_KG = 50;   // الوحدة المعيارية: شيكارة 50 كجم
 const json = (v, d) => { try { return v ? JSON.parse(v) : d; } catch { return d; } };
 /** وزن وحدة الصنف بالكيلو: المحدد في الإعدادات، وإلا من الاسم (مثال «*30ك»)، وإلا 50 */
-export const kgOf = (m, map = {}) => Number(map[m.id]) || Number(/(\d+(?:\.\d+)?)\s*ك(?:جم|ج)?/.exec(m.name || '')?.[1]) || STD_BAG_KG;
+export const kgOf = (m, map = {}, def = STD_BAG_KG) => Number(map[m.id]) || Number(/(\d+(?:\.\d+)?)\s*ك(?:جم|ج)?/.exec(m.name || '')?.[1]) || def;
 /** الوزن متخمّن (مش محدد في الإعدادات ولا مكتوب في الاسم) — لازم يتنبّه له المستخدم */
 export const kgGuessed = (m, map = {}) => !Number(map[m.id]) && !/(\d+(?:\.\d+)?)\s*ك(?:جم|ج)?/.test(m.name || '');
 // «اسمنت» بأي كتابة (اسمنت / أسمنت / إسمنت)
@@ -32,15 +32,16 @@ export async function getConfig() {
 // ---------- أساس المتر المنتج لكل نوع منتج ----------
 //  GRC: أسمنت (شيكارة معيارية 50 كجم) — GRP: بوليستر — GRG: جبس (Gypro وغيره) — المتر المنتج = كمية الأساس المصروفة للصب × معدل الفرد (يدوي شهري)
 const BASIS = {
-  GRC: { pats: ['اسمنت'], std: STD_BAG_KG, title: 'الأسمنت', qty_label: 'شكاير الأسمنت للصب (معيارية 50 كجم)', spread_label: 'معدل فرد الشيكارة', per_unit: 'م² / شيكارة', unit_short: 'شيكارة', per_col: 'معيار الشيكارة', lines_title: 'أسمنت الصب محوّل لشكاير 50 كجم', std_col: 'ما يعادل شكاير 50 كجم', factor_label: 'وزن الوحدة (كجم)' },
-  GRP: { pats: ['بوليستر', 'polyester'], std: 1, title: 'البوليستر', qty_label: 'كمية البوليستر للصب (كجم)', spread_label: 'معدل فرد البوليستر', per_unit: 'م² / كجم', unit_short: 'كجم', per_col: 'معيار الكجم', lines_title: 'بوليستر الصب (كجم)', std_col: 'ما يعادل كجم', factor_label: 'كجم لكل وحدة' },
-  GRG: { pats: ['جبس', 'gypro', 'جيبرو', 'gypsum'], std: 1, title: 'الجبس', qty_label: 'كمية الجبس للصب (كجم)', spread_label: 'معدل فرد الجبس', per_unit: 'م² / كجم', unit_short: 'كجم', per_col: 'معيار الكجم', lines_title: 'جبس الصب (كجم)', std_col: 'ما يعادل كجم', factor_label: 'كجم لكل وحدة' },
+  GRC: { pats: ['اسمنت'], std: STD_BAG_KG, bagged: true, title: 'الأسمنت', qty_label: 'شكاير الأسمنت للصب (معيارية 50 كجم)', spread_label: 'معدل فرد الشيكارة', per_unit: 'م² / شيكارة', unit_short: 'شيكارة', per_col: 'معيار الشيكارة', lines_title: 'أسمنت الصب محوّل لشكاير 50 كجم', std_col: 'ما يعادل شكاير 50 كجم', factor_label: 'وزن الوحدة (كجم)' },
+  GRP: { pats: ['بوليستر', 'polyester'], std: 1, divide: true, title: 'البوليستر', qty_label: 'كمية البوليستر للصب (كجم)', spread_label: 'معدل فرد البوليستر', per_unit: 'كجم / م²', unit_short: 'كجم', per_col: 'معيار الكجم', lines_title: 'بوليستر الصب (كجم)', std_col: 'ما يعادل كجم', factor_label: 'كجم لكل وحدة' },
+  GRG: { pats: ['جبس', 'gypro', 'جيبرو', 'gypsum'], std: 25, bagged: true, title: 'الجبس', qty_label: 'كمية الجبس للصب (معيارية 25كجم)', spread_label: 'معدل فرد الجبس', per_unit: 'م² / شيكارة', unit_short: 'شيكارة', per_col: 'معيار الشيكارة', lines_title: 'جبس الصب محوّل لشكاير 25 كجم', std_col: 'ما يعادل شكاير 25 كجم', factor_label: 'وزن الوحدة (كجم)' },
 };
 export const basisOf = (kind) => BASIS[String(kind).toUpperCase()] || { pats: [], std: 1, title: kind, qty_label: `كمية أساس ${kind} للصب`, spread_label: `معدل فرد ${kind}`, per_unit: 'م² / وحدة', unit_short: 'وحدة', per_col: 'معيار الوحدة', lines_title: `أصناف أساس ${kind}`, std_col: 'الكمية المعيارية', factor_label: 'معامل الوحدة' };
 const isCement = (kind) => String(kind).toUpperCase() === 'GRC';
+const isBagged = (kind) => !!basisOf(kind).bagged;   // أساس بالشكاير المعيارية (أسمنت 50 كجم / جبس 25 كجم)
 const basisCfg = (cfg, kind) => (isCement(kind) ? { ids: cfg.cement_material_ids, factor: cfg.cement_kg } : { ids: (cfg.basis?.[String(kind).toUpperCase()]?.ids || []).map(Number), factor: cfg.basis?.[String(kind).toUpperCase()]?.factor || {} });
 /** كمية الوحدة بالكيلو (أسمنت: من الإعدادات/الاسم/50)، وغيره: المعامل المحدد وإلا 1 (الكمية بوحدة الصنف نفسها) */
-const perUnitOf = (kind, m, factor) => (isCement(kind) ? kgOf(m, factor) : (Number(factor[m.id]) || 1));
+const perUnitOf = (kind, m, factor) => (isBagged(kind) ? kgOf(m, factor, basisOf(kind).std) : (Number(factor[m.id]) || 1));
 const patCond = (kind) => { const pats = basisOf(kind).pats; return { sql: pats.length ? `(${pats.map(() => `LOWER(${NORM('m.name')}) LIKE ?`).join(' OR ')})` : null, params: pats.map((p) => `%${p}%`) }; };
 /** أصناف أساس المتر المرشحة لنوع: اللي اسمها مطابق + اللي اتضافت يدوياً، مع المعامل الحالي */
 export async function basisCandidates(cfg, kind) {
@@ -48,7 +49,7 @@ export async function basisCandidates(cfg, kind) {
   const byPat = pc.sql ? await all(`SELECT m.id, m.name FROM materials m WHERE m.active=1 AND ${pc.sql} ORDER BY m.name`, ...pc.params) : [];
   const extra = bc.ids.length ? await all(`SELECT m.id, m.name FROM materials m WHERE m.id IN (${bc.ids.map(() => '?').join(',')}) ORDER BY m.name`, ...bc.ids) : [];
   const seen = new Map(); for (const m of [...byPat, ...extra]) seen.set(m.id, m);
-  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, 'ar')).map((m) => ({ id: m.id, name: m.name, kg: perUnitOf(kind, m, bc.factor), kg_guessed: isCement(kind) && kgGuessed(m, bc.factor), selected: !bc.ids.length || bc.ids.includes(m.id) }));
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, 'ar')).map((m) => ({ id: m.id, name: m.name, kg: perUnitOf(kind, m, bc.factor), kg_guessed: isBagged(kind) && kgGuessed(m, bc.factor), selected: !bc.ids.length || bc.ids.includes(m.id) }));
 }
 export const cementCandidates = (cfg) => basisCandidates(cfg, 'GRC');
 export async function saveConfig(b) {
@@ -66,7 +67,7 @@ export async function saveConfig(b) {
     const kind = await kindOf(b.basis.kind); const key = kind.toUpperCase();
     const ids = [...new Set((b.basis.ids || []).map(Number).filter(Boolean))];
     if (!ids.length) throw new AppError(`اختر صنف واحد على الأقل لأساس متر ${kind}`);
-    const factor = {}; for (const [id, v] of Object.entries(b.basis.factor || {})) { const n = Number(v); if (!(n > 0 && n <= 1000)) throw new AppError(isCement(kind) ? 'وزن الشيكارة غير صحيح' : 'معامل الوحدة غير صحيح'); factor[Number(id)] = n; }
+    const factor = {}; for (const [id, v] of Object.entries(b.basis.factor || {})) { const n = Number(v); if (!(n > 0 && n <= 1000)) throw new AppError(isBagged(kind) ? 'وزن الشيكارة غير صحيح' : 'معامل الوحدة غير صحيح'); factor[Number(id)] = n; }
     const pc = patCond(kind); const cand = pc.sql ? (await all(`SELECT m.id FROM materials m WHERE m.active=1 AND ${pc.sql}`, ...pc.params)).map((x) => Number(x.id)) : [];
     const finalIds = ids.length === cand.length && ids.every((i) => cand.includes(i)) ? [] : ids;   // كل المطابقين بالاسم بدون إضافات = تلقائي (أي صنف جديد بالاسم بيدخل لوحده)
     if (isCement(kind)) { await setSetting(CFG_KEYS.cement, JSON.stringify(finalIds)); await setSetting(CFG_KEYS.kg, JSON.stringify(factor)); }
@@ -149,7 +150,7 @@ async function systemBags(cfg, kind, castIds, month, projectId) {
   const rows = await all(`SELECT m.id, m.name, SUM(c.qty) qty FROM cost_lines c JOIN materials m ON m.id=c.material_id
     WHERE substr(c.date,1,7)=? AND c.stage_id IN (${castIds.map(() => '?').join(',')}) AND c.cost_type='material' AND c.cost_class<>'transfer' AND ${cond}${pw}
     GROUP BY m.id, m.name ORDER BY m.name`, month, ...castIds, ...cp, ...pp);
-  const lines = rows.map((r) => { const kg = perUnitOf(kind, r, bc.factor); return { material_id: r.id, name: r.name, qty: r4(r.qty), kg, kg_guessed: isCement(kind) && kgGuessed(r, bc.factor), std_bags: r4(r.qty * kg / bs.std) }; });
+  const lines = rows.map((r) => { const kg = perUnitOf(kind, r, bc.factor); return { material_id: r.id, name: r.name, qty: r4(r.qty), kg, kg_guessed: isBagged(kind) && kgGuessed(r, bc.factor), std_bags: r4(r.qty * kg / bs.std) }; });
   return { lines, bags: r4(lines.reduce((t, l) => t + l.std_bags, 0)) };
 }
 
@@ -165,7 +166,8 @@ export async function computeLive(month, projectId = 0, inputs = null, kind = ''
   const [cast, finish, mold] = [await stageBlock(cfg.cast_stage_id, castIds, month, projectId), await stageBlock(cfg.finish_stage_id, finishIds, month, projectId), await moldBlock(cfg.mold_stage_id, month, projectId)];
   const sys = await systemBags(cfg, kind, castIds, month, projectId);
   const bags = sys.bags;   // الشكاير دايماً من المنصرف بالنظام (مفيش إدخال يدوي)
-  const area = r2(bags * spread);
+  const bs = basisOf(kind);
+  const area = bs.divide ? (spread > 0 ? r2(bags / spread) : 0) : r2(bags * spread);   // GRP: كمية البوليستر ÷ معدل الفرد (كجم/م²)؛ غيره: الكمية × المعدل (م²/شيكارة)
   if (cast) for (const m of cast.materials) m.per_bag = bags > 0 ? r4(m.qty / bags) : null;   // معيار الشيكارة
   const per = (b) => (b && area > 0 ? r2(b.total / area) : null);
   if (cast) cast.per_m2 = per(cast); if (finish) finish.per_m2 = per(finish);

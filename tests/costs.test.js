@@ -96,8 +96,8 @@ await line({ date: '2026-09-07', source_type: 'labor', cost_type: 'labor', stage
 await line({ date: '2026-09-08', source_type: 'labor', cost_type: 'labor', stage_id: pfin, qty: 1, amount: 2000 });
 const g = await computeLive('2026-09', 0, { spread_rate: 2 }, 'GRC'), pp = await computeLive('2026-09', 0, { spread_rate: 2 }, 'GRP');
 near(g.cast.total, 30000, 'صب GRC'); near(pp.cast.total, 15000, 'صب GRP'); near(g.finish.total, 5000, 'تشطيب GRC'); near(pp.finish.total, 2000, 'تشطيب GRP');
-near(g.inputs.bags, 100 * 50 / 50, 'شكاير GRC'); near(pp.inputs.bags, 25, 'أساس GRP = البوليستر مش الأسمنت'); near(pp.inputs.area, 50, 'متر GRP = بوليستر × المعدل');
-near(pp.unit_cost.total, (15000 + 2000) / 50, 'سعر متر GRP'); ok(pp.inputs.basis.spread_label === 'معدل فرد البوليستر', 'عناوين GRP');
+near(g.inputs.bags, 100 * 50 / 50, 'شكاير GRC'); near(pp.inputs.bags, 25, 'أساس GRP = البوليستر مش الأسمنت'); near(pp.inputs.area, 12.5, 'متر GRP = كمية البوليستر ÷ معدل الفرد (كجم/م²)');
+near(pp.unit_cost.total, (15000 + 2000) / 12.5, 'سعر متر GRP'); ok(pp.inputs.basis.spread_label === 'معدل فرد البوليستر' && pp.inputs.basis.per_unit === 'كجم / م²', 'عناوين GRP');
 console.log('▶ GRG: الجبس (Gypro) + صنف مضاف يدوياً');
 const gcast3 = await sub('STG-T5', 'صب GRG', st['الصب']), gfin3 = await sub('STG-T6', 'تشطيب GRG', st['التشطيب']);
 await run(`INSERT INTO finished_types(code,name) SELECT 'FGT-09','GRG' WHERE NOT EXISTS (SELECT 1 FROM finished_types WHERE name='GRG')`);
@@ -107,9 +107,9 @@ await line({ date: '2026-09-09', source_type: 'issue', cost_type: 'material', st
 await line({ date: '2026-09-09', source_type: 'labor', cost_type: 'labor', stage_id: gfin3, qty: 1, amount: 300 });
 let gg = await computeLive('2026-09', 0, { spread_rate: 4 }, 'GRG'); near(gg.inputs.bags, 10, 'GRG بالاسم: Gypro بس'); near(gg.inputs.area, 40, 'متر GRG');
 await throws(() => saveConfig({ basis: { kind: 'GRG', ids: [] } }), /صنف واحد/, 'لازم صنف واحد على الأقل');
-await saveConfig({ basis: { kind: 'GRG', ids: [gypro, gextra], factor: { [gextra]: 2 } } });
-gg = await computeLive('2026-09', 0, { spread_rate: 4 }, 'GRG'); near(gg.inputs.bags, 10 + 5 * 2, 'إضافة صنف جبس يدوياً بمعامل'); near(gg.inputs.area, 80, 'متر GRG بعد الإضافة');
-ok((await basisCandidates(await getConfig(), 'GRG')).some((x) => x.id === gextra && x.selected && x.kg === 2), 'الصنف المضاف ظاهر في الربط');
+await saveConfig({ basis: { kind: 'GRG', ids: [gypro, gextra], factor: { [gextra]: 25 } } });
+gg = await computeLive('2026-09', 0, { spread_rate: 4 }, 'GRG'); near(gg.inputs.bags, 10 + 5, 'إضافة صنف جبس يدوياً بمعامل'); near(gg.inputs.area, 60, 'متر GRG بعد الإضافة');
+ok((await basisCandidates(await getConfig(), 'GRG')).some((x) => x.id === gextra && x.selected && x.kg === 25), 'الصنف المضاف ظاهر في الربط');
 near((await computeLive('2026-09', 0, { spread_rate: 2 }, 'GRC')).inputs.bags, 100, 'GRC لسه بالأسمنت');
 await savePeriod({ month: '2026-09', kind: 'GRP', spread_rate: 2 }, { id: 1 }); await savePeriod({ month: '2026-09', kind: 'GRC', spread_rate: 3 }, { id: 1 });
 near((await getSheet('2026-09', 0, 'GRP')).inputs.spread_rate, 2, 'معدل GRP مستقل'); near((await getSheet('2026-09', 0, 'GRC')).inputs.spread_rate, 3, 'معدل GRC مستقل');

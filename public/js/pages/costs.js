@@ -43,7 +43,7 @@ export async function configPage(root, params = {}) {
           h('td', r.m.name, r.m.kg_guessed ? h('span.badge.warn', { style: { marginInlineStart: '8px' } }, 'الوزن متخمّن — راجعه') : null),
           h('td', h('input', { type: 'number', step: 'any', min: 0, value: r.kg, disabled: !canEdit, style: { width: '90px' }, onchange: (e) => { r.kg = Number(e.target.value); } }))))))
         : h('div', `مفيش أصناف مرتبطة بأساس ${kind} لسه — ضيف الأصناف من الأسفل.`));
-      warn.replaceChildren(...(rows.some((r) => r.m.kg_guessed) ? [h('div.note.bad', '⚠ في أصناف أسمنت وزنها متخمّن 50 كجم لأنه مش مكتوب في الاسم ولا محفوظ هنا. لو الوزن مختلف عدّله واضغط حفظ، لأنه بيأثر على عدد الشكاير وسعر المتر.')] : []));
+      warn.replaceChildren(...(rows.some((r) => r.m.kg_guessed) ? [h('div.note.bad', `⚠ في أصناف وزنها متخمّن ${bm.std} كجم لأنه مش مكتوب في الاسم ولا محفوظ هنا. لو الوزن مختلف عدّله واضغط حفظ، لأنه بيأثر على عدد الشكاير وسعر المتر.`)] : []));
     };
     drawRows();
     const pick = fieldInput({ t: 'fk', ref: 'materials', combo: true, filter: (x) => !rows.some((r) => r.m.id === x.id) }, null); pick.style.minWidth = '280px';
@@ -55,7 +55,7 @@ export async function configPage(root, params = {}) {
     const tabs = h('div', { style: { display: 'flex', gap: '8px', margin: '4px 0 10px', flexWrap: 'wrap' } }, c.kinds.map((k) => h('button.btn.sm' + (k === kind ? '.primary' : ''), { onclick: () => { kind = k; load(); } }, k)));
     host.replaceChildren(card('المراحل', f.el),
       card(`أساس المتر المنتج حسب نوع المنتج التام`, tabs,
-        h('div.note', `نوع ${kind}: المتر المنتج = كمية ${bm.title.replace(/^ال/, '')} المصروفة للصب × ${bm.spread_label} (${bm.per_unit}) بيتدخل شهرياً في «تكلفة المتر».${kind.toUpperCase() === 'GRC' ? ' الوحدة المعيارية شيكارة 50 كجم.' : ' الكمية بوحدة الصنف نفسها × المعامل (كجم لكل وحدة) — سيبه 1 لو الصنف بالكيلو.'}`),
+        h('div.note', `نوع ${kind}: المتر المنتج = كمية ${bm.title.replace(/^ال/, '')} المصروفة للصب ${bm.divide ? '÷' : '×'} ${bm.spread_label} (${bm.per_unit}) بيتدخل شهرياً في «تكلفة المتر».${bm.bagged ? ` الوحدة المعيارية شيكارة ${bm.std} كجم.` : ' الكمية بوحدة الصنف نفسها × المعامل (كجم لكل وحدة) — سيبه 1 لو الصنف بالكيلو.'}`),
         tbl, warn,
         canEdit ? h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' } }, h('span', 'إضافة صنف تاني للأساس:'), pick, add) : null),
       canEdit ? h('div', { style: { marginTop: '12px' } }, h('button.btn.primary', { onclick: save }, 'حفظ')) : null);
@@ -65,7 +65,7 @@ export async function configPage(root, params = {}) {
 }
 
 // ---------- تكلفة المتر (شهرياً) — GRC / GRP / GRG حسب أنواع المنتج التام ----------
-const LEGACY_BASIS = { title: 'الأسمنت', qty_label: 'شكاير الأسمنت للصب (معيارية 50 كجم)', spread_label: 'معدل فرد الشيكارة', per_unit: 'م² / شيكارة', per_col: 'معيار الشيكارة', lines_title: 'أسمنت الصب محوّل لشكاير 50 كجم', std_col: 'ما يعادل شكاير 50 كجم', factor_label: 'وزن الوحدة (كجم)' };
+const LEGACY_BASIS = { std: 50, bagged: true, title: 'الأسمنت', qty_label: 'شكاير الأسمنت للصب (معيارية 50 كجم)', spread_label: 'معدل فرد الشيكارة', per_unit: 'م² / شيكارة', per_col: 'معيار الشيكارة', lines_title: 'أسمنت الصب محوّل لشكاير 50 كجم', std_col: 'ما يعادل شكاير 50 كجم', factor_label: 'وزن الوحدة (كجم)' };
 export async function unitCostPage(root, params = {}) {
   const host = h('div');
   const kinds = () => (L.finished_types || []).filter((x) => x.active).map((x) => x.name);   // أنواع المنتج التام من الإعدادات
@@ -102,7 +102,7 @@ export async function unitCostPage(root, params = {}) {
       approved && s.drift ? h('div.note.bad', `تنبيه: الأرقام الحالية اختلفت عن وقت الاعتماد (السعر الحالي ${blank(s.live_unit_cost?.total)} مقابل المعتمد ${blank(u.total)}) — السعر المعتمد لسه ثابت. أعد فتح الشهر لو عايز تحدّثه.`) : null,
       h('div.kpis', kpi(bm.qty_label, fq(i.bags), 'من المنصرف بالنظام'), kpi(bm.spread_label, i.spread_rate ? fq(i.spread_rate) : '—', bm.per_unit),
         kpi('المتر المسطح المنتج', i.area ? fmt(i.area) : '—', 'م²'), kpi('تكلفة الصب / م²', blank(u.cast)), kpi('تكلفة التشطيب / م²', blank(u.finish)), kpi('سعر المتر الإجمالي', blank(u.total), 'صب + تشطيب', 'ok')),
-      i.cement_lines?.some((x) => x.kg_guessed) ? h('div.note.bad', '⚠ وزن الوحدة متخمّن (50 كجم) للأصناف: ' + i.cement_lines.filter((x) => x.kg_guessed).map((x) => x.name).join('، ') + ' — راجعه من «ربط المراحل والمواد» لأنه بيأثر على المتر المنتج.') : null,
+      i.cement_lines?.some((x) => x.kg_guessed) ? h('div.note.bad', `⚠ وزن الوحدة متخمّن (${bm.std} كجم) للأصناف: ` + i.cement_lines.filter((x) => x.kg_guessed).map((x) => x.name).join('، ') + ' — راجعه من «ربط المراحل والمواد» لأنه بيأثر على المتر المنتج.') : null,
       i.cement_lines?.length ? card(bm.lines_title, table({ name: bm.lines_title, search: false, compact: true, rows: i.cement_lines, cols: [{ k: 'name', l: 'الصنف', render: (r) => matLink(r.material_id, r.name), text: (r) => r.name }, { k: 'qty', l: 'الكمية المصروفة', num: true, fmt: (v) => fq(v) }, { k: 'kg', l: bm.factor_label, num: true, fmt: (v) => fq(v) }, { k: 'std_bags', l: bm.std_col, num: true, fmt: (v) => fq(v) }], foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'std_bags' ? fq(i.bags_system) : '') })) : null,
       h('div.chart-grid', stageTable(s.cast, { perBag: true, perCol: bm.per_col }), stageTable(s.finish)),
       card(`مرحلة ${s.mold?.name || 'القوالب'} — محمّلة على المشروع (لا تدخل في سعر المتر)`, s.mold ? table({ name: 'القوالب', search: false, compact: true, rows: s.mold.by_project,
