@@ -2,13 +2,13 @@ import { Router } from 'express';
 import { can, canModule, need } from '../lib/perms.js';
 import { audit } from '../lib/core.js';
 import * as P3 from '../lib/phase3.js';
-import { getConfig, cementCandidates, saveConfig, getSheet, savePeriod, approvePeriod, reopenPeriod, history } from '../lib/costing.js';
+import { getConfig, basisCandidates, basisOf, productKinds, kindOf as kindFor, saveConfig, getSheet, savePeriod, approvePeriod, reopenPeriod, history } from '../lib/costing.js';
 
 export function costsRouter() {
   const r = Router();
   r.use((req, res, next) => (canModule(req.user, 'costs') ? next() : res.status(403).json({ error: 'ليس لديك صلاحية على موديول التكاليف' })));
-  r.get('/config', async (req, res) => { need(req.user, 'costs.config'); const c = await getConfig(); res.json({ ...c, cement_candidates: await cementCandidates(c) }); });
-  r.put('/config', async (req, res) => { need(req.user, 'costs.config.edit'); const c = await saveConfig(req.body); await audit(req.user, 'config', 'costs', null, c); res.json({ ...c, cement_candidates: await cementCandidates(c) }); });
+  r.get('/config', async (req, res) => { need(req.user, 'costs.config'); const c = await getConfig(); const kind = await kindFor(req.query.kind); res.json({ ...c, kind, kinds: await productKinds(), basis_meta: { ...basisOf(kind), pats: undefined }, candidates: await basisCandidates(c, kind) }); });
+  r.put('/config', async (req, res) => { need(req.user, 'costs.config.edit'); const c = await saveConfig(req.body); await audit(req.user, 'config', 'costs', null, c); const kind = await kindFor(req.body.basis?.kind || req.query.kind); res.json({ ...c, kind, kinds: await productKinds(), basis_meta: { ...basisOf(kind), pats: undefined }, candidates: await basisCandidates(c, kind) }); });
   r.get('/sheet', async (req, res) => { need(req.user, 'costs.unit-cost'); res.json(await getSheet(String(req.query.month || ''), Number(req.query.project_id) || 0, req.query.kind || 'GRC')); });
   r.put('/period', async (req, res) => {
     need(req.user, 'costs.unit-cost.save'); const s = await savePeriod(req.body, req.user);

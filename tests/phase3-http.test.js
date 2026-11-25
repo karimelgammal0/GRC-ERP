@@ -52,12 +52,12 @@ for (const [m, p, b] of [['GET', '/doc/production_log'], ['GET', '/doc/delivery_
 }
 console.log('▶ نوع المنتج التام');
 r = await call('GET', '/m/finished_types', null, A); ok(r.status === 200 || r.status === 404, 'مسار الأنواع');
-r = await call('GET', '/lookups', null, A); ok(Array.isArray(r.json.finished_types) && r.json.finished_types.map((x) => x.name).sort().join() === 'GRC,GRP', 'GRC وGRP متكوّدين تلقائياً');
+r = await call('GET', '/lookups', null, A); ok(Array.isArray(r.json.finished_types) && r.json.finished_types.map((x) => x.name).sort().join() === 'GRC,GRG,GRP', 'GRC وGRP وGRG متكوّدين تلقائياً');
 r = await call('POST', '/m/finished_types', { name: 'grc' }, A); ok(r.status === 400, 'اسم مكرر مرفوض (حتى بحروف مختلفة)');
-r = await call('POST', '/m/finished_types', { name: 'GRG' }, A); ok(r.status === 200 && r.json.code?.startsWith('FGT-'), 'كود نوع جديد: ' + JSON.stringify(r.json)); const grg = r.json.id;
+r = await call('POST', '/m/finished_types', { name: 'GRX' }, A); ok(r.status === 200 && r.json.code?.startsWith('FGT-'), 'كود نوع جديد: ' + JSON.stringify(r.json)); const grg = r.json.id;
 r = await call('POST', '/m/project_items', { project_id: prj, name: 'بند جي', unit_id: unit, area_m2: 1, kind: 'ZZZ' }, A); ok(r.status === 400, 'بند بنوع غير متكوّد مرفوض');
-r = await call('POST', '/m/project_items', { project_id: prj, name: 'بند جي ٢', unit_id: unit, area_m2: 1, kind: 'GRG' }, A); ok(r.status === 200 && r.json.kind === 'GRG', 'بند بالنوع الجديد');
-r = await call('PUT', `/m/finished_types/${grg}`, { name: 'GRG2' }, A); ok(r.status === 400, 'مينفعش تغيير اسم نوع مستخدم');
+r = await call('POST', '/m/project_items', { project_id: prj, name: 'بند جي ٢', unit_id: unit, area_m2: 1, kind: 'GRX' }, A); ok(r.status === 200 && r.json.kind === 'GRX', 'بند بالنوع الجديد');
+r = await call('PUT', `/m/finished_types/${grg}`, { name: 'GRX2' }, A); ok(r.status === 400, 'مينفعش تغيير اسم نوع مستخدم');
 r = await call('DELETE', `/m/finished_types/${grg}`, null, A); ok(r.status === 200 && r.json.deactivated === true, 'الحذف لنوع مستخدم بيعطّله');
-r = await call('GET', '/costs/sheet?month=2026-06&kind=GRG', null, A); ok(r.status === 400, 'نوع معطّل مرفوض في تكلفة المتر');
+r = await call('GET', '/costs/sheet?month=2026-06&kind=GRX', null, A); ok(r.status === 400, 'نوع معطّل مرفوض في تكلفة المتر');
 console.log(`\nالنتيجة: ${pass} نجح، ${fail} فشل`); server.close(); process.exit(fail ? 1 : 0);

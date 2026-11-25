@@ -61,6 +61,11 @@ export async function ensureBaseData() {
   }
   for (const [key, label, prefix, padding] of DEFAULT_SEQUENCES)
     await run('INSERT INTO sequences(key,label,prefix,padding) VALUES(?,?,?,?) ON CONFLICT DO NOTHING', key, label, prefix, padding);
+  // نوع المنتج التام GRG: بيتكوّد مرة واحدة (لو المستخدم مسحه بعد كده مبنرجّعهوش)
+  if (!(await getSetting('seed_grg_type'))) {
+    if (!(await val(`SELECT COUNT(*) FROM finished_types WHERE UPPER(name)='GRG'`))) await run('INSERT INTO finished_types(code,name) VALUES(?,?)', await nextNo('fg_type'), 'GRG');
+    await setSetting('seed_grg_type', '1');
+  }
   // اسم الشركة في المطبوعات: بدون «— مصنع GRC»
   if (await getSetting('company_name') === 'شركة سيف لصناعة مواد البناء — مصنع GRC') await setSetting('company_name', 'شركة سيف لصناعة مواد البناء');
   // لوجو المصنع الافتراضي (نفس أيقونة التطبيق) — لو مفيش لوجو متخزن؛ يتغيّر من الإعدادات العامة

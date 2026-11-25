@@ -1,4 +1,4 @@
-import { h, GET, PUT, POST, L, META, can, fmt, fq, today, table, filterBar, formGrid, pageHead, card, kpi, badge, modal, toast, guard, confirmBox, nameOf } from '../core.js';
+import { h, GET, PUT, POST, L, META, can, fieldInput, byId, fmt, fq, today, table, filterBar, formGrid, pageHead, card, kpi, badge, modal, toast, guard, confirmBox, nameOf } from '../core.js';
 import { barChart } from '../charts.js';
 
 const curMonth = () => today().slice(0, 7);
@@ -7,8 +7,8 @@ const matLink = (id, name) => (id ? h('a', { href: `#/inventory/stock-card?mater
 const blank = (v) => (v === null || v === undefined ? '—' : fmt(v));
 
 // ---------- جدول مرحلة (صب / تشطيب): أصناف + أجور + مرتبات ----------
-function stageTable(b, { perBag = false, bags = 0 } = {}) {
-  if (!b) return card('المرحلة غير مربوطة', h('div.note.bad', 'اربط المرحلة من زر «ربط المراحل والأسمنت».'));
+function stageTable(b, { perBag = false, bags = 0, perCol = 'معيار الشيكارة' } = {}) {
+  if (!b) return card('المرحلة غير مربوطة', h('div.note.bad', 'اربط المرحلة من زر «ربط المراحل والمواد».'));
   const rows = [
     ...b.materials.map((m) => ({ k: 'm', material_id: m.material_id, name: m.name, unit: m.unit, qty: m.qty, per_bag: m.per_bag, amount: m.amount })),
     { k: 't', name: 'إجمالي الأصناف', amount: b.mat_total },
@@ -19,38 +19,60 @@ function stageTable(b, { perBag = false, bags = 0 } = {}) {
     { k: 'g', name: `تكلفة المتر المسطح — ${b.name}`, amount: b.per_m2, bold: true },
   ];
   const cols = [{ k: 'name', l: 'البند', render: (r) => (r.k === 'm' ? matLink(r.material_id, r.name) : r.name), text: (r) => r.name }, { k: 'unit', l: 'الوحدة' }, { k: 'qty', l: 'الكمية', num: true, fmt: (v) => fq(v) }];
-  if (perBag) cols.push({ k: 'per_bag', l: 'معيار الشيكارة', num: true, fmt: (v) => (v === null || v === undefined ? '' : fq(Math.round(v * 10000) / 10000)) });
+  if (perBag) cols.push({ k: 'per_bag', l: perCol, num: true, fmt: (v) => (v === null || v === undefined ? '' : fq(Math.round(v * 10000) / 10000)) });
   cols.push({ k: 'amount', l: 'الإجمالي', num: true, fmt: (v) => blank(v) });
   return card(`مرحلة ${b.name}`, table({ cols, rows, search: false, compact: true, name: `تكلفة ${b.name}`, rowClass: (r) => (r.k === 'g' ? 'tot' : r.k === 't' ? 'sub' : '') }));
 }
 
-// ---------- ربط المراحل والأسمنت (تبويب مستقل — الوحدة المعيارية: شيكارة 50 كجم) ----------
-export async function configPage(root) {
-  const c = await GET('/costs/config'); const canEdit = can('costs.config.edit');
-  const f = formGrid([
-    { k: 'cast_stage_id', l: 'مرحلة الصب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit }, { k: 'finish_stage_id', l: 'مرحلة التشطيب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit },
-    { k: 'mold_stage_id', l: 'مرحلة القوالب (على المشروع)', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, readonly: !canEdit }], c, 3);
-  const rows = c.cement_candidates.map((m) => ({ m, cb: h('input', { type: 'checkbox', checked: m.selected, disabled: !canEdit }), kg: h('input', { type: 'number', step: 'any', min: 0, value: m.kg, disabled: !canEdit, style: { width: '90px' } }) }));
-  const save = guard(async () => {
-    const sel = rows.filter((r) => r.cb.checked); const all = sel.length === rows.length;
-    await PUT('/costs/config', { ...f.values(), cement_material_ids: all ? [] : sel.map((r) => r.m.id), cement_kg: Object.fromEntries(rows.map((r) => [r.m.id, Number(r.kg.value)])) }); toast('تم الحفظ');
-  });
-  root.replaceChildren(pageHead('ربط المراحل والأسمنت'),
-    card('المراحل', f.el),
-    card('أصناف الأسمنت المحسوبة في المتر المنتج (الوحدة المعيارية شيكارة 50 كجم)', rows.length
-      ? h('table.tbl.compact', h('thead', h('tr', ['', 'الصنف', 'وزن الوحدة (كجم)'].map((x) => h('th', x)))), h('tbody', rows.map((r) => h('tr', h('td', r.cb), h('td', r.m.name, r.m.kg_guessed ? h('span.badge.warn', { style: { marginInlineStart: '8px' } }, 'الوزن متخمّن — راجعه') : null), h('td', r.kg)))))
-      : h('div', 'لا توجد أصناف اسمها فيه «اسمنت». لإضافة صنف جديد: الإعدادات ← الأصناف، واكتب «اسمنت» في الاسم مع الوزن (مثال: اسمنت ابيض *50ك).')),
-    rows.some((r) => r.m.kg_guessed) ? h('div.note.bad', '⚠ في أصناف أسمنت وزنها متخمّن 50 كجم لأنه مش مكتوب في الاسم ولا محفوظ هنا. لو الوزن مختلف عدّله واضغط حفظ، لأنه بيأثر على عدد الشكاير وسعر المتر.') : null,
-    canEdit ? h('div', { style: { marginTop: '12px' } }, h('button.btn.primary', { onclick: save }, 'حفظ')) : null);
+// ---------- ربط المراحل والمواد (تبويب مستقل): المراحل + أصناف أساس المتر المنتج لكل نوع منتج ----------
+//  GRC: أسمنت (شيكارة 50 كجم) — GRP: بوليستر — GRG: جبس (Gypro وغيره)، وتقدر تضيف أي صنف تاني لأي نوع
+export async function configPage(root, params = {}) {
+  const canEdit = can('costs.config.edit'); let kind = params.kind || null;
+  const host = h('div');
+  const load = async () => {
+    const c = await GET('/costs/config', kind ? { kind } : {}); kind = c.kind; const bm = c.basis_meta;
+    const f = formGrid([
+      { k: 'cast_stage_id', l: 'مرحلة الصب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit }, { k: 'finish_stage_id', l: 'مرحلة التشطيب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit },
+      { k: 'mold_stage_id', l: 'مرحلة القوالب (على المشروع)', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, readonly: !canEdit }], c, 3);
+    const rows = c.candidates.map((m) => ({ m, sel: m.selected, kg: m.kg }));
+    const tbl = h('div'); const warn = h('div');
+    const drawRows = () => {
+      tbl.replaceChildren(rows.length
+        ? h('table.tbl.compact', h('thead', h('tr', ['', 'الصنف', bm.factor_label].map((x) => h('th', x)))), h('tbody', rows.map((r) => h('tr',
+          h('td', h('input', { type: 'checkbox', checked: r.sel, disabled: !canEdit, onchange: (e) => { r.sel = e.target.checked; } })),
+          h('td', r.m.name, r.m.kg_guessed ? h('span.badge.warn', { style: { marginInlineStart: '8px' } }, 'الوزن متخمّن — راجعه') : null),
+          h('td', h('input', { type: 'number', step: 'any', min: 0, value: r.kg, disabled: !canEdit, style: { width: '90px' }, onchange: (e) => { r.kg = Number(e.target.value); } }))))))
+        : h('div', `مفيش أصناف مرتبطة بأساس ${kind} لسه — ضيف الأصناف من الأسفل.`));
+      warn.replaceChildren(...(rows.some((r) => r.m.kg_guessed) ? [h('div.note.bad', '⚠ في أصناف أسمنت وزنها متخمّن 50 كجم لأنه مش مكتوب في الاسم ولا محفوظ هنا. لو الوزن مختلف عدّله واضغط حفظ، لأنه بيأثر على عدد الشكاير وسعر المتر.')] : []));
+    };
+    drawRows();
+    const pick = fieldInput({ t: 'fk', ref: 'materials', combo: true, filter: (x) => !rows.some((r) => r.m.id === x.id) }, null); pick.style.minWidth = '280px';
+    const add = h('button.btn', { onclick: () => { const id = pick.get(); const m = id && byId('materials', id); if (!m) return; if (!rows.some((r) => r.m.id === m.id)) rows.push({ m: { id: m.id, name: m.name }, sel: true, kg: bm.std || 1 }); pick.set?.(null); drawRows(); } }, '＋ إضافة صنف');
+    const save = guard(async () => {
+      const sel = rows.filter((r) => r.sel);
+      await PUT('/costs/config', { ...f.values(), basis: { kind, ids: sel.map((r) => r.m.id), factor: Object.fromEntries(rows.map((r) => [r.m.id, Number(r.kg) || 1])) } }); toast('تم الحفظ'); await load();
+    });
+    const tabs = h('div', { style: { display: 'flex', gap: '8px', margin: '4px 0 10px', flexWrap: 'wrap' } }, c.kinds.map((k) => h('button.btn.sm' + (k === kind ? '.primary' : ''), { onclick: () => { kind = k; load(); } }, k)));
+    host.replaceChildren(card('المراحل', f.el),
+      card(`أساس المتر المنتج حسب نوع المنتج التام`, tabs,
+        h('div.note', `نوع ${kind}: المتر المنتج = كمية ${bm.title.replace(/^ال/, '')} المصروفة للصب × ${bm.spread_label} (${bm.per_unit}) بيتدخل شهرياً في «تكلفة المتر».${kind.toUpperCase() === 'GRC' ? ' الوحدة المعيارية شيكارة 50 كجم.' : ' الكمية بوحدة الصنف نفسها × المعامل (كجم لكل وحدة) — سيبه 1 لو الصنف بالكيلو.'}`),
+        tbl, warn,
+        canEdit ? h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' } }, h('span', 'إضافة صنف تاني للأساس:'), pick, add) : null),
+      canEdit ? h('div', { style: { marginTop: '12px' } }, h('button.btn.primary', { onclick: save }, 'حفظ')) : null);
+  };
+  root.replaceChildren(pageHead('ربط المراحل والمواد'), host);
+  await load();
 }
 
-// ---------- تكلفة المتر GRC / GRP (شهرياً) ----------
+// ---------- تكلفة المتر (شهرياً) — GRC / GRP / GRG حسب أنواع المنتج التام ----------
+const LEGACY_BASIS = { title: 'الأسمنت', qty_label: 'شكاير الأسمنت للصب (معيارية 50 كجم)', spread_label: 'معدل فرد الشيكارة', per_unit: 'م² / شيكارة', per_col: 'معيار الشيكارة', lines_title: 'أسمنت الصب محوّل لشكاير 50 كجم', std_col: 'ما يعادل شكاير 50 كجم', factor_label: 'وزن الوحدة (كجم)' };
 export async function unitCostPage(root, params = {}) {
   const host = h('div');
   const kinds = () => (L.finished_types || []).filter((x) => x.active).map((x) => x.name);   // أنواع المنتج التام من الإعدادات
   let cur = { month: params.month || curMonth(), kind: params.kind || kinds()[0] || 'GRC', project_id: params.project_id ? Number(params.project_id) : null };
   const bar = filterBar([{ k: 'month', l: 'الشهر', t: 'month', req: 1 }, { k: 'spread_rate', l: 'معدل فرد الشيكارة (م² / شيكارة)', t: 'number', step: '0.01' }, { k: 'kind', l: 'نوع المنتج التام', t: 'select', options: kinds().map((k) => [k, k]), def: cur.kind }, { k: 'project_id', l: 'عرض مشروع محدد (اختياري — للاعتماد اتركه فاضي)', t: 'fk', ref: 'projects', combo: true }],
     async (v) => { cur = { month: v.month || curMonth(), kind: v.kind || kinds()[0] || 'GRC', project_id: v.project_id || null }; await load(); }, { month: cur.month, kind: cur.kind, project_id: cur.project_id });
+  const pageTitle = () => `تكلفة المتر ${kinds().join(' / ')}`;
   bar.append(h('button.btn', { onclick: () => window.print() }, '🖨 طباعة'));
   const rateEl = () => bar.querySelectorAll('label.fld')[1]?.querySelector('input');
   const rateVal = () => { const v = rateEl()?.value; return v === '' || v === undefined ? 0 : Number(v); };
@@ -62,7 +84,8 @@ export async function unitCostPage(root, params = {}) {
   let doSave = () => {};
 
   const draw = (s) => {
-    const pv = !!s.project_view; const approved = s.status === 'approved' || pv; const i = s.inputs;
+    const pv = !!s.project_view; const approved = s.status === 'approved' || pv; const i = s.inputs; const bm = { ...LEGACY_BASIS, ...(i.basis || {}) };
+    { const sp = bar.querySelectorAll('label.fld')[1]?.querySelector('span'); if (sp?.firstChild) sp.firstChild.textContent = `${bm.spread_label} (${bm.per_unit})`; }
     { const el = rateEl(); if (el) { el.value = i.spread_rate || ''; el.disabled = approved; el.onkeydown = (e) => { if (e.key === 'Enter') { e.stopPropagation(); e.preventDefault(); doSave(); } }; } }
     const body = () => ({ ...q(), spread_rate: rateVal() });
     doSave = guard(async () => { const typed = rateEl()?.value; draw(await PUT('/costs/period', body())); const el = rateEl(); if (el && el.value === '' && typed) el.value = typed; });
@@ -75,13 +98,13 @@ export async function unitCostPage(root, params = {}) {
     host.replaceChildren(
       h('div.row', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', margin: '8px 0' } },
         pv ? badge(s.status === 'approved_view' ? 'الشهر معتمد' : s.status === 'new' ? 'الشهر لم يُحفظ بعد' : 'الشهر مسودة', 'info') : pv ? badge(s.status === 'approved_view' ? 'الشهر معتمد' : s.status === 'new' ? 'الشهر لم يُحفظ بعد' : 'الشهر مسودة', 'info') : approved ? badge(`معتمد ${s.approved_at || ''}`, 'ok') : badge(s.status === 'new' ? 'لم يُحفظ بعد' : 'مسودة', 'warn'), s.project_id ? badge(`مشروع: ${nameOf('projects', s.project_id)}`, 'info') : badge('كل المشاريع', '')),
-      pv ? h('div.note', 'عرض تحليلي لمشروع واحد: معدل فرد الشيكارة هو معدل الشهر الواحد لكل المشروعات، والاعتماد يتم على مستوى الشهر (بدون اختيار مشروع).') : null,
+      pv ? h('div.note', 'عرض تحليلي لمشروع واحد: معدل الفرد هو معدل الشهر الواحد لكل المشروعات، والاعتماد يتم على مستوى الشهر (بدون اختيار مشروع).') : null,
       approved && s.drift ? h('div.note.bad', `تنبيه: الأرقام الحالية اختلفت عن وقت الاعتماد (السعر الحالي ${blank(s.live_unit_cost?.total)} مقابل المعتمد ${blank(u.total)}) — السعر المعتمد لسه ثابت. أعد فتح الشهر لو عايز تحدّثه.`) : null,
-      h('div.kpis', kpi('شكاير الأسمنت للصب (معيارية 50 كجم)', fq(i.bags), 'من المنصرف بالنظام'), kpi('معدل فرد الشيكارة', i.spread_rate ? fq(i.spread_rate) : '—', 'م² / شيكارة'),
+      h('div.kpis', kpi(bm.qty_label, fq(i.bags), 'من المنصرف بالنظام'), kpi(bm.spread_label, i.spread_rate ? fq(i.spread_rate) : '—', bm.per_unit),
         kpi('المتر المسطح المنتج', i.area ? fmt(i.area) : '—', 'م²'), kpi('تكلفة الصب / م²', blank(u.cast)), kpi('تكلفة التشطيب / م²', blank(u.finish)), kpi('سعر المتر الإجمالي', blank(u.total), 'صب + تشطيب', 'ok')),
-      i.cement_lines?.some((x) => x.kg_guessed) ? h('div.note.bad', '⚠ وزن الوحدة متخمّن (50 كجم) للأصناف: ' + i.cement_lines.filter((x) => x.kg_guessed).map((x) => x.name).join('، ') + ' — راجعه من «ربط المراحل والأسمنت» لأنه بيأثر على المتر المنتج.') : null,
-      i.cement_lines?.length ? card('أسمنت الصب محوّل لشكاير 50 كجم', table({ name: 'أسمنت الصب', search: false, compact: true, rows: i.cement_lines, cols: [{ k: 'name', l: 'الصنف', render: (r) => matLink(r.material_id, r.name), text: (r) => r.name }, { k: 'qty', l: 'الكمية المصروفة', num: true, fmt: (v) => fq(v) }, { k: 'kg', l: 'وزن الوحدة (كجم)', num: true, fmt: (v) => fq(v) }, { k: 'std_bags', l: 'ما يعادل شكاير 50 كجم', num: true, fmt: (v) => fq(v) }], foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'std_bags' ? fq(i.bags_system) : '') })) : null,
-      h('div.chart-grid', stageTable(s.cast, { perBag: true }), stageTable(s.finish)),
+      i.cement_lines?.some((x) => x.kg_guessed) ? h('div.note.bad', '⚠ وزن الوحدة متخمّن (50 كجم) للأصناف: ' + i.cement_lines.filter((x) => x.kg_guessed).map((x) => x.name).join('، ') + ' — راجعه من «ربط المراحل والمواد» لأنه بيأثر على المتر المنتج.') : null,
+      i.cement_lines?.length ? card(bm.lines_title, table({ name: bm.lines_title, search: false, compact: true, rows: i.cement_lines, cols: [{ k: 'name', l: 'الصنف', render: (r) => matLink(r.material_id, r.name), text: (r) => r.name }, { k: 'qty', l: 'الكمية المصروفة', num: true, fmt: (v) => fq(v) }, { k: 'kg', l: bm.factor_label, num: true, fmt: (v) => fq(v) }, { k: 'std_bags', l: bm.std_col, num: true, fmt: (v) => fq(v) }], foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'std_bags' ? fq(i.bags_system) : '') })) : null,
+      h('div.chart-grid', stageTable(s.cast, { perBag: true, perCol: bm.per_col }), stageTable(s.finish)),
       card(`مرحلة ${s.mold?.name || 'القوالب'} — محمّلة على المشروع (لا تدخل في سعر المتر)`, s.mold ? table({ name: 'القوالب', search: false, compact: true, rows: s.mold.by_project,
         cols: [{ k: 'name', l: 'المشروع' }, { k: 'material', l: 'أصناف', num: true, fmt: (v) => fmt(v) }, { k: 'labor', l: 'عمالة', num: true, fmt: (v) => fmt(v) }, { k: 'expense', l: 'مصروفات', num: true, fmt: (v) => fmt(v) }, { k: 'direct', l: 'مباشر', num: true, fmt: (v) => fmt(v) }, { k: 'allocated', l: 'موزّع من «غير محدد»', num: true, fmt: (v) => (v ? fmt(v) : '') }, { k: 'total', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }],
         foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'total' ? fmt(s.mold.total) : ''), empty: 'لا توجد تكاليف قوالب في هذا الشهر' }) : h('div.note', 'مرحلة القوالب غير مربوطة.')),
@@ -89,7 +112,7 @@ export async function unitCostPage(root, params = {}) {
       acts.some(Boolean) ? h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '14px 0' } }, acts) : null,
     );
   };
-  root.replaceChildren(h('div.print-only.print-head', h('div.ph-co', META.settings?.company_logo ? h('img.ph-logo', { src: META.settings.company_logo }) : null, META.settings?.company_name || ''), h('div.ph-title', 'تكلفة المتر GRC / GRP')), pageHead('تكلفة المتر GRC / GRP'), bar, host);
+  root.replaceChildren(h('div.print-only.print-head', h('div.ph-co', META.settings?.company_logo ? h('img.ph-logo', { src: META.settings.company_logo }) : null, META.settings?.company_name || ''), h('div.ph-title', pageTitle())), pageHead(pageTitle()), bar, host);
   await load();
 }
 unitCostPage.newInfo = null;

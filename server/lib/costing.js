@@ -8,7 +8,7 @@ import { all, get, run, val, AppError, r2, r4, num } from '../db.js';
 import { getSetting, setSetting } from './core.js';
 
 export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
-const CFG_KEYS = { cast: 'cost_stage_cast', finish: 'cost_stage_finish', mold: 'cost_stage_mold', cement: 'cost_cement_materials', kg: 'cost_cement_kg' };
+const CFG_KEYS = { cast: 'cost_stage_cast', finish: 'cost_stage_finish', mold: 'cost_stage_mold', cement: 'cost_cement_materials', kg: 'cost_cement_kg', basis: 'cost_basis' };
 export const STD_BAG_KG = 50;   // الوحدة المعيارية: شيكارة 50 كجم
 const json = (v, d) => { try { return v ? JSON.parse(v) : d; } catch { return d; } };
 /** وزن وحدة الصنف بالكيلو: المحدد في الإعدادات، وإلا من الاسم (مثال «*30ك»)، وإلا 50 */
@@ -18,7 +18,7 @@ export const kgGuessed = (m, map = {}) => !Number(map[m.id]) && !/(\d+(?:\.\d+)?
 // «اسمنت» بأي كتابة (اسمنت / أسمنت / إسمنت)
 const NORM = (col) => `REPLACE(REPLACE(REPLACE(${col},'أ','ا'),'إ','ا'),'آ','ا')`;
 
-/** ربط المراحل والأسمنت: من الإعدادات، وإلا بالاسم (صب / تشطيب / قوالب) */
+/** ربط المراحل والمواد: من الإعدادات، وإلا بالاسم (صب / تشطيب / قوالب) */
 export async function getConfig() {
   const stages = await all('SELECT id, name FROM stages WHERE active=1 AND parent_id IS NULL ORDER BY seq');
   const byName = (re) => stages.find((s) => re.test(s.name))?.id ?? null;
@@ -26,13 +26,31 @@ export async function getConfig() {
   return {
     cast_stage_id: await pick('cast', byName(/صب/)), finish_stage_id: await pick('finish', byName(/تشطيب/)), mold_stage_id: await pick('mold', byName(/قوالب|قالب/)),
     cement_material_ids: json(await getSetting(CFG_KEYS.cement), []).map(Number), cement_kg: json(await getSetting(CFG_KEYS.kg), {}),
+    basis: json(await getSetting(CFG_KEYS.basis), {}),   // أصناف أساس المتر المنتج لغير GRC: { GRP: { ids, factor }, GRG: {...} }
   };
 }
-/** أصناف الأسمنت المرشحة (الاسم فيه «اسمنت») مع الوزن الحالي لكل وحدة */
-export async function cementCandidates(cfg) {
-  const rows = await all(`SELECT id, name FROM materials WHERE ${NORM('name')} LIKE '%اسمنت%' AND active=1 ORDER BY name`);
-  return rows.map((m) => ({ id: m.id, name: m.name, kg: kgOf(m, cfg.cement_kg), kg_guessed: kgGuessed(m, cfg.cement_kg), selected: !cfg.cement_material_ids.length || cfg.cement_material_ids.includes(m.id) }));
+// ---------- أساس المتر المنتج لكل نوع منتج ----------
+//  GRC: أسمنت (شيكارة معيارية 50 كجم) — GRP: بوليستر — GRG: جبس (Gypro وغيره) — المتر المنتج = كمية الأساس المصروفة للصب × معدل الفرد (يدوي شهري)
+const BASIS = {
+  GRC: { pats: ['اسمنت'], std: STD_BAG_KG, title: 'الأسمنت', qty_label: 'شكاير الأسمنت للصب (معيارية 50 كجم)', spread_label: 'معدل فرد الشيكارة', per_unit: 'م² / شيكارة', unit_short: 'شيكارة', per_col: 'معيار الشيكارة', lines_title: 'أسمنت الصب محوّل لشكاير 50 كجم', std_col: 'ما يعادل شكاير 50 كجم', factor_label: 'وزن الوحدة (كجم)' },
+  GRP: { pats: ['بوليستر', 'polyester'], std: 1, title: 'البوليستر', qty_label: 'كمية البوليستر للصب (كجم)', spread_label: 'معدل فرد البوليستر', per_unit: 'م² / كجم', unit_short: 'كجم', per_col: 'معيار الكجم', lines_title: 'بوليستر الصب (كجم)', std_col: 'ما يعادل كجم', factor_label: 'كجم لكل وحدة' },
+  GRG: { pats: ['جبس', 'gypro', 'جيبرو', 'gypsum'], std: 1, title: 'الجبس', qty_label: 'كمية الجبس للصب (كجم)', spread_label: 'معدل فرد الجبس', per_unit: 'م² / كجم', unit_short: 'كجم', per_col: 'معيار الكجم', lines_title: 'جبس الصب (كجم)', std_col: 'ما يعادل كجم', factor_label: 'كجم لكل وحدة' },
+};
+export const basisOf = (kind) => BASIS[String(kind).toUpperCase()] || { pats: [], std: 1, title: kind, qty_label: `كمية أساس ${kind} للصب`, spread_label: `معدل فرد ${kind}`, per_unit: 'م² / وحدة', unit_short: 'وحدة', per_col: 'معيار الوحدة', lines_title: `أصناف أساس ${kind}`, std_col: 'الكمية المعيارية', factor_label: 'معامل الوحدة' };
+const isCement = (kind) => String(kind).toUpperCase() === 'GRC';
+const basisCfg = (cfg, kind) => (isCement(kind) ? { ids: cfg.cement_material_ids, factor: cfg.cement_kg } : { ids: (cfg.basis?.[String(kind).toUpperCase()]?.ids || []).map(Number), factor: cfg.basis?.[String(kind).toUpperCase()]?.factor || {} });
+/** كمية الوحدة بالكيلو (أسمنت: من الإعدادات/الاسم/50)، وغيره: المعامل المحدد وإلا 1 (الكمية بوحدة الصنف نفسها) */
+const perUnitOf = (kind, m, factor) => (isCement(kind) ? kgOf(m, factor) : (Number(factor[m.id]) || 1));
+const patCond = (kind) => { const pats = basisOf(kind).pats; return { sql: pats.length ? `(${pats.map(() => `LOWER(${NORM('m.name')}) LIKE ?`).join(' OR ')})` : null, params: pats.map((p) => `%${p}%`) }; };
+/** أصناف أساس المتر المرشحة لنوع: اللي اسمها مطابق + اللي اتضافت يدوياً، مع المعامل الحالي */
+export async function basisCandidates(cfg, kind) {
+  const bc = basisCfg(cfg, kind); const pc = patCond(kind);
+  const byPat = pc.sql ? await all(`SELECT m.id, m.name FROM materials m WHERE m.active=1 AND ${pc.sql} ORDER BY m.name`, ...pc.params) : [];
+  const extra = bc.ids.length ? await all(`SELECT m.id, m.name FROM materials m WHERE m.id IN (${bc.ids.map(() => '?').join(',')}) ORDER BY m.name`, ...bc.ids) : [];
+  const seen = new Map(); for (const m of [...byPat, ...extra]) seen.set(m.id, m);
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, 'ar')).map((m) => ({ id: m.id, name: m.name, kg: perUnitOf(kind, m, bc.factor), kg_guessed: isCement(kind) && kgGuessed(m, bc.factor), selected: !bc.ids.length || bc.ids.includes(m.id) }));
 }
+export const cementCandidates = (cfg) => basisCandidates(cfg, 'GRC');
 export async function saveConfig(b) {
   for (const [k, f] of [['cast', 'cast_stage_id'], ['finish', 'finish_stage_id'], ['mold', 'mold_stage_id']]) {
     if (b[f] === undefined) continue; const v = b[f] === '' || b[f] === null ? null : Number(b[f]);
@@ -44,6 +62,16 @@ export async function saveConfig(b) {
     const map = {}; for (const [id, kg] of Object.entries(b.cement_kg || {})) { const n = Number(kg); if (!(n > 0 && n <= 1000)) throw new AppError('وزن الشيكارة غير صحيح'); map[Number(id)] = n; }
     await setSetting(CFG_KEYS.kg, JSON.stringify(map));
   }
+  if (b.basis) {
+    const kind = await kindOf(b.basis.kind); const key = kind.toUpperCase();
+    const ids = [...new Set((b.basis.ids || []).map(Number).filter(Boolean))];
+    if (!ids.length) throw new AppError(`اختر صنف واحد على الأقل لأساس متر ${kind}`);
+    const factor = {}; for (const [id, v] of Object.entries(b.basis.factor || {})) { const n = Number(v); if (!(n > 0 && n <= 1000)) throw new AppError(isCement(kind) ? 'وزن الشيكارة غير صحيح' : 'معامل الوحدة غير صحيح'); factor[Number(id)] = n; }
+    const pc = patCond(kind); const cand = pc.sql ? (await all(`SELECT m.id FROM materials m WHERE m.active=1 AND ${pc.sql}`, ...pc.params)).map((x) => Number(x.id)) : [];
+    const finalIds = ids.length === cand.length && ids.every((i) => cand.includes(i)) ? [] : ids;   // كل المطابقين بالاسم بدون إضافات = تلقائي (أي صنف جديد بالاسم بيدخل لوحده)
+    if (isCement(kind)) { await setSetting(CFG_KEYS.cement, JSON.stringify(finalIds)); await setSetting(CFG_KEYS.kg, JSON.stringify(factor)); }
+    else { const cur = json(await getSetting(CFG_KEYS.basis), {}); cur[key] = { ids: finalIds, factor }; await setSetting(CFG_KEYS.basis, JSON.stringify(cur)); }
+  }
   const c = await getConfig();
   const ids = [c.cast_stage_id, c.finish_stage_id, c.mold_stage_id].filter(Boolean);
   if (new Set(ids).size !== ids.length) throw new AppError('كل مرحلة لازم تتربط بدور مختلف (صب / تشطيب / قوالب)');
@@ -53,7 +81,7 @@ export async function saveConfig(b) {
 /** أنواع المنتج التام المتاحة (من الإعدادات ← نوع المنتج التام) */
 export const productKinds = async () => (await all('SELECT name FROM finished_types WHERE active=1 ORDER BY id')).map((x) => x.name);
 /** يتحقق من النوع ويرجّع اسمه كما هو متكوّد؛ فاضي ← أول نوع نشط */
-const kindOf = async (k) => {
+export const kindOf = async (k) => {
   const names = await productKinds(); const v = String(k || '').trim();
   if (!v) { if (!names.length) throw new AppError('كوّد نوع منتج تام واحد على الأقل من الإعدادات'); return names[0]; }
   const hit = names.find((n) => n.toUpperCase() === v.toUpperCase());
@@ -111,15 +139,17 @@ async function moldBlock(stageId, month, projectId) {
   return { stage_id: stageId, name: await val('SELECT name FROM stages WHERE id=?', stageId), by_project, total: projectId ? r2(by_project.reduce((t, r) => t + r.total, 0)) : total, allocated_unassigned: !!(un && base.length && baseSum > 0) };
 }
 
-/** شكاير الأسمنت المصروفة للصب في الشهر محوّلة لشكاير معيارية 50 كجم (الأصناف 30 كجم وغيرها بتتحول بالوزن) */
-async function systemBags(cfg, castIds, month, projectId) {
+/** كمية أساس المتر (أسمنت/بوليستر/جبس حسب النوع) المصروفة للصب في الشهر محوّلة للوحدة المعيارية (أسمنت: شيكارة 50 كجم) */
+async function systemBags(cfg, kind, castIds, month, projectId) {
   if (!castIds.length) return { lines: [], bags: 0 };
+  const bc = basisCfg(cfg, kind); const bs = basisOf(kind); const pc = patCond(kind);
+  let cond, cp;
+  if (bc.ids.length) { cond = `m.id IN (${bc.ids.map(() => '?').join(',')})`; cp = bc.ids; } else if (pc.sql) { cond = pc.sql; cp = pc.params; } else return { lines: [], bags: 0 };
   const pw = projectId ? ' AND c.project_id=?' : ''; const pp = projectId ? [projectId] : [];
-  const ids = cfg.cement_material_ids; const iw = ids.length ? ` AND c.material_id IN (${ids.map(() => '?').join(',')})` : '';
   const rows = await all(`SELECT m.id, m.name, SUM(c.qty) qty FROM cost_lines c JOIN materials m ON m.id=c.material_id
-    WHERE substr(c.date,1,7)=? AND c.stage_id IN (${castIds.map(() => '?').join(',')}) AND c.cost_type='material' AND c.cost_class<>'transfer' AND ${NORM('m.name')} LIKE '%اسمنت%'${iw}${pw}
-    GROUP BY m.id, m.name ORDER BY m.name`, month, ...castIds, ...ids, ...pp);
-  const lines = rows.map((r) => { const kg = kgOf(r, cfg.cement_kg); return { material_id: r.id, name: r.name, qty: r4(r.qty), kg, kg_guessed: kgGuessed(r, cfg.cement_kg), std_bags: r4(r.qty * kg / STD_BAG_KG) }; });
+    WHERE substr(c.date,1,7)=? AND c.stage_id IN (${castIds.map(() => '?').join(',')}) AND c.cost_type='material' AND c.cost_class<>'transfer' AND ${cond}${pw}
+    GROUP BY m.id, m.name ORDER BY m.name`, month, ...castIds, ...cp, ...pp);
+  const lines = rows.map((r) => { const kg = perUnitOf(kind, r, bc.factor); return { material_id: r.id, name: r.name, qty: r4(r.qty), kg, kg_guessed: isCement(kind) && kgGuessed(r, bc.factor), std_bags: r4(r.qty * kg / bs.std) }; });
   return { lines, bags: r4(lines.reduce((t, l) => t + l.std_bags, 0)) };
 }
 
@@ -133,7 +163,7 @@ export async function computeLive(month, projectId = 0, inputs = null, kind = ''
   const spread = num(inputs?.spread_rate ?? saved?.spread_rate);
   const castIds = await kindStageIds(cfg.cast_stage_id, kind), finishIds = await kindStageIds(cfg.finish_stage_id, kind);
   const [cast, finish, mold] = [await stageBlock(cfg.cast_stage_id, castIds, month, projectId), await stageBlock(cfg.finish_stage_id, finishIds, month, projectId), await moldBlock(cfg.mold_stage_id, month, projectId)];
-  const sys = await systemBags(cfg, castIds, month, projectId);
+  const sys = await systemBags(cfg, kind, castIds, month, projectId);
   const bags = sys.bags;   // الشكاير دايماً من المنصرف بالنظام (مفيش إدخال يدوي)
   const area = r2(bags * spread);
   if (cast) for (const m of cast.materials) m.per_bag = bags > 0 ? r4(m.qty / bags) : null;   // معيار الشيكارة
@@ -141,7 +171,7 @@ export async function computeLive(month, projectId = 0, inputs = null, kind = ''
   if (cast) cast.per_m2 = per(cast); if (finish) finish.per_m2 = per(finish);
   const unit_cost = { cast: cast?.per_m2 ?? null, finish: finish?.per_m2 ?? null, total: area > 0 ? r2((cast?.total || 0) / area + (finish?.total || 0) / area) : null };
   return { month, kind, project_id: projectId || 0, config: cfg, stage_ids: { cast: castIds, finish: finishIds },
-    inputs: { cement_lines: sys.lines, bags_system: sys.bags, bags, spread_rate: spread, area },
+    inputs: { cement_lines: sys.lines, bags_system: sys.bags, bags, spread_rate: spread, area, basis: { ...basisOf(kind), pats: undefined } },
     cast, finish, mold, unit_cost, pool_total: r2((cast?.total || 0) + (finish?.total || 0)) };
 }
 
@@ -163,7 +193,7 @@ export async function savePeriod(b, user) {
   const month = b.month, pid = 0, kind = await kindOf(b.kind);   // المدخلات شهرية فقط (مش لكل مشروع)
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح');
   const spread = b.spread_rate === '' || b.spread_rate === null || b.spread_rate === undefined ? 0 : Number(b.spread_rate);
-  if (!(spread >= 0) || spread > 100) throw new AppError('معدل فرد الشيكارة غير صحيح');
+  if (!(spread >= 0) || spread > 100) throw new AppError(`${basisOf(kind).spread_label} غير صحيح`);
   const cur = await getPeriod(month, pid, kind);
   if (cur?.status === 'approved') throw new AppError('الشهر معتمد — أعد فتحه أولاً لتعديل المدخلات');
   if (cur) await run('UPDATE unit_cost_periods SET spread_rate=? WHERE id=?', spread, cur.id);
@@ -173,11 +203,11 @@ export async function savePeriod(b, user) {
 
 export async function approvePeriod(month, projectId, user, kind = '') {
   kind = await kindOf(kind); const pid = 0; const cur = await getPeriod(month, pid, kind);
-  if (!cur) throw new AppError('احفظ معدل فرد الشيكارة للشهر أولاً');
+  if (!cur) throw new AppError(`احفظ ${basisOf(kind).spread_label} للشهر أولاً`);
   if (cur.status === 'approved') throw new AppError('الشهر معتمد بالفعل');
   const live = await computeLive(month, pid, null, kind);
-  if (!(live.inputs.spread_rate > 0)) throw new AppError('أدخل معدل فرد الشيكارة قبل الاعتماد');
-  if (!(live.inputs.bags > 0)) throw new AppError('لا توجد شكاير أسمنت مصروفة للصب في هذا الشهر — تأكد من صنف الأسمنت أو أدخل العدد يدوياً');
+  if (!(live.inputs.spread_rate > 0)) throw new AppError(`أدخل ${basisOf(kind).spread_label} قبل الاعتماد`);
+  if (!(live.inputs.bags > 0)) throw new AppError(`لا توجد كميات ${isCement(kind) ? 'أسمنت' : basisOf(kind).title.replace(/^ال/, '')} مصروفة للصب في هذا الشهر — تأكد من أصناف الأساس في «ربط المراحل والمواد»`);
   if (!live.config.cast_stage_id || !live.config.finish_stage_id) throw new AppError('اربط مرحلتي الصب والتشطيب من إعدادات التكاليف');
   if (!live.stage_ids.cast.length || !live.stage_ids.finish.length) throw new AppError(`مفيش مراحل فرعية لنوع ${kind} تحت الصب والتشطيب — اسم المرحلة الفرعية لازم يحتوي على ${kind}`);
   await run(`UPDATE unit_cost_periods SET status='approved', snapshot=?, approved_by=?, approved_at=to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS') WHERE id=?`, JSON.stringify(live), user?.id ?? null, cur.id);
