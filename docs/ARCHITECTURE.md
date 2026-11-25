@@ -232,3 +232,11 @@ npm install · npm start (localhost:3000) · npm test · npm run reset-db -- --y
 - بدون `.env` ← Postgres مضمّن في `data/pgdata`. مع `DATABASE_URL` ← Supabase.
 - الدخول الأول: `admin / admin123` (يطلب تغيير).
 - **شغّل نسخة سيرفر واحدة فقط** على نفس القاعدة.
+
+
+## المرحلة 3 — الإنتاج التام والتسليم والمستخلص (مبنية)
+- **الكود**: `server/lib/phase3.js` (سجل الإنتاج، تشغيل التكلفة، التسليم، المستخلص)، مسارات `/api/costs/run*` و`/api/p3/*` و`/api/reports/{quantities,profitability,client-balances,client-statement}`، شاشات `public/js/pages/sales.js` + `costs.js (projectsCostPage)`.
+- **الجداول**: `production_logs/_lines`, `costing_runs/_items`, `delivery_notes/_lines`, `deduction_types`, `client_certificates/_lines/_adjustments`؛ وأعمدة `project_items.area_m2/kind/fg_material_id` و`materials.fg_item_id`.
+- **المخزون**: كل بند مشروع له صنف مخفي `FG-…` في دفتر المخزون عشان نستخدم نفس محرك المتوسط المرجح وكارت الصنف؛ المخزن `type='finished'`. الإنتاج يدخل عند اعتماد التشغيل (`doc_type=fgrun`) والتسليم يخرج (`delivery`) وعليه `onRecost`.
+- **القيود**: اعتماد التشغيل Dr 1222 / Cr إنتاج تحت التشغيل (صب/تشطيب بسعر المتر + قوالب + مباشر) و5910 للغير مباشر؛ التسليم Dr 5900 / Cr 1222 وDr 1240 / Cr 4100؛ المستخلص: الخصم Dr حساب الخصم / Cr 1240 والإضافة العكس.
+- **ضوابط**: سعر المتر المعتمد شرط لاعتماد التشغيل؛ مينفعش سجل إنتاج في شهر معتمد؛ إعادة فتح سعر المتر ممنوعة لو في تشغيل معتمد عليه؛ إلغاء إذن داخل في مستخلص ممنوع.
