@@ -58,7 +58,7 @@ const disbLines = mkLines({ typeList: 'payment_types', typeLabel: 'نوع الد
 const collLines = mkLines({ typeList: 'receipt_types', typeLabel: 'نوع المقبوض', kind: 'collection', title: 'المقبوضات — أضف أكتر من سطر في نفس السند', withStage: false });
 
 function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind, srcLabel }) {
-  const listMulti = kinds.length > 1; const multi = listMulti && !newKind; const kindOpts = () => kinds.map((k) => [k, META.voucher_kinds[k]]);
+  const listMulti = kinds.length > 1; const multi = listMulti && !newKind; const LEGACY = new Set(['receipt', 'payment_other', 'expense', 'supplier_payment']); const kindOpts = () => kinds.map((k) => [k, META.voucher_kinds[k] + (newKind && LEGACY.has(k) ? ' (قديم)' : '')]);
   const amountCol = { k: 'amount', l: 'المبلغ', num: true, fmt: (v) => fmt(v) };
   return docScreen({
     type: 'voucher', perm, title, noun, newLabel, note, fixed: only ? { only } : listMulti ? {} : { kind: kinds[0] },
@@ -137,12 +137,12 @@ function extraPanel(ctx) {
   return null;
 }
 
-export const expensesVoucherPage = voucherScreen({ perm: 'finance.expenses', title: 'سندات المدفوعات', noun: 'سند', kinds: ['disbursement', 'expense', 'supplier_payment'], newKind: 'disbursement', only: 'expenses', srcLabel: 'مكان الصرف', newLabel: 'سند صرف جديد',
+export const expensesVoucherPage = voucherScreen({ perm: 'finance.expenses', title: 'سندات المدفوعات', noun: 'سند', kinds: ['disbursement', 'expense', 'supplier_payment', 'payment_other'], newKind: 'disbursement', only: 'expenses', srcLabel: 'مكان الصرف', newLabel: 'سند صرف جديد',
   note: 'سند واحد تصرف بيه أكتر من مصروف وتسدد أكتر من مورد. اختر مكان الصرف (خزينة / بنك / عهدة) وبعدين أضف الأسطر. المصروف المباشر لازم له مشروع ومرحلة تصنيع، وسداد المورد بيتوزع تلقائياً على أقدم فواتيره المفتوحة والباقي بيفضل دفعة مقدمة. أنواع المدفوعات بتتكوّد من الإعدادات.' });
 export const wagePaymentsPage = voucherScreen({ perm: 'finance.wages', title: 'صرف الأجور والمرتبات', noun: 'سند صرف أجور', kinds: ['wage_payment'], newLabel: 'صرف أجور', note: 'اصرف مستحقات كشوف اليوميات والمرتبات الشهرية من خزينة أو عهدة.' });
 export const custodyVouchersPage = voucherScreen({ perm: 'finance.custody', title: 'سندات العهد والتحويلات', noun: 'سند', kinds: ['custody_issue', 'custody_return', 'transfer'], only: 'custody', newLabel: 'سند جديد',
   note: 'صرف عهدة لموظف، أو رد باقي العهدة للخزينة، أو تحويل بين خزينتين/بنكين. مصروفات العهدة بتتسجل من «سندات المدفوعات» باختيار مكان الصرف: عهدة.' });
-export const otherVouchersPage = voucherScreen({ perm: 'finance.other', title: 'سندات المقبوضات', noun: 'سند', kinds: ['collection', 'receipt', 'payment_other'], newKind: 'collection', only: 'receipts', srcLabel: 'مكان الإيداع', newLabel: 'سند مقبوضات جديد',
+export const otherVouchersPage = voucherScreen({ perm: 'finance.other', title: 'سندات المقبوضات', noun: 'سند', kinds: ['collection', 'receipt'], newKind: 'collection', only: 'receipts', srcLabel: 'مكان الإيداع', newLabel: 'سند مقبوضات جديد',
   note: 'سند واحد تستلم بيه أكتر من مقبوض. اختر مكان الإيداع (خزينة / بنك / عهدة) وبعدين أضف الأسطر: نوع المقبوض ثم الاسم والقيمة. أنواع المقبوضات بتتكوّد من الإعدادات (عميل / مورد / عامل / عهدة / حساب).' });
 
 // ---------------- أرصدة الخزن والعهد + كشوف الحساب ----------------

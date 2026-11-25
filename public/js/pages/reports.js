@@ -48,7 +48,7 @@ function openDrill(filters, title) {
   GET('/reports/cost-lines', filters).then((rows) => body.replaceChildren(costTable(rows)));
 }
 // رابط المستند المصدر لسطر تكلفة: [الصفحة, مفتاح الصلاحية]
-const VOUCHER_PG = { supplier_payment: 'expenses', expense: 'expenses', disbursement: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'custody', receipt: 'other', payment_other: 'other', collection: 'other' };
+const VOUCHER_PG = { supplier_payment: 'expenses', expense: 'expenses', disbursement: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'custody', receipt: 'other', payment_other: 'expenses', collection: 'other' };
 const docPage = (r) => {
   const t = r.source_type;
   if (t === 'issue') return ['inventory', r.doc_kind === 'site' || r.doc_kind === 'site_in' ? 'site-transfers' : r.doc_kind === 'return' ? 'returns' : 'issues'];

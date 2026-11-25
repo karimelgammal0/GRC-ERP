@@ -12,7 +12,7 @@ const MODULE_OF = {
   stock_issue: 'inventory', stock_adjustment: 'inventory', labor_sheet: 'hr', labor_advance: 'hr', payroll: 'hr', voucher: 'finance', production_log: 'production', delivery_note: 'sales', client_certificate: 'sales',
 };
 export { canModule as canUse } from '../lib/perms.js';
-const VOUCHER_PAGE = { supplier_payment: 'expenses', expense: 'expenses', disbursement: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'custody', receipt: 'other', payment_other: 'other', collection: 'other' };
+const VOUCHER_PAGE = { supplier_payment: 'expenses', expense: 'expenses', disbursement: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'custody', receipt: 'other', payment_other: 'expenses', collection: 'other' };
 const TYPE_PAGE = { purchase_request: 'purchases.requests', purchase_order: 'purchases.orders', goods_receipt: 'purchases.receipts', purchase_invoice: 'purchases.invoices', purchase_return: 'purchases.returns', stock_adjustment: 'inventory.adjustments', labor_sheet: 'hr.labor', labor_advance: 'hr.labor-advances', payroll: 'hr.payroll', production_log: 'production.log', delivery_note: 'sales.deliveries', client_certificate: 'sales.certificates' };
 const ISSUE_PAGE = { production: 'inventory.issues', overhead: 'inventory.issues', site: 'inventory.site-transfers', site_in: 'inventory.site-transfers', return: 'inventory.returns' };
 /** مفتاح صفحة المستند (حسب نوعه وكوده لو متعدد الصفحات) */
@@ -80,7 +80,7 @@ const LISTS = {
       FROM production_logs d JOIN projects pr ON pr.id=d.project_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   delivery_note: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, c.name client_name FROM delivery_notes d JOIN projects pr ON pr.id=d.project_id LEFT JOIN clients c ON c.id=d.client_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   client_certificate: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, c.name client_name FROM client_certificates d JOIN projects pr ON pr.id=d.project_id JOIN clients c ON c.id=d.client_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
-  voucher: async (q) => { const base = []; if (q.only === 'expenses') base.push(`d.kind IN ('disbursement','expense','supplier_payment')`); if (q.only === 'receipts') base.push(`d.kind IN ('collection','receipt','payment_other')`); if (q.only === 'custody') base.push(`d.kind IN ('custody_issue','custody_return','transfer')`);
+  voucher: async (q) => { const base = []; if (q.only === 'expenses') base.push(`d.kind IN ('disbursement','expense','supplier_payment','payment_other')`); if (q.only === 'receipts') base.push(`d.kind IN ('collection','receipt')`); if (q.only === 'custody') base.push(`d.kind IN ('custody_issue','custody_return','transfer')`);
     const { sql, p } = where(q, base); const rows = await all(`SELECT d.*, s.name supplier_name, t.name treasury_name, t2.name to_treasury_name, c.name custodian_name, ec.name category_name, a.name account_name
       FROM vouchers d LEFT JOIN suppliers s ON s.id=d.supplier_id LEFT JOIN treasuries t ON t.id=d.treasury_id LEFT JOIN treasuries t2 ON t2.id=d.to_treasury_id
       LEFT JOIN custodians c ON c.id=d.custodian_id LEFT JOIN expense_categories ec ON ec.id=d.category_id LEFT JOIN accounts a ON a.id=d.account_id
