@@ -369,3 +369,24 @@ export async function certifiableLines(projectId, { from, to, certId } = {}) {
       AND NOT EXISTS (SELECT 1 FROM client_certificate_lines cl JOIN client_certificates c ON c.id=cl.cert_id WHERE cl.delivery_line_id=dl.id AND c.status='posted' ${certId ? 'AND c.id<>' + Number(certId) : ''})
     ORDER BY n.date, dl.id`, ...p);
 }
+
+/** كميات الإنتاج التام: المطلوب (تعاقدي) / منتج في الشهر / منتج حتى الآن / مسلّم / مستخلص / رصيد المخزن */
+export async function quantitiesReport(month, projectId = null) {
+  if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح (YYYY-MM)');
+  const end = monthEnd(month); const w = projectId ? 'AND i.project_id=?' : ''; const pp = projectId ? [projectId] : [];
+  const items = await all(`SELECT i.id item_id, i.name, i.qty contract_qty, i.area_m2, p.id project_id, p.name project_name, u.name unit_name, i.fg_material_id
+    FROM project_items i JOIN projects p ON p.id=i.project_id LEFT JOIN units u ON u.id=i.unit_id
+    WHERE i.active=1 AND (EXISTS (SELECT 1 FROM production_log_lines l JOIN production_logs d ON d.id=l.log_id WHERE l.item_id=i.id AND d.status='posted' AND d.date<=?)) ${w} ORDER BY p.name, i.name`, end, ...pp);
+  const wh = await fgWarehouse(); const out = [];
+  for (const it of items) {
+    const q = async (sql, ...a) => num(await val(sql, ...a));
+    const inMonth = await q(`SELECT COALESCE(SUM(l.qty),0) FROM production_log_lines l JOIN production_logs d ON d.id=l.log_id WHERE l.item_id=? AND d.status='posted' AND substr(d.date,1,7)=?`, it.item_id, month);
+    const toDate = await q(`SELECT COALESCE(SUM(l.qty),0) FROM production_log_lines l JOIN production_logs d ON d.id=l.log_id WHERE l.item_id=? AND d.status='posted' AND d.date<=?`, it.item_id, end);
+    const delivered = await q(`SELECT COALESCE(SUM(l.qty),0) FROM delivery_note_lines l JOIN delivery_notes d ON d.id=l.note_id WHERE l.item_id=? AND d.status='posted' AND d.date<=?`, it.item_id, end);
+    const certified = await q(`SELECT COALESCE(SUM(cl.qty),0) FROM client_certificate_lines cl JOIN client_certificates c ON c.id=cl.cert_id WHERE cl.item_id=? AND c.status='posted' AND c.date<=?`, it.item_id, end);
+    const stock = it.fg_material_id ? num((await stockAsOf(wh, it.fg_material_id, end)).qty) : 0;
+    out.push({ ...it, in_month: r4(inMonth), meters_month: r4(inMonth * num(it.area_m2)), to_date: r4(toDate), delivered: r4(delivered), certified: r4(certified), stock: r4(stock), uncosted: r4(toDate - stock - delivered),
+      remaining: it.contract_qty === null ? null : r4(num(it.contract_qty) - toDate) });
+  }
+  return out;
+}

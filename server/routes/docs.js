@@ -5,14 +5,15 @@ import { stockOf } from '../lib/stock.js';
 import { nextNo, peekNo, audit } from '../lib/core.js';
 import { can, need, canModule, maskEmployees } from '../lib/perms.js';
 import { insertRow } from '../db.js';
+import '../lib/phase3.js';
 
 const MODULE_OF = {
   purchase_request: 'purchases', purchase_order: 'purchases', goods_receipt: 'purchases', purchase_invoice: 'purchases', purchase_return: 'purchases',
-  stock_issue: 'inventory', stock_adjustment: 'inventory', labor_sheet: 'hr', labor_advance: 'hr', payroll: 'hr', voucher: 'finance',
+  stock_issue: 'inventory', stock_adjustment: 'inventory', labor_sheet: 'hr', labor_advance: 'hr', payroll: 'hr', voucher: 'finance', production_log: 'production', delivery_note: 'sales', client_certificate: 'sales',
 };
 export { canModule as canUse } from '../lib/perms.js';
 const VOUCHER_PAGE = { supplier_payment: 'expenses', expense: 'expenses', disbursement: 'expenses', wage_payment: 'wages', custody_issue: 'custody', custody_return: 'custody', transfer: 'custody', receipt: 'other', payment_other: 'other', collection: 'other' };
-const TYPE_PAGE = { purchase_request: 'purchases.requests', purchase_order: 'purchases.orders', goods_receipt: 'purchases.receipts', purchase_invoice: 'purchases.invoices', purchase_return: 'purchases.returns', stock_adjustment: 'inventory.adjustments', labor_sheet: 'hr.labor', labor_advance: 'hr.labor-advances', payroll: 'hr.payroll' };
+const TYPE_PAGE = { purchase_request: 'purchases.requests', purchase_order: 'purchases.orders', goods_receipt: 'purchases.receipts', purchase_invoice: 'purchases.invoices', purchase_return: 'purchases.returns', stock_adjustment: 'inventory.adjustments', labor_sheet: 'hr.labor', labor_advance: 'hr.labor-advances', payroll: 'hr.payroll', production_log: 'production.log', delivery_note: 'sales.deliveries', client_certificate: 'sales.certificates' };
 const ISSUE_PAGE = { production: 'inventory.issues', overhead: 'inventory.issues', site: 'inventory.site-transfers', site_in: 'inventory.site-transfers', return: 'inventory.returns' };
 /** مفتاح صفحة المستند (حسب نوعه وكوده لو متعدد الصفحات) */
 const pageKey = (type, kind) => (type === 'stock_issue' ? ISSUE_PAGE[kind] : type === 'voucher' ? (VOUCHER_PAGE[kind] ? `finance.${VOUCHER_PAGE[kind]}` : null) : TYPE_PAGE[type]);
@@ -26,7 +27,7 @@ function where(q, base = []) {
   if (q.from) { w.push('d.date>=?'); p.push(q.from); }
   if (q.to) { w.push('d.date<=?'); p.push(q.to); }
   eq('d.status', 'status'); eq('d.supplier_id', 'supplier_id'); eq('d.project_id', 'project_id'); eq('d.kind', 'kind');
-  eq('d.warehouse_id', 'warehouse_id'); eq('d.site_id', 'site_id'); eq('d.treasury_id', 'treasury_id'); eq('d.custodian_id', 'custodian_id');
+  eq('d.client_id', 'client_id'); eq('d.warehouse_id', 'warehouse_id'); eq('d.site_id', 'site_id'); eq('d.treasury_id', 'treasury_id'); eq('d.custodian_id', 'custodian_id');
   if (q.q) { w.push('d.no LIKE ?'); p.push(`%${q.q}%`); }
   return { sql: w.length ? 'WHERE ' + w.join(' AND ') : '', p };
 }
@@ -74,6 +75,11 @@ const LISTS = {
   labor_advance: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, t.name treasury_name, c.name custodian_name, (SELECT COUNT(*) FROM labor_advance_lines WHERE advance_id=d.id) n_lines
       FROM labor_advances d LEFT JOIN treasuries t ON t.id=d.treasury_id LEFT JOIN custodians c ON c.id=d.custodian_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   payroll: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, (SELECT COUNT(*) FROM payroll_lines WHERE run_id=d.id) n_lines FROM payroll_runs d ${sql} ORDER BY d.month DESC, d.id DESC LIMIT 500`, ...p); },
+  production_log: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, (SELECT COALESCE(SUM(qty),0) FROM production_log_lines WHERE log_id=d.id) qty,
+      (SELECT COALESCE(SUM(qty*area_m2),0) FROM production_log_lines WHERE log_id=d.id) meters, (SELECT COUNT(*) FROM production_log_lines WHERE log_id=d.id) n_lines
+      FROM production_logs d JOIN projects pr ON pr.id=d.project_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
+  delivery_note: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, c.name client_name FROM delivery_notes d JOIN projects pr ON pr.id=d.project_id LEFT JOIN clients c ON c.id=d.client_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
+  client_certificate: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, c.name client_name FROM client_certificates d JOIN projects pr ON pr.id=d.project_id JOIN clients c ON c.id=d.client_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   voucher: async (q) => { const base = []; if (q.only === 'expenses') base.push(`d.kind IN ('disbursement','expense','supplier_payment')`); if (q.only === 'receipts') base.push(`d.kind IN ('collection','receipt','payment_other')`); if (q.only === 'custody') base.push(`d.kind IN ('custody_issue','custody_return','transfer')`);
     const { sql, p } = where(q, base); const rows = await all(`SELECT d.*, s.name supplier_name, t.name treasury_name, t2.name to_treasury_name, c.name custodian_name, ec.name category_name, a.name account_name
       FROM vouchers d LEFT JOIN suppliers s ON s.id=d.supplier_id LEFT JOIN treasuries t ON t.id=d.treasury_id LEFT JOIN treasuries t2 ON t2.id=d.to_treasury_id

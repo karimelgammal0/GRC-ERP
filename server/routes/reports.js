@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { can, canModule } from '../lib/perms.js';
-import { all, get, val, AppError, r2 } from '../db.js';
+import { all, get, val, AppError, r2, num } from '../db.js';
+import { quantitiesReport } from '../lib/phase3.js';
 import { acc, getSetting } from '../lib/core.js';
 
 const CLASS_LBL = { direct: 'مباشرة', indirect: 'غير مباشرة', admin: 'إدارية', transfer: 'تحويلات للمواقع' };
@@ -10,7 +11,7 @@ const TYPE_LBL = { material: 'أصناف', labor: 'عمالة', expense: 'مصر
 async function attachMoveDocs(moves) {
   const ids = (t, f = (m) => m.doc_type === t) => [...new Set(moves.filter(f).map((m) => Number(m.doc_id)).filter(Boolean))];
   const inList = (a) => a.map(() => '?').join(',');
-  const noTable = { receipt: 'goods_receipts', invoice: 'purchase_invoices', preturn: 'purchase_returns', adjustment: 'stock_adjustments' };
+  const noTable = { receipt: 'goods_receipts', invoice: 'purchase_invoices', preturn: 'purchase_returns', adjustment: 'stock_adjustments', delivery: 'delivery_notes' };
   const nos = {};
   for (const [t, tb] of Object.entries(noTable)) { const a = ids(t); if (a.length) for (const r of await all(`SELECT id, no FROM ${tb} WHERE id IN (${inList(a)})`, ...a)) nos[`${t}:${r.id}`] = { no: r.no }; }
   const iss = ids('issue'); const lines = [...new Set(moves.filter((m) => m.doc_type === 'issue').map((m) => Number(m.line_id)).filter(Boolean))];
@@ -61,6 +62,7 @@ const REPORT_PAGES = {
   'supplier-statement': ['purchases.supplier-statement'], 'supplier-balances': ['purchases.supplier-balances'],
   'treasury-statement': ['finance.treasury-statement'], 'treasury-balances': ['finance.treasuries'], 'custody-statement': ['finance.custody-statement'], 'custody-balances': ['finance.treasuries'],
   expenses: ['reports.expenses'], labor: ['reports.labor'], 'trial-balance': ['reports.trial-balance'], ledger: ['reports.ledger'], 'income-summary': ['reports.income'],
+  'client-balances': ['sales.client-balances'], 'client-statement': ['sales.client-statement'], profitability: ['sales.profitability'], quantities: ['production.quantities'],
 };
 export function reportRouter() {
   const r = Router();
@@ -153,7 +155,8 @@ export function reportRouter() {
   r.get('/stock-balances', async (req, res) => {
     const wh = req.query.warehouse_id || await val(`SELECT id FROM warehouses WHERE type='raw' ORDER BY id LIMIT 1`);
     const asOf = req.query.as_of;
-    const cat = req.query.category_id ? ' AND m.category_id=' + Number(req.query.category_id) : '';
+    const isFg = await val(`SELECT type FROM warehouses WHERE id=?`, wh) === 'finished';
+    const cat = (req.query.category_id ? ' AND m.category_id=' + Number(req.query.category_id) : '') + (isFg ? ' AND m.fg_item_id IS NOT NULL' : ' AND m.fg_item_id IS NULL');
     const rows = asOf
       ? await all(`SELECT m.id, m.code, m.name, m.min_qty, u.name unit, c.name category, COALESCE(x.bal_qty,0) qty, COALESCE(x.bal_value,0) value, COALESCE(x.avg_cost,0) avg_cost
           FROM materials m JOIN units u ON u.id=m.unit_id LEFT JOIN material_categories c ON c.id=m.category_id
@@ -206,6 +209,39 @@ export function reportRouter() {
     const out = rows.map((x) => ({ ...x, balance: r2(x.balance), aging: ag[x.id] || { current: 0, d30: 0, d60: 0, d90: 0 } })).filter((x) => Math.abs(x.balance) > 0.004 || req.query.all === '1');
     res.json({ rows: out, total: r2(out.reduce((s, x) => s + x.balance, 0)) });
   });
+
+  // ---------- العملاء والمبيعات ----------
+  r.get('/client-balances', async (req, res) => {
+    const asOf = req.query.as_of || '9999-12-31'; const ar = await acc('acc_ar');
+    const rows = await all(`SELECT c.id, c.code, c.name, c.phone, COALESCE(SUM(jl.debit-jl.credit),0) balance
+      FROM clients c LEFT JOIN journal_lines jl ON jl.client_id=c.id AND jl.account_id=? LEFT JOIN journal_entries je ON je.id=jl.entry_id AND je.date<=? GROUP BY c.id ORDER BY balance DESC`, ar, asOf);
+    // أعمار الدين: كل مستخلص (net) بيتسجل عند تاريخه، والتحصيلات بتتخصم من الأقدم (FIFO)
+    const today = new Date().toISOString().slice(0, 10); const out = [];
+    for (const x of rows) {
+      const bal = r2(x.balance); if (Math.abs(bal) < 0.005 && req.query.all !== '1') continue;
+      const debits = await all(`SELECT je.date, jl.debit amount FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id WHERE jl.client_id=? AND jl.account_id=? AND jl.debit>0 AND je.date<=? ORDER BY je.date, je.id`, x.id, ar, asOf);
+      let paid = r2(num(await val(`SELECT COALESCE(SUM(jl.credit),0) FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id WHERE jl.client_id=? AND jl.account_id=? AND je.date<=?`, x.id, ar, asOf)));
+      const ag = { current: 0, d30: 0, d60: 0, d90: 0 };
+      for (const d of debits) { const use = Math.min(paid, d.amount); paid = r2(paid - use); const open = r2(d.amount - use); if (open < 0.005) continue;
+        const days = Math.floor((Date.parse(today) - Date.parse(d.date)) / 86400000); const b = days <= 30 ? 'current' : days <= 60 ? 'd30' : days <= 90 ? 'd60' : 'd90'; ag[b] = r2(ag[b] + open); }
+      out.push({ ...x, balance: bal, aging: ag });
+    }
+    res.json({ rows: out, total: r2(out.reduce((s, x) => s + x.balance, 0)) });
+  });
+  r.get('/client-statement', async (req, res) => {
+    const c = await get('SELECT * FROM clients WHERE id=?', req.query.client_id); if (!c) throw new AppError('اختر العميل');
+    res.json(await subStatement('client_id', c.id, await acc('acc_ar'), req.query.from, req.query.to));
+  });
+  r.get('/profitability', async (req, res) => {
+    const w = ["n.status='posted'"]; const p = [];
+    if (req.query.from) { w.push('n.date>=?'); p.push(req.query.from); } if (req.query.to) { w.push('n.date<=?'); p.push(req.query.to); } if (req.query.project_id) { w.push('n.project_id=?'); p.push(req.query.project_id); }
+    const rows = await all(`SELECT pr.id project_id, pr.name project_name, c.name client_name, COALESCE(SUM(n.total),0) revenue, COALESCE(SUM(n.total_cost),0) cost, COUNT(*) notes
+      FROM delivery_notes n JOIN projects pr ON pr.id=n.project_id LEFT JOIN clients c ON c.id=n.client_id WHERE ${w.join(' AND ')} GROUP BY pr.id, pr.name, c.name ORDER BY revenue DESC`, ...p);
+    const out = rows.map((x) => ({ ...x, revenue: r2(x.revenue), cost: r2(x.cost), profit: r2(x.revenue - x.cost), margin: x.revenue > 0 ? r2((x.revenue - x.cost) / x.revenue * 100) : 0 }));
+    const tr = r2(out.reduce((s, x) => s + x.revenue, 0)), tc = r2(out.reduce((s, x) => s + x.cost, 0));
+    res.json({ rows: out, revenue: tr, cost: tc, profit: r2(tr - tc), margin: tr > 0 ? r2((tr - tc) / tr * 100) : 0 });
+  });
+  r.get('/quantities', async (req, res) => res.json(await quantitiesReport(String(req.query.month || ''), Number(req.query.project_id) || null)));
 
   // ---------- الخزن والعهد ----------
   async function subStatement(dimCol, dimId, accountId, from, to, sign) {
@@ -286,8 +322,9 @@ export function reportRouter() {
       WHERE a.type IN ('revenue','expense') AND je.date BETWEEN ? AND ? GROUP BY a.id ORDER BY a.code`, from, to);
     const rev = rows.filter((x) => x.type === 'revenue').map((x) => ({ ...x, amount: -x.net }));
     const exp = rows.filter((x) => x.type === 'expense').map((x) => ({ ...x, amount: x.net }));
-    const tr = r2(rev.reduce((s, x) => s + x.amount, 0)), te = r2(exp.reduce((s, x) => s + x.amount, 0));
-    res.json({ revenue: rev, expenses: exp, total_revenue: tr, total_expenses: te, net: r2(tr - te) });
+    const cogsRows = exp.filter((x) => x.code === '5900'), opex = exp.filter((x) => x.code !== '5900');
+    const tr = r2(rev.reduce((s, x) => s + x.amount, 0)), te = r2(exp.reduce((s, x) => s + x.amount, 0)), tc = r2(cogsRows.reduce((s, x) => s + x.amount, 0)), to2 = r2(opex.reduce((s, x) => s + x.amount, 0));
+    res.json({ revenue: rev, expenses: exp, cogs: cogsRows, operating_expenses: opex, total_revenue: tr, total_expenses: te, total_cogs: tc, gross_profit: r2(tr - tc), total_operating_expenses: to2, net: r2(tr - te) });
   });
 
   // ---------- لوحة التحكم ----------

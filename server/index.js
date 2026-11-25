@@ -11,6 +11,7 @@ import { docRouter, helperRouter } from './routes/docs.js';
 import { reportRouter } from './routes/reports.js';
 import { accountsRouter } from './routes/accounts.js';
 import { costsRouter } from './routes/costs.js';
+import { phase3Router } from './routes/phase3.js';
 import { writeQueue } from './lib/queue.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,7 @@ app.use('/api/helpers', helperRouter());
 app.use('/api/reports', reportRouter());
 app.use('/api/acc', await accountsRouter());
 app.use('/api/costs', costsRouter());
+app.use('/api/p3', phase3Router());
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'غير موجود' }));
 app.use((err, req, res, next) => {

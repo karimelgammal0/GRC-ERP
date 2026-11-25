@@ -111,7 +111,42 @@ export async function historyPage(root) {
   bar.run();
 }
 
-// ---------- تكاليف مشروعات (تبويب مبدئي — المحتوى لاحقاً) ----------
-export async function projectsCostPage(root) {
-  root.replaceChildren(pageHead('تكاليف مشروعات'), card('قيد التجهيز', h('div.note', 'التبويب ده متخصص لتكاليف المشروعات — هنحدد محتواه في خطوة جاية.')));
+// ---------- تكاليف مشروعات: تكلفة المنتج التام لكل مشروع وشهر ----------
+const RUN_ST = { new: ['لم يُحسب', ''], draft: ['مسودة', 'warn'], approved: ['معتمد', 'ok'] };
+export async function projectsCostPage(root, params = {}) {
+  const host = h('div');
+  const overview = async (v) => {
+    const rows = await GET('/costs/runs', { month: v.month });
+    host.replaceChildren(h('div.kpis', kpi('مشروعات فيها إنتاج تام', String(rows.length), v.month), kpi('معتمد', String(rows.filter((r) => r.status === 'approved').length)), kpi('لسه ما اتعتمدش', String(rows.filter((r) => r.status !== 'approved').length), '', rows.some((r) => r.status !== 'approved') ? 'warn' : '')),
+      h('div.note', 'آخر الشهر: اعتمد سعر المتر الأول من «تكلفة المتر»، وبعدها اعتمد تكلفة كل مشروع هنا. تكلفة المشروع = سعر المتر × الأمتار التامة + القوالب + المباشر + نصيبه من غير المباشر، وبتتوزع على بنوده بالمتر التام.'),
+      table({ name: 'تكاليف-مشروعات', rows, onRow: (r) => detail(v.month, r.project_id), empty: 'لا يوجد إنتاج تام مسجّل في الشهر ده',
+        cols: [{ k: 'project_name', l: 'المشروع', render: (r) => h('b', r.project_name) }, { k: 'qty', l: 'القطع', num: true, fmt: (n) => fq(n) }, { k: 'meters', l: 'الأمتار التامة', num: true, fmt: (n) => fq(n) },
+          { k: 'status', l: 'الحالة', render: (r) => badge(RUN_ST[r.status][0], RUN_ST[r.status][1]), text: (r) => RUN_ST[r.status][0] }, { k: 'total', l: 'تكلفة المشروع', num: true, fmt: (n) => (n === null ? '' : fmt(n)) }, { k: 'per_meter', l: 'تكلفة المتر', num: true, fmt: (n) => (n === null ? '' : fmt(n)) }] }));
+  };
+  const detail = guard(async (month, projectId) => {
+    const r = await GET('/costs/run', { month, project_id: projectId });
+    const approved = r.status === 'approved'; const carry = h('input', { type: 'number', step: 'any', value: r.carry || 0, disabled: approved || !can('costs.projects-cost.save') });
+    const reload = () => detail(month, projectId);
+    const act = (label, cls, fn) => h('button.btn' + (cls ? '.' + cls : ''), { onclick: guard(async () => { if ((await fn()) !== false) reload(); }) }, label);
+    const P = r.parts || {};
+    const back = h('a', { href: '#', onclick: (e) => { e.preventDefault(); fb.run(); root.replaceChildren(pageHead('تكاليف مشروعات'), fb, host); } }, '← تكاليف مشروعات');
+    host.replaceChildren(h('div.crumb', back),
+      h('div.kpis', kpi('المشروع', r.project_name, month), kpi('الحالة', RUN_ST[r.status || 'new'][0], approved ? r.approved_at || '' : '', approved ? '' : 'warn'), kpi('الأمتار التامة', fq(r.total_meters)), r.total ? kpi('تكلفة المشروع', fmt(r.total), `تكلفة المتر ${fmt(r.per_meter)}`) : null),
+      ...(r.problems || []).map((p) => h('div.note.bad', '⚠ ' + p)),
+      r.items?.length ? card('توزيع التكلفة على البنود التامة', table({ name: `تكلفة-تامة-${month}`, compact: true, search: false, rows: r.items,
+        cols: [{ k: 'name', l: 'البند', render: (x) => h('b', x.name) }, { k: 'kind', l: 'النوع' }, { k: 'qty', l: 'القطع', num: true, fmt: (n) => fq(n) }, { k: 'meters', l: 'الأمتار', num: true, fmt: (n) => fq(n) },
+          { k: 'pool', l: 'سعر المتر (صب+تشطيب)', num: true, fmt: (n) => fmt(n) }, { k: 'extras', l: 'قوالب + مباشر + غير مباشر', num: true, fmt: (n) => fmt(n) }, { k: 'value', l: 'قيمة البند', num: true, fmt: (n) => fmt(n) }, { k: 'unit_cost', l: 'تكلفة القطعة', num: true, fmt: (n) => fmt(n) }],
+        foot: (c) => (c.k === 'value' ? fmt(r.total) : c.k === 'name' ? 'الإجمالي' : '') })) : null,
+      r.parts ? card('مكونات تكلفة المشروع', h('div.kpis', kpi('صب بسعر المتر', fmt(P.pool_cast)), kpi('تشطيب بسعر المتر', fmt(P.pool_finish)), kpi('قوالب', fmt(P.mold)), kpi('مباشر خارج المتر', fmt(P.other_direct)),
+        kpi('غير مباشر محمّل', fmt(P.indirect), `${fq((P.indirect_share || 0) * 100)}% من ${fmt(P.indirect_pool)}`), kpi('مرحّل (نصف مصنّع)', fmt(P.carry), 'يفضل تحت التشغيل'))) : null,
+      r.credits?.length ? card('القيد اللي هيتعمل عند الاعتماد', table({ name: 'قيد-التحميل', compact: true, search: false, rows: [{ name: 'من ح/ مخزن المنتجات التامة', amount: r.total }, ...r.credits.map((c) => ({ name: `إلى ${nameOf('accounts', c.account_id) || ''} — ${c.label}`, amount: c.amount }))],
+        cols: [{ k: 'name', l: 'البيان' }, { k: 'amount', l: 'المبلغ', num: true, fmt: (n) => fmt(n) }] })) : null,
+      card('الإجراءات', h('div.actions', h('label', 'نصف مصنّع مرحّل للشهر الجاي (قوالب/مباشر لسه ما خلصش): ', carry), 
+        !approved && can('costs.projects-cost.save') ? act('حفظ المرحّل', '', async () => { await PUT('/costs/run', { month, project_id: projectId, carry: Number(carry.value) || 0 }); toast('اتحفظ'); }) : null,
+        !approved && can('costs.projects-cost.approve') ? act('اعتماد تكلفة المنتج التام', 'primary', async () => { if (!(await confirmBox(`اعتماد تكلفة ${r.project_name} لشهر ${month}؟ هيدخل المنتج التام مخزن المنتجات التامة بالقيم دي ويتعمل القيد.`, 'اعتماد'))) return false; await POST('/costs/run/approve', { month, project_id: projectId }); toast('اتعتمد'); }) : null,
+        approved && can('costs.projects-cost.reopen') ? act('إعادة فتح', 'danger', async () => { if (!(await confirmBox('إعادة فتح التشغيل بتشيل القيد وحركات مخزن التام — مش هتنفع لو في تسليمات مبنية عليها.', 'إعادة فتح', true))) return false; await POST('/costs/run/reopen', { month, project_id: projectId }); toast('اتفتح'); }) : null)));
+  });
+  const fb = filterBar([{ k: 'month', l: 'الشهر', t: 'month' }], overview, { month: params.month || curMonth() });
+  root.replaceChildren(pageHead('تكاليف مشروعات'), fb, host); fb.run();
+  if (params.project_id) detail(params.month || curMonth(), Number(params.project_id));
 }

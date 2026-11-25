@@ -133,6 +133,7 @@ export function docScreen(cfg) {
       const noEl = h('span.doc-no', doc ? doc.no : `${nounNow} جديد`);
       if (!doc && noKey) GET('/helpers/next-no', { key: noKey }).then((r) => { if (r?.no) { noEl.textContent = `${nounNow} جديد — رقم ${r.no}`; noEl.title = 'الرقم يتأكد نهائياً عند الحفظ'; } }).catch(() => {});
       drawHeader(); drawFooter(); drawLines(); updateTotals(); drawExtra();
+      if (E.afterOpen) setTimeout(() => E.afterOpen(ctx), 0);
       host.replaceChildren(
         h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); showList(); } }, '← ' + cfg.title)),
         h('div.doc-head', noEl, doc ? statusBadge(doc.status) : null, h('span.grow'),

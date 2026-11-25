@@ -179,6 +179,8 @@ export async function approvePeriod(month, projectId, user, kind = 'GRC') {
 export async function reopenPeriod(month, projectId, kind = 'GRC') {
   kind = kindOf(kind); const pid = 0; const cur = await getPeriod(month, pid, kind);
   if (!cur || cur.status !== 'approved') throw new AppError('الشهر غير معتمد');
+  const used = await get(`SELECT p.name FROM costing_runs r JOIN projects p ON p.id=r.project_id WHERE r.month=? AND r.status='approved' LIMIT 1`, month);
+  if (used) throw new AppError(`تكلفة المنتج التام لمشروع «${used.name}» معتمدة على سعر المتر ده — أعد فتحها من «تكاليف مشروعات» أولاً`);
   await run(`UPDATE unit_cost_periods SET status='draft', snapshot=NULL, approved_by=NULL, approved_at=NULL WHERE id=?`, cur.id);
   return await getSheet(month, pid, kind);
 }

@@ -70,13 +70,14 @@ export async function systemRouter() {
     const out = Object.fromEntries(jobs.map(([k], i) => [k, rows[i]]));
     out.warehouses = await withLinks('warehouses', out.warehouses);
     out.employees = maskEmployees(out.employees, req.user);
+    out.fg_materials = out.materials.filter((m) => m.fg_item_id); out.materials = out.materials.filter((m) => !m.fg_item_id);
     { const sn = Object.fromEntries(out.stages.map((s) => [s.id, s.name])); out.stages = out.stages.map((s) => ({ ...s, full_name: s.parent_id ? `${sn[s.parent_id] || ''} › ${s.name}` : s.name })); }
     res.json(out);
   });
 
   // ----- إعدادات عامة وربط الحسابات والترقيم -----
   r.put('/settings', async (req, res) => {
-    const ok = ['company_name', 'company_logo', 'currency', 'opening_date', 'allow_negative_stock', ...Object.keys(ACC_KEYS)];
+    const ok = ['company_name', 'company_logo', 'currency', 'opening_date', 'allow_negative_stock', 'profit_pct', ...Object.keys(ACC_KEYS)];
     for (const k of Object.keys(req.body)) {
       if (!ok.includes(k)) continue;
       if (k.startsWith('acc_')) need(req.user, 'accounts.account-links.edit', 'ليس لديك صلاحية تعديل ربط الحسابات');
@@ -88,6 +89,7 @@ export async function systemRouter() {
       if (k === 'company_logo' && v && !(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(String(v)) && String(v).length <= 400000)) throw new AppError('اللوجو لازم يكون صورة PNG أو JPG أو WEBP بحجم صغير');
       if (k === 'opening_date' && await openingLocked()) throw new AppError('الأرصدة الافتتاحية مقفلة');
       if (k.startsWith('acc_')) { const a = await get('SELECT postable FROM accounts WHERE id=?', Number(v)); if (!a || !a.postable) throw new AppError(`اختر حساب فرعي لـ «${ACC_KEYS[k]}»`); }
+      if (k === 'profit_pct' && !(Number(v) >= 0 && Number(v) <= 500)) throw new AppError('نسبة الربح لازم تكون بين 0 و 500');
       await setSetting(k, v);
     }
     await audit(req.user, 'settings', 'settings', 0, Object.keys(req.body)); res.json(await allSettings());

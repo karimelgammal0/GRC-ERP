@@ -210,8 +210,60 @@ export async function incomePage(root) {
   const t = (rows) => table({ search: false, compact: true, name: 'قائمة الدخل', rows, cols: [{ k: 'code', l: 'الكود' }, { k: 'name', l: 'الحساب' }, { k: 'amount', l: 'المبلغ', num: true, fmt: (n) => fmt(n) }] });
   const fb = fbar([{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }], async (v) => {
     const d = await GET('/reports/income-summary', v);
-    host.replaceChildren(h('div.kpis', kpi('الإيرادات', fmt(d.total_revenue)), kpi('المصروفات', fmt(d.total_expenses)), kpi('صافي الربح/الخسارة', fmt(d.net), '', d.net < 0 ? 'bad' : '')), chartsGrid(chartCard('الإيرادات مقابل المصروفات', barChart([{ label: 'الإيرادات', value: d.total_revenue }, { label: 'المصروفات', value: d.total_expenses }])), chartCard('توزيع المصروفات', donutChart(d.expenses.map((x) => ({ label: x.name, value: x.amount }))))),
-      h('div.grid2', card('الإيرادات', t(d.revenue)), card('المصروفات', t(d.expenses))));
+    host.replaceChildren(h('div.kpis', kpi('الإيرادات', fmt(d.total_revenue)), kpi('مجمل الربح', fmt(d.gross_profit), 'الإيراد − تكلفة المبيعات'), kpi('مصروفات التشغيل والإدارة', fmt(d.total_operating_expenses)), kpi('صافي الربح/الخسارة', fmt(d.net), '', d.net < 0 ? 'bad' : '')),
+      h('div.grid2', card('الإيرادات', t(d.revenue)), card('تكلفة المبيعات', t(d.cogs))), card('المصروفات الإدارية والتشغيلية (بتتخصم من مجمل الربح)', t(d.operating_expenses)));
   }, { from: monthStart() });
-  root.replaceChildren(...rhead('قائمة الدخل المبسطة'), h('div.note', 'تُحسب من القيود: تكلفة المنتج تحت التشغيل تبقى أصل (WIP) إلى أن تُنقل للتكلفة عند البيع (مرحلة المنتجات التامة لاحقاً).'), fb, host); fb.run();
+  root.replaceChildren(...rhead('قائمة الدخل'), h('div.note', 'الإيراد وتكلفة المبيعات بيتسجلوا عند إذن التسليم. تكلفة المنتج تحت التشغيل بتفضل أصل لحد ما المنتج يتسلّم، والمصروفات الإدارية بتتخصم من مجمل الربح.'), fb, host); fb.run();
+}
+
+// ---------------- كميات الإنتاج التام ----------------
+export async function productionQtyPage(root) {
+  const host = h('div');
+  const fb = fbar([{ k: 'month', l: 'الشهر', t: 'month' }, { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }], async (v) => {
+    const rows = await GET('/reports/quantities', v);
+    host.replaceChildren(h('div.kpis', kpi('قطع منتجة في الشهر', fq(rows.reduce((s, r) => s + r.in_month, 0))), kpi('أمتار الشهر', fq(rows.reduce((s, r) => s + r.meters_month, 0))), kpi('رصيد مخزن التام', fq(rows.reduce((s, r) => s + r.stock, 0)))),
+      table({ name: 'كميات-الإنتاج-التام', rows, empty: 'لا يوجد إنتاج تام',
+        cols: [{ k: 'project_name', l: 'المشروع' }, { k: 'name', l: 'البند', render: (r) => h('b', r.name) }, { k: 'unit_name', l: 'الوحدة' }, { k: 'contract_qty', l: 'المطلوب', num: true, fmt: (n) => (n === null ? '' : fq(n)) },
+          { k: 'in_month', l: 'منتج في الشهر', num: true, fmt: (n) => fq(n) }, { k: 'to_date', l: 'منتج حتى الآن', num: true, fmt: (n) => fq(n) }, { k: 'remaining', l: 'المتبقي من المطلوب', num: true, fmt: (n) => (n === null ? '' : fq(n)) },
+          { k: 'delivered', l: 'مسلّم', num: true, fmt: (n) => fq(n) }, { k: 'certified', l: 'مستخلص', num: true, fmt: (n) => fq(n) }, { k: 'stock', l: 'رصيد المخزن', num: true, fmt: (n) => fq(n) }, { k: 'meters_month', l: 'أمتار الشهر', num: true, fmt: (n) => fq(n) }] }));
+  }, { month: today().slice(0, 7) });
+  root.replaceChildren(...rhead('كميات الإنتاج التام'), h('div.note', 'كل بند: المطلوب بالعقد، المنتج، المسلّم، المستخلص، والباقي بمخزن المنتجات التامة (حتى آخر الشهر المختار).'), fb, host); fb.run();
+}
+
+// ---------------- ربحية المشروعات ----------------
+export async function profitabilityPage(root) {
+  const host = h('div');
+  const fb = fbar([{ k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }, { k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }], async (v) => {
+    const r = await GET('/reports/profitability', v);
+    host.replaceChildren(h('div.kpis', kpi('قيمة التسليمات', fmt(r.revenue)), kpi('تكلفة المسلّم', fmt(r.cost)), kpi('مجمل الربح', fmt(r.profit), `${fq(r.margin)}% من الإيراد`)),
+      table({ name: 'ربحية-المشروعات', rows: r.rows, empty: 'لا توجد تسليمات في الفترة',
+        cols: [{ k: 'project_name', l: 'المشروع', render: (x) => h('b', x.project_name) }, { k: 'client_name', l: 'العميل' }, { k: 'notes', l: 'عدد الإذونات', num: true }, { k: 'revenue', l: 'قيمة التسليم', num: true, fmt: (n) => fmt(n) }, { k: 'cost', l: 'التكلفة', num: true, fmt: (n) => fmt(n) }, { k: 'profit', l: 'مجمل الربح', num: true, fmt: (n) => fmt(n) }, { k: 'margin', l: 'الهامش %', num: true, fmt: (n) => fq(n) }],
+        foot: (c) => (c.k === 'revenue' ? fmt(r.revenue) : c.k === 'cost' ? fmt(r.cost) : c.k === 'profit' ? fmt(r.profit) : c.k === 'project_name' ? 'الإجمالي' : '') }));
+  }, { from: yearStart() });
+  root.replaceChildren(...rhead('ربحية المشروعات'), h('div.note', 'من إذونات التسليم المعتمدة: الإيراد = تكلفة القطعة + نسبة الربح، والتكلفة من متوسط كارت المنتج التام وقت التسليم.'), fb, host); fb.run();
+}
+
+// ---------------- أرصدة العملاء وأعمار الديون / كشف حساب عميل ----------------
+export async function clientBalancesPage(root) {
+  const host = h('div');
+  const fb = fbar([{ k: 'as_of', l: 'الأرصدة حتى تاريخ', t: 'date' }, { k: 'all', l: 'عرض', t: 'select', options: [['0', 'أصحاب الأرصدة فقط'], ['1', 'كل العملاء']] }], async (v) => {
+    const r = await GET('/reports/client-balances', v);
+    host.replaceChildren(h('div.kpis', kpi('إجمالي المستحق على العملاء', fmt(r.total), `${r.rows.length} عميل`, 'warn'), kpi('متأخر أكتر من 30 يوم', fmt(r.rows.reduce((s, x) => s + x.aging.d30 + x.aging.d60 + x.aging.d90, 0)), '', 'bad')),
+      table({ name: 'أرصدة-العملاء', rows: r.rows, onRow: (x) => { location.hash = `#/sales/client-statement?client_id=${x.id}`; }, empty: 'لا توجد أرصدة',
+        cols: [{ k: 'code', l: 'الكود' }, { k: 'name', l: 'العميل', render: (x) => h('b', x.name) }, { k: 'balance', l: 'الرصيد المستحق', num: true, fmt: (n) => fmt(n) },
+          { k: 'a0', l: 'حتى 30 يوم', num: true, text: (x) => fmt(x.aging.current) }, { k: 'a1', l: '31–60', num: true, text: (x) => fmt(x.aging.d30) }, { k: 'a2', l: '61–90', num: true, text: (x) => fmt(x.aging.d60) }, { k: 'a3', l: 'أكثر من 90', num: true, text: (x) => fmt(x.aging.d90) }],
+        foot: (c) => (c.k === 'balance' ? fmt(r.total) : c.k === 'name' ? 'الإجمالي' : '') }));
+  }, { all: '0' });
+  root.replaceChildren(...rhead('أرصدة العملاء وأعمار الديون'), fb, host); fb.run();
+}
+export async function clientStatementPage(root, params) {
+  const host = h('div');
+  const fb = fbar([{ k: 'client_id', l: 'العميل', t: 'fk', ref: 'clients', combo: true, req: 1 }, { k: 'from', l: 'من تاريخ', t: 'date' }, { k: 'to', l: 'إلى تاريخ', t: 'date' }], async (v) => {
+    if (!v.client_id) { host.replaceChildren(h('div.empty-state', 'اختر العميل')); return; }
+    const r = await GET('/reports/client-statement', v);
+    host.replaceChildren(h('div.kpis', kpi('رصيد أول المدة', fmt(r.opening)), kpi('الرصيد الحالي (مستحق علينا من العميل)', fmt(r.closing), r.closing > 0 ? 'مستحق لنا' : r.closing < 0 ? 'دفعة مقدمة' : 'مسدد', r.closing > 0 ? 'warn' : '')),
+      table({ name: 'كشف-عميل', compact: true, rows: [{ date: v.from || '', description: 'رصيد أول المدة', balance: r.opening, _o: 1 }, ...r.rows], rowClass: (x) => (x._o ? 'low' : ''),
+        cols: [{ k: 'date', l: 'التاريخ' }, { k: 'no', l: 'القيد' }, { k: 'description', l: 'البيان' }, { k: 'debit', l: 'مدين (تسليم / مستخلص)', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'credit', l: 'دائن (تحصيل / خصم)', num: true, fmt: (n) => (n ? fmt(n) : '') }, { k: 'balance', l: 'الرصيد', num: true, fmt: (n) => fmt(n) }] }));
+  }, { client_id: params?.client_id ? Number(params.client_id) : null });
+  root.replaceChildren(...rhead('كشف حساب عميل'), fb, host); fb.run();
 }

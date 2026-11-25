@@ -98,7 +98,7 @@ function logoCard(canE) {
 
 export async function generalPage(root) {
   const S = META.settings; const canE = can('settings.general.edit');
-  const g1 = formGrid([{ k: 'company_name', l: 'اسم الشركة', t: 'text', wide: true, readonly: !canE }, { k: 'currency', l: 'العملة', t: 'text', readonly: !canE },
+  const g1 = formGrid([{ k: 'company_name', l: 'اسم الشركة', t: 'text', wide: true, readonly: !canE }, { k: 'currency', l: 'العملة', t: 'text', readonly: !canE }, { k: 'profit_pct', l: 'نسبة الربح على المنتج المسلّم %', t: 'number', readonly: !canE },
     { k: 'allow_negative_stock', l: 'السماح بالصرف على المكشوف (رصيد سالب)', t: 'select', options: [['0', 'لا — منع (موصى به)'], ['1', 'نعم']], readonly: !canE }], S, 2);
   const save = guard(async () => { await PUT('/settings', g1.values()); await loadMeta(); toast('تم حفظ الإعدادات'); });
   root.replaceChildren(pageHead('الإعدادات العامة', canE ? h('button.btn.primary', { onclick: save }, 'حفظ') : null),

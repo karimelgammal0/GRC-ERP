@@ -5,7 +5,7 @@ import { nextNo, audit } from '../lib/core.js';
 import { can, maskEmployees } from '../lib/perms.js';
 
 // صفحة الصلاحيات لكل كود (العاملين ليهم صفحتين: الموارد البشرية والإعدادات)
-const PAGE_OF = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', payment_types: 'payment-types', receipt_types: 'receipt-types', employees: 'employees' };
+const PAGE_OF = { units: 'units', material_categories: 'categories', materials: 'materials', warehouses: 'warehouses', clients: 'clients', projects: 'projects', project_items: 'project-items', deduction_types: 'deduction-types', stages: 'stages', sites: 'sites', suppliers: 'suppliers', treasuries: 'treasuries', custodians: 'custodians', expense_categories: 'expense-cats', payment_types: 'payment-types', receipt_types: 'receipt-types', employees: 'employees' };
 const masterKeys = (name, action) => [`settings.${PAGE_OF[name]}.${action}`, ...(name === 'employees' ? [`hr.employees.${action}`] : [])];
 
 const T = (k, l, t = 'text', extra = {}) => ({ k, l, t, ...extra });
@@ -24,7 +24,7 @@ export const MASTERS = {
     cols: ['code', 'name', 'category_id', 'unit_id', 'min_qty'],
     used: [['stock_moves', 'material_id'], ['purchase_request_lines', 'material_id'], ['purchase_order_lines', 'material_id'], ['goods_receipt_lines', 'material_id'], ['purchase_invoice_lines', 'material_id'], ['stock_issue_lines', 'material_id'], ['stock_adjustment_lines', 'material_id'], ['purchase_return_lines', 'material_id']],
   },
-  warehouses: { title: 'المخازن', table: 'warehouses', seq: 'warehouse', fields: [T('name', 'الاسم', 'text', { req: 1 }), T('type', 'النوع', 'select', { options: [['raw', 'مخزن أصناف'], ['finished', 'مخزن منتجات تامة (لاحقاً)']] }),
+  warehouses: { title: 'المخازن', table: 'warehouses', seq: 'warehouse', fields: [T('name', 'الاسم', 'text', { req: 1 }), T('type', 'النوع', 'select', { options: [['raw', 'مخزن أصناف'], ['finished', 'مخزن منتجات تامة']] }),
       T('zero_cost_transfer', 'تحويل بدون تكلفة (سقالات / معدات بترجع)', 'select', { options: [['0', 'لا'], ['1', 'نعم']], help: 'لو «نعم»: التحويل لموقع من المخزن ده والتحويل الوارد ليه بيتسجل بقيد بقيمة صفر (بيان: تحويل) ومبيتحمّلش على تكلفة المشروع.' }),
       T('category_ids', 'فئات الأصناف المسموحة في المخزن', 'multifk', { ref: 'material_categories', wide: true, help: 'الأصناف اللي فئتها مختارة هنا بس هي اللي هتظهر عند الصرف والتحويل من المخزن ده. سيبها فاضية = كل الأصناف.' })], cols: ['code', 'name', 'type', 'zero_cost_transfer', 'category_ids'], used: [['stock_moves', 'warehouse_id']] },
   suppliers: {
@@ -40,8 +40,17 @@ export const MASTERS = {
   },
   project_items: {
     title: 'بنود المشروعات', table: 'project_items', seq: 'project_item',
-    fields: [T('project_id', 'المشروع', 'fk', { ref: 'projects', req: 1 }), T('name', 'اسم البند', 'text', { req: 1 }), T('qty', 'الكمية', 'number'), T('unit_id', 'الوحدة', 'fk', { ref: 'units' }), T('notes', 'ملاحظات', 'textarea')],
-    cols: ['code', 'name', 'project_id', 'qty', 'unit_id'], used: [['stock_issues', 'item_id'], ['stock_issue_lines', 'item_id'], ['cost_lines', 'item_id'], ['labor_sheet_lines', 'item_id']],
+    fields: [T('project_id', 'المشروع', 'fk', { ref: 'projects', req: 1 }), T('name', 'اسم البند', 'text', { req: 1 }), T('qty', 'الكمية', 'number'), T('unit_id', 'الوحدة', 'fk', { ref: 'units' }),
+      T('area_m2', 'المتر المسطح للقطعة الواحدة (م²)', 'number', { help: 'بيتحسب عليه توزيع التكلفة ومتر الإنتاج التام — مطلوب لأي بند هيتسجّل له إنتاج' }),
+      T('kind', 'نوع الخامة (يحدد سعر المتر)', 'select', { options: [['GRC', 'GRC'], ['GRP', 'GRP']], def: 'GRC' }), T('notes', 'ملاحظات', 'textarea')],
+    cols: ['code', 'name', 'project_id', 'qty', 'unit_id', 'area_m2', 'kind'], used: [['production_log_lines', 'item_id'], ['delivery_note_lines', 'item_id'], ['stock_issues', 'item_id'], ['stock_issue_lines', 'item_id'], ['cost_lines', 'item_id'], ['labor_sheet_lines', 'item_id']],
+  },
+  deduction_types: {
+    title: 'الخصومات والإضافات (للمستخلص)', table: 'deduction_types', seq: 'deduction_type',
+    fields: [T('name', 'الاسم', 'text', { req: 1 }), T('kind', 'النوع', 'select', { options: [['deduction', 'خصم'], ['addition', 'إضافة']], def: 'deduction' }),
+      T('method', 'طريقة الحساب', 'select', { options: [['percent', 'نسبة % من إجمالي المستخلص'], ['amount', 'مبلغ ثابت']], def: 'percent' }), T('value', 'القيمة الافتراضية', 'number', { def: 0, help: 'نسبة أو مبلغ — تقدر تعدّلها على المستخلص نفسه' }),
+      T('account_id', 'الحساب المقابل (محتجز، منبع، دفعة مقدمة، ضريبة…)', 'fk', { ref: 'accounts', req: 1 }), T('notes', 'ملاحظات', 'textarea')],
+    cols: ['code', 'name', 'kind', 'method', 'value', 'account_id'], used: [['client_certificate_adjustments', 'type_id']],
   },
   stages: {
     title: 'مراحل التصنيع', table: 'stages', seq: 'stage',
@@ -259,7 +268,7 @@ export async function masterRouter() {
   });
   r.get('/:name', async (req, res) => {
     const M = MASTERS[req.params.name]; if (!M) throw new AppError('غير موجود', 404);
-    const rows = await withLinks(req.params.name, await all(`SELECT * FROM ${M.table} ORDER BY code`));
+    const rows = await withLinks(req.params.name, await all(`SELECT * FROM ${M.table} ${req.params.name === 'materials' ? 'WHERE fg_item_id IS NULL' : ''} ORDER BY code`));
     res.json(req.params.name === 'employees' ? maskEmployees(rows, req.user) : rows);
   });
   await r.post('/:name', async (req, res) => {

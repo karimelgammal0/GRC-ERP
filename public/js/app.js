@@ -7,6 +7,7 @@ import * as fin from './pages/finance.js';
 import * as acc from './pages/accounts.js';
 import * as rep from './pages/reports.js';
 import * as cst from './pages/costs.js';
+import * as sal from './pages/sales.js';
 import { dashboardPage } from './pages/dashboard.js';
 
 const root = document.getElementById('root');
@@ -15,7 +16,7 @@ const NAV = [
   { id: 'dashboard', ico: '▦', title: 'لوحة التحكم', direct: true, items: [['home', 'نظرة عامة', dashboardPage]] },
   { id: 'inventory', ico: '▣', title: 'المخازن', items: [
     ['issues', 'صرف للإنتاج والتشغيل', inv.issuesPage], ['site-transfers', 'تحويلات المواقع', inv.siteTransfersPage], ['returns', 'مرتجع للمخزن', inv.returnsPage], ['adjustments', 'جرد وتسويات', inv.adjustmentsPage],
-    ['balances', 'أرصدة المخزون', inv.balancesPage], ['stock-card', 'كارت الصنف', inv.stockCardPage], ['moves', 'حركة المخزون', inv.movesPage], ['fg', 'مخازن المنتجات التامة — قريباً', null]] },
+    ['balances', 'أرصدة المخزون', inv.balancesPage], ['stock-card', 'كارت الصنف', inv.stockCardPage], ['moves', 'حركة المخزون', inv.movesPage]] },
   { id: 'purchases', ico: '⛟', title: 'المشتريات', items: [
     ['requests', 'طلبات الشراء', pur.requestsPage], ['orders', 'أوامر التوريد', pur.ordersPage], ['receipts', 'إذونات الاستلام', pur.receiptsPage], ['invoices', 'فواتير الشراء', pur.invoicesPage],
     ['returns', 'مرتجعات الشراء', pur.preturnsPage], ['supplier-statement', 'كشف حساب مورد', pur.supplierStatementPage], ['supplier-balances', 'أرصدة الموردين', pur.supplierBalancesPage]] },
@@ -25,6 +26,9 @@ const NAV = [
     ['other', 'سندات المقبوضات', fin.otherVouchersPage], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
     ['custody-statement', 'كشف حساب عهد', fin.custodyStatementPage], ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage, true]] },
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
+  { id: 'production', ico: '▤', title: 'الإنتاج التام', items: [['log', 'سجل الإنتاج التام', sal.productionLogPage], ['quantities', 'كميات الإنتاج التام', rep.productionQtyPage]] },
+  { id: 'sales', ico: '⇄', title: 'المبيعات والمستخلصات', items: [['deliveries', 'إذونات التسليم', sal.deliveriesPage], ['certificates', 'مستخلصات العملاء', sal.certificatesPage], ['fg-stock', 'مخزن المنتجات التامة', sal.fgStockPage],
+    ['client-balances', 'أرصدة العملاء وأعمار الديون', rep.clientBalancesPage], ['client-statement', 'كشف حساب عميل', rep.clientStatementPage], ['profitability', 'ربحية المشروعات', rep.profitabilityPage]] },
   { id: 'costs', ico: '∑', title: 'تكاليف', items: [['unit-cost', 'تكلفة المتر GRC / GRP', cst.unitCostPage], ['history', 'سجل أسعار المتر', cst.historyPage], ['projects-cost', 'تكاليف مشروعات', cst.projectsCostPage], ['config', 'ربط المراحل والأسمنت', cst.configPage]] },
   { id: 'reports', ico: '◔', title: 'التقارير', direct: true, items: [
     ['hub', 'كل التقارير', rep.hub], ['project-stage', 'تكلفة المشاريع × المراحل', rep.projectStagePage], ['stage-project', 'تكلفة المراحل × المشاريع', rep.stageProjectPage], ['project-analysis', 'تحليل مشروع (بنود)', rep.projectAnalysisPage],
@@ -33,7 +37,7 @@ const NAV = [
   { id: 'settings', ico: '⚙', title: 'الإعدادات', items: [
     ['general', 'عام (بيانات الشركة)', generalPage], ['opening', 'الأرصدة الافتتاحية', openingPage],
     ['materials', 'الأصناف', M('materials')], ['categories', 'فئات الأصناف', M('material_categories')], ['units', 'وحدات القياس', M('units')], ['warehouses', 'المخازن', M('warehouses')],
-    ['clients', 'العملاء', M('clients')], ['projects', 'المشروعات', M('projects')], ['project-items', 'بنود المشروعات', M('project_items')], ['stages', 'مراحل التصنيع', M('stages')], ['sites', 'المواقع', M('sites')],
+    ['clients', 'العملاء', M('clients')], ['projects', 'المشروعات', M('projects')], ['project-items', 'بنود المشروعات', M('project_items')], ['deduction-types', 'الخصومات والإضافات', M('deduction_types')], ['stages', 'مراحل التصنيع', M('stages')], ['sites', 'المواقع', M('sites')],
     ['suppliers', 'الموردين', M('suppliers')], ['treasuries', 'الخزن والبنوك', M('treasuries')], ['custodians', 'العهد', M('custodians')],
     ['expense-cats', 'المصروفات', M('expense_categories')], ['payment-types', 'أنواع المدفوعات', M('payment_types')], ['receipt-types', 'أنواع المقبوضات', M('receipt_types')], ['employees', 'العاملين', M('employees')]] },
   { id: 'permissions', ico: '⚿', title: 'الصلاحيات', admin: true, items: [['users', 'المستخدمون والصلاحيات', usersPage], ['jobs', 'الوظائف', jobsPage], ['audit', 'سجل العمليات', auditPage]] }

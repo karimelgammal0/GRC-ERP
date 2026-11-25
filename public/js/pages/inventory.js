@@ -2,7 +2,7 @@ import { h, GET, POST, L, META, can, loadLookups, modal, formGrid, fmt, fq, toda
 import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 export const KINDS = [['production', 'صرف إنتاج (مشروع + بند + مرحلة)'], ['site', 'تحويل لموقع'], ['overhead', 'تشغيل غير مباشر (بدون مشروع)']];
-export const DOC_LABEL = { receipt: 'إذن استلام', invoice: 'فاتورة شراء', preturn: 'مرتجع مشتريات', issue: 'صرف', adjustment: 'جرد وتسوية', opening: 'رصيد افتتاحي' };
+export const DOC_LABEL = { receipt: 'إذن استلام', invoice: 'فاتورة شراء', preturn: 'مرتجع مشتريات', issue: 'صرف', adjustment: 'جرد وتسوية', opening: 'رصيد افتتاحي', fgrun: 'إنتاج تام (تحميل التكلفة)', delivery: 'تسليم لعميل' };
 const unitOf = (mid) => nameOf('units', byId('materials', mid)?.unit_id);
 const mapStock = async (ctx) => {
   const wh = ctx.header.warehouse_id; if (!wh) { ctx.stock = {}; return; }
@@ -186,7 +186,7 @@ export async function balancesPage(root, params) {
 // ---------------- كارت الصنف (بنفس شكل شيت الإكسل) ----------------
 // رقم الإذن كرابط يفتح الإذن نفسه (لو المستخدم ليه صلاحية الصفحة)
 const docPageOf = (r) => ({ issue: ['inventory', r.doc_kind === 'site' || r.doc_kind === 'site_in' ? 'site-transfers' : r.doc_kind === 'return' ? 'returns' : 'issues'], adjustment: ['inventory', 'adjustments'],
-  receipt: ['purchases', 'receipts'], invoice: ['purchases', 'invoices'], preturn: ['purchases', 'returns'] }[r.doc_type] || null);
+  delivery: ['sales', 'deliveries'], receipt: ['purchases', 'receipts'], invoice: ['purchases', 'invoices'], preturn: ['purchases', 'returns'] }[r.doc_type] || null);
 const docLink = (r) => { if (!r.doc_no) return ''; const pg = docPageOf(r); return pg && can(`${pg[0]}.${pg[1]}`) ? h('a', { href: `#/${pg[0]}/${pg[1]}?id=${r.doc_id}`, title: 'فتح الإذن' }, r.doc_no) : r.doc_no; };
 export async function stockCardPage(root, params) {
   const host = h('div');
@@ -207,7 +207,7 @@ export async function stockCardPage(root, params) {
           { k: 'oq', l: 'صادر: كمية', ...N(), fmt: fq }, { k: 'op', l: 'سعر', ...N(), fmt: (n) => fmt(n, 3) }, { k: 'ov', l: 'قيمة', ...N() },
           { k: 'bq', l: 'الرصيد: كمية', ...N(), fmt: fq }, { k: 'bp', l: 'سعر', ...N(), fmt: (n) => fmt(n, 3) }, { k: 'bv', l: 'قيمة', ...N() }] }));
   };
-  const fb = filterBar([{ k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', combo: true, req: 1 }, { k: 'warehouse_id', l: 'المخزن (اختياري)', t: 'fk', ref: 'warehouses', filter: (x) => x.type === 'raw' }, { k: 'from', l: 'من تاريخ', t: 'date' }, { k: 'to', l: 'إلى تاريخ', t: 'date' }], run, { material_id: params.material_id ? Number(params.material_id) : null, warehouse_id: params.warehouse_id ? Number(params.warehouse_id) : null });
+  const fb = filterBar([{ k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials_all', combo: true, req: 1 }, { k: 'warehouse_id', l: 'المخزن (اختياري)', t: 'fk', ref: 'warehouses' }, { k: 'from', l: 'من تاريخ', t: 'date' }, { k: 'to', l: 'إلى تاريخ', t: 'date' }], run, { material_id: params.material_id ? Number(params.material_id) : null, warehouse_id: params.warehouse_id ? Number(params.warehouse_id) : null });
   root.replaceChildren(pageHead('كارت الصنف', h('a.btn', { href: '#/inventory/balances' }, 'الأرصدة')), h('div.note', 'نفس تصميم شيت المخزون القديم: وارد / صادر / رصيد (كمية — سعر — قيمة) بالمتوسط المرجح.'), fb, host); fb.run();
 }
 
