@@ -100,7 +100,7 @@ export function docScreen(cfg) {
           st.lines = groups.sort(cmp).flat(); drawLines(); updateTotals();
         };
         const sortable = (c) => E.lines.sortable && c.l && !c.serial && !c.render;
-        const tbl = h('table.lines', h('thead', h('tr', cols.map((c) => (sortable(c)
+        const tbl = h('table.lines' + (E.lines.center ? '.ctr' : ''), h('thead', h('tr', cols.map((c) => (sortable(c)
           ? h('th.sortable', { title: 'اضغط للترتيب', onclick: () => sortBy(c) }, c.l, st.sort?.c === c.l ? (st.sort.dir === 1 ? ' ▲' : ' ▼') : '')
           : h('th', c.l))), readonly || E.lines.fixed ? null : h('th'))), tb);
         linesHost.replaceChildren(E.lines.scrollX ? h('div.lines-scroll', tbl) : tbl,

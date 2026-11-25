@@ -68,7 +68,7 @@ export const issuesPage = docScreen({ perm: 'inventory.issues', lockable: true, 
     { k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...ISSUE_KINDS] }],
   listCols: [
     { k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'kind', l: 'النوع', text: (r) => labelOf(KINDS, r.kind).split(' (')[0] },
-    { k: 'project_name', l: 'المشروع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'received_by', l: 'المستلم' },
+    { k: 'project_name', l: 'المشروع' }, { k: 'site_name', l: 'الموقع' }, { k: 'item_name', l: 'البند' }, { k: 'stage_name', l: 'المرحلة' }, { k: 'received_by', l: 'المستلم' },
     { k: 'total', l: 'التكلفة', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   listFoot: (c, rows) => (c.k === 'total' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.total)) : c.k === 'no' ? 'الإجمالي' : ''),
   editor: {
@@ -142,15 +142,21 @@ export const returnsPage = docScreen({ perm: 'inventory.returns', print: issuePr
   },
 });
 
+// ---------------- طباعة جرد وتسوية ----------------
+const adjustmentPrint = (doc) => printSheet({ title: 'جرد وتسوية', no: doc.no, date: doc.date, meta: [['المخزن', nameOf('warehouses', doc.warehouse_id)]],
+  cols: ['الصنف', 'الوحدة', 'رصيد الدفتر', 'الكمية المجرودة', 'الفرق', 'قيمة الفرق'],
+  rows: (doc.lines || []).map((l) => [nameOf('materials', l.material_id), unitOf(l.material_id), fq(l.system_qty), fq(l.counted_qty), fq(l.diff_qty), fmt(l.value)]),
+  totals: [['صافي قيمة الفروق', fmt((doc.lines || []).reduce((a, l) => a + (Number(l.value) || 0), 0))]], notes: doc.notes, module: 'inventory', by: doc.created_by_name, sign: ['أمين المخزن', 'الاعتماد'] });
+
 // ---------------- جرد وتسوية ----------------
-export const adjustmentsPage = docScreen({ perm: 'inventory.adjustments',
+export const adjustmentsPage = docScreen({ perm: 'inventory.adjustments', print: adjustmentPrint,
   type: 'stock_adjustment', title: 'الجرد والتسوية', noun: 'جرد', newLabel: 'جرد جديد',
   note: 'أدخل الكمية الفعلية المجرودة؛ النظام يحسب الفرق عن رصيد الدفتر ويسوّيه (العجز بالمتوسط المرجح، والزيادة بمتوسط التكلفة الحالي) ويرحّل القيد.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'net_value', l: 'صافي الفرق (قيمة)', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
     cols: 3, defaults: () => ({ warehouse_id: defaultWh() }),
     header: (ctx) => [dateF, { k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, lockOnEdit: true, onChange: () => mapStock(ctx) }, { ...notesF, wide: false }],
-    lines: { blank: () => ({ material_id: null, counted_qty: null }), cols: [
+    lines: { center: true, blank: () => ({ material_id: null, counted_qty: null }), cols: [
       { k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', req: 1, w: '38%' }, { k: 'counted_qty', l: 'الكمية المجرودة', t: 'number', w: '140px' },
       { l: 'رصيد الدفتر', calc: (l, c) => (c.doc ? l.system_qty : (c.stock?.[l.material_id]?.qty ?? 0)), fmt: fq },
       { l: 'الفرق', calc: (l, c) => (c.doc ? l.diff_qty : (Number(l.counted_qty) || 0) - (c.stock?.[l.material_id]?.qty ?? 0)), fmt: fq },
