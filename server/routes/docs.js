@@ -98,6 +98,23 @@ export async function docRouter() {
     const pk = pageKey(type, kind); if (!pk) throw new AppError('نوع المستند غير معروف', 400);
     need(req.user, action ? `${pk}.${action}` : pk, 'ليس لديك صلاحية على هذا المستند أو الإجراء');
   };
+  // ---- مسودات شاشات الإدخال (لكل مستخدم مسوداته بس) — لازم قبل مسارات /:type
+  const draftType = (req, scope) => { const type = String(scope || '').split('|')[0]; known(type); if (!canModule(req.user, MODULE_OF[type])) throw new AppError('ليس لديك صلاحية على هذه الصفحة', 403); return type; };
+  r.get('/drafts', async (req, res) => {
+    draftType(req, req.query.scope);
+    const rows = await all(`SELECT id, summary, updated_at, payload FROM doc_drafts WHERE user_id=? AND scope=? ORDER BY updated_at DESC, id DESC LIMIT 200`, req.user.id, String(req.query.scope));
+    res.json(rows.map((x) => { let payload = {}; try { payload = JSON.parse(x.payload); } catch { /* مسودة تالفة */ } return { ...x, payload }; }));
+  });
+  r.post('/drafts', async (req, res) => {
+    const { id, scope, summary, payload } = req.body || {}; draftType(req, scope);
+    const body = JSON.stringify(payload || {}); if (body.length > 1_000_000) throw new AppError('المسودة كبيرة جداً', 400);
+    if (id && await get('SELECT id FROM doc_drafts WHERE id=? AND user_id=?', Number(id), req.user.id)) {
+      await run(`UPDATE doc_drafts SET payload=?, summary=?, updated_at=now() WHERE id=?`, body, summary || null, Number(id)); return res.json({ id: Number(id) });
+    }
+    const row = await get(`INSERT INTO doc_drafts (user_id, scope, summary, payload) VALUES (?,?,?,?) RETURNING id`, req.user.id, String(scope), summary || null, body);
+    res.json({ id: Number(row.id) });
+  });
+  r.delete('/drafts/:id', async (req, res) => { await run('DELETE FROM doc_drafts WHERE id=? AND user_id=?', Number(req.params.id), req.user.id); res.json({ ok: true }); });
   r.get('/:type', async (req, res) => {
     known(req.params.type); const type = req.params.type;
     if (!can(req.user, typePages(type))) throw new AppError('ليس لديك صلاحية على هذه الصفحة', 403);

@@ -655,3 +655,14 @@ CREATE TABLE IF NOT EXISTS client_certificate_adjustments (
 CREATE INDEX IF NOT EXISTS ix_ccl_dl ON client_certificate_lines(delivery_line_id);
 
 ALTER TABLE labor_sheets ADD COLUMN IF NOT EXISTS reopened INTEGER NOT NULL DEFAULT 0;   -- كشف اليومية المعتمد بيتقفل؛ reopened=1 معناها اتفتح بصلاحية للتعديل مرة واحدة
+
+-- مسودات شاشات الإدخال: مستند لسه متحفظش (بيتحفظ تلقائياً لكل مستخدم) — مش مستند معتمد ومفيهوش أي أثر محاسبي/مخزني
+CREATE TABLE IF NOT EXISTS doc_drafts (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  scope TEXT NOT NULL,                -- نوع المستند|الشاشة
+  summary TEXT,
+  payload TEXT NOT NULL,              -- JSON: الرأس + البنود
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_doc_drafts_user ON doc_drafts(user_id, scope);

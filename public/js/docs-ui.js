@@ -2,9 +2,11 @@
 //  شاشة مستندات عامة: قائمة + فلاتر + محرر (رأس + بنود + إجماليات)
 // ============================================================
 import { entryUnits, toBaseQty } from './units.js';
-import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, formGrid, fieldInput, pageHead, card, toast, guard, confirmBox, statusBadge, byId, nameOf, can } from './core.js';
+import { h, GET, POST, PUT, DEL, L, fmt, fq, today, monthStart, yearStart, table, filterBar, formGrid, fieldInput, pageHead, card, toast, guard, confirmBox, statusBadge, byId, nameOf, can } from './core.js';
 
 export function docScreen(cfg) {
+  const scope = `${cfg.type}|${cfg.perm || cfg.fixed?.only || cfg.fixed?.kind || cfg.title || ''}`;   // مسودات كل شاشة لوحدها
+  const canNewNow = () => !((typeof cfg.canCreate === 'function' ? cfg.canCreate() : cfg.canCreate) === false || (cfg.perm && !can(cfg.perm + '.create')));   // وقت العرض (بيانات المستخدم بتتحمّل بعد تعريف الشاشة)
   const render = function render(root, params = {}) {
     const host = h('div'); root.replaceChildren(host);
     const showList = () => {
@@ -21,11 +23,30 @@ export function docScreen(cfg) {
       };
       const dv = (v) => (typeof v === 'function' ? v() : v);
       const fb = filterBar(fields, load, { from: dv(cfg.defaultFrom) ?? monthStart(), to: dv(cfg.defaultTo) ?? today() });
-      host.replaceChildren(pageHead(cfg.title, (typeof cfg.canCreate === 'function' ? cfg.canCreate() : cfg.canCreate) === false || (cfg.perm && !can(cfg.perm + '.create')) ? null : (cfg.newButtons ? h('span', { style: { display: 'inline-flex', gap: '8px' } }, cfg.newButtons.map((b) => h('button.btn.primary', { onclick: () => showEditor(null, b.init) }, `＋ ${b.label}`))) : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`))), cfg.note ? h('div.note', cfg.note) : null, fb, tableHost);
+      // تاب Draft: مستندات اتبدأت ولسه متحفظتش (مسودات المستخدم الحالي بس)
+      const canNew = canNewNow();
+      const btnDocs = h('button.btn.sm.primary', { onclick: () => setMode('docs') }, 'المستندات');
+      const btnDraft = h('button.btn.sm', { onclick: () => setMode('draft') }, 'Draft');
+      const tabs = canNew ? h('div', { style: { display: 'flex', gap: '8px', margin: '4px 0 10px' } }, btnDocs, btnDraft) : null;
+      const draftRows = async () => { const rows = await GET('/doc/drafts', { scope }); btnDraft.textContent = rows.length ? `Draft (${rows.length})` : 'Draft'; return rows; };
+      const openDraft = (r) => showEditor(null, { ...r.payload }, r.id);
+      const loadDrafts = guard(async () => {
+        const rows = await draftRows();
+        tableHost.replaceChildren(table({ name: 'draft-' + cfg.title, rows, onRow: openDraft, empty: 'لا توجد مسودات', cols: [
+          { k: 'date', l: 'التاريخ', text: (r) => r.payload.date || '' },
+          { k: 'summary', l: 'المحتوى', text: (r) => r.summary || '' },
+          { k: 'updated_at', l: 'آخر تعديل', text: (r) => new Date(r.updated_at).toLocaleString('ar-EG') },
+          { k: '_a', l: '', render: (r) => h('span', { style: { display: 'inline-flex', gap: '6px' } },
+            h('button.btn.sm.primary', { onclick: (ev) => { ev.stopPropagation(); openDraft(r); } }, 'متابعة'),
+            h('button.btn.sm.danger', { onclick: guard(async (ev) => { ev.stopPropagation(); if (!(await confirmBox('حذف المسودة دي نهائياً؟', 'حذف', true))) return; await DEL(`/doc/drafts/${r.id}`); toast('تم حذف المسودة'); loadDrafts(); }) }, 'حذف')) }] }));
+      });
+      const setMode = (m) => { btnDocs.className = 'btn sm' + (m === 'docs' ? ' primary' : ''); btnDraft.className = 'btn sm' + (m === 'draft' ? ' primary' : ''); fb.style.display = m === 'docs' ? '' : 'none'; if (m === 'docs') fb.run(); else loadDrafts(); };
+      if (canNew) draftRows().catch(() => {});
+      host.replaceChildren(pageHead(cfg.title, (typeof cfg.canCreate === 'function' ? cfg.canCreate() : cfg.canCreate) === false || (cfg.perm && !can(cfg.perm + '.create')) ? null : (cfg.newButtons ? h('span', { style: { display: 'inline-flex', gap: '8px' } }, cfg.newButtons.map((b) => h('button.btn.primary', { onclick: () => showEditor(null, b.init) }, `＋ ${b.label}`))) : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`))), cfg.note ? h('div.note', cfg.note) : null, tabs, fb, tableHost);
       fb.run();
     };
 
-    const showEditor = guard(async (id, init) => {
+    const showEditor = guard(async (id, init, draftId = null) => {
       const E = cfg.editor;
       const doc = id ? await GET(`/doc/${cfg.type}/${id}`) : null;
       const st = { header: { date: today(), ...(E.defaults?.() || {}), ...(init || {}), ...(doc || {}) }, lines: doc?.lines ? doc.lines.map((l) => ({ ...l })) : (init?.lines ? init.lines : []), doc, ctx: null };
@@ -107,7 +128,26 @@ export function docScreen(cfg) {
           readonly || E.lines.fixed ? null : h('div.actions', h('button.btn.sm', { onclick: () => { st.lines.push(E.lines.blank?.() || {}); drawLines(); } }, E.lines.addLabel || '＋ بند'),
             ...(E.tools || []).map((t) => h('button.btn.sm', { onclick: guard(async () => { await t.run(ctx); }) }, t.label))));
       };
+      // ---- مسودة تلقائية للمستند الجديد: بتتحفظ على السيرفر بعد كل تعديل وبتظهر في تاب Draft؛ بتتمسح لما المستند يتحفظ
+      const draftOn = !doc && !readonly && !cfg.noDraft;
+      let baseHdr = null, tmr = null, draftDone = false;
+      const lineHas = (l) => { const b = E.lines?.blank?.() || {}; return Object.keys(l).some((k) => !k.startsWith('_') && l[k] != null && l[k] !== '' && l[k] !== b[k]); };
+      const draftDirty = () => (st.lines || []).some(lineHas) || !!st.header.notes || (baseHdr !== null && JSON.stringify(st.header) !== baseHdr);
+      const putDraft = async () => {
+        if (!draftOn || draftDone || !draftDirty()) return;
+        const n = (st.lines || []).filter(lineHas).length;
+        const summary = [n ? `${n} بند` : '', st.header.notes || ''].filter(Boolean).join(' — ');
+        try { const r = await POST('/doc/drafts', { id: draftId, scope, summary, payload: { ...st.header, lines: st.lines } }); draftId = r.id; } catch { /* المسودة best-effort */ }
+      };
+      const scheduleDraft = () => { if (!draftOn || baseHdr === null || draftDone) return; clearTimeout(tmr); tmr = setTimeout(() => { tmr = null; putDraft(); }, 1200); };
+      const flushDraft = async () => { if (tmr) { clearTimeout(tmr); tmr = null; await putDraft(); } };
+      const onVis = () => { if (document.visibilityState === 'hidden') flushDraft(); };
+      const onLeave = () => { flushDraft(); stopDraft(); };
+      const stopDraft = () => { draftDone = true; clearTimeout(tmr); tmr = null; window.removeEventListener('hashchange', onLeave); document.removeEventListener('visibilitychange', onVis); };
+      if (draftOn) { window.addEventListener('hashchange', onLeave); document.addEventListener('visibilitychange', onVis); }
+      const leave = async () => { await flushDraft(); stopDraft(); showList(); };
       const updateTotals = () => {
+        scheduleDraft();
         if (E.extraLive) drawExtra();
         totalsHost.replaceChildren(...(E.totals?.(ctx) || []).map(([l, v, cls]) => h('div' + (cls ? '.' + cls : ''), h('small', l), h('b', v))));
       };
@@ -118,6 +158,7 @@ export function docScreen(cfg) {
         const v = { ...hf.values(), ...(ff ? ff.values() : {}) }; const payload = { ...st.header, ...v, lines: st.lines.map(({ ...l }) => l) };
         E.prepare?.(payload, ctx);
         const saved = id ? await PUT(`/doc/${cfg.type}/${id}`, payload) : await POST(`/doc/${cfg.type}`, payload);
+        stopDraft(); if (draftId) { try { await DEL(`/doc/drafts/${draftId}`); } catch { /* مش مؤثر */ } }
         toast(`تم الحفظ — ${saved.no}`); E.afterSave?.(saved); showList();
       });
       const reopenIt = guard(async () => {
@@ -136,7 +177,7 @@ export function docScreen(cfg) {
       drawHeader(); drawFooter(); drawLines(); updateTotals(); drawExtra();
       if (E.afterOpen) setTimeout(() => E.afterOpen(ctx), 0);
       host.replaceChildren(
-        h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); showList(); } }, '← ' + cfg.title)),
+        h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); leave(); } }, '← ' + cfg.title)),
         h('div.doc-head', noEl, doc ? statusBadge(doc.status) : null, h('span.grow'),
           doc || cfg.printDraft ? h('button.btn.sm', { onclick: () => (doc ? (cfg.print ? cfg.print(doc) : window.print()) : cfg.printDraft(ctx)) }, '🖨 طباعة') : null,
           doc && cfg.print2 ? h('button.btn.sm', { onclick: () => cfg.print2.fn(doc) }, cfg.print2.label) : null,
@@ -149,8 +190,9 @@ export function docScreen(cfg) {
         E.intro ? h('div.note', E.intro) : null,
         card(null, headerHost), hasLines ? card(E.lines.title || 'البنود', linesHost, E.footer ? footerHost : null) : (E.footer ? card(null, footerHost) : null), extraCard,
         h('div.card', totalsHost),
-        readonly ? (E.buttons ? h('div.actions', E.buttons(ctx)) : null) : h('div.actions', h('button.btn.primary', { onclick: save }, doc ? 'حفظ التعديل' : 'حفظ واعتماد'), h('button.btn', { onclick: showList }, 'رجوع'), ...(E.buttons?.(ctx) || [])));
+        readonly ? (E.buttons ? h('div.actions', E.buttons(ctx)) : null) : h('div.actions', h('button.btn.primary', { onclick: save }, doc ? 'حفظ التعديل' : 'حفظ واعتماد'), h('button.btn', { onclick: leave }, 'رجوع'), ...(E.buttons?.(ctx) || [])));
       if (E.onOpen) await E.onOpen(ctx);
+      baseHdr = JSON.stringify(st.header);
     });
 
     if (params.new) showEditor(null, params.init); else if (params.id) showEditor(Number(params.id)); else showList();
