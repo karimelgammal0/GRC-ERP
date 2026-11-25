@@ -21,7 +21,7 @@ export function docScreen(cfg) {
       };
       const dv = (v) => (typeof v === 'function' ? v() : v);
       const fb = filterBar(fields, load, { from: dv(cfg.defaultFrom) ?? monthStart(), to: dv(cfg.defaultTo) ?? today() });
-      host.replaceChildren(pageHead(cfg.title, cfg.canCreate === false || (cfg.perm && !can(cfg.perm + '.create')) ? null : (cfg.newButtons ? h('span', { style: { display: 'inline-flex', gap: '8px' } }, cfg.newButtons.map((b) => h('button.btn.primary', { onclick: () => showEditor(null, b.init) }, `＋ ${b.label}`))) : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`))), cfg.note ? h('div.note', cfg.note) : null, fb, tableHost);
+      host.replaceChildren(pageHead(cfg.title, (typeof cfg.canCreate === 'function' ? cfg.canCreate() : cfg.canCreate) === false || (cfg.perm && !can(cfg.perm + '.create')) ? null : (cfg.newButtons ? h('span', { style: { display: 'inline-flex', gap: '8px' } }, cfg.newButtons.map((b) => h('button.btn.primary', { onclick: () => showEditor(null, b.init) }, `＋ ${b.label}`))) : h('button.btn.primary', { onclick: () => showEditor(null) }, `＋ ${cfg.newLabel || 'جديد'}`))), cfg.note ? h('div.note', cfg.note) : null, fb, tableHost);
       fb.run();
     };
 
@@ -156,7 +156,7 @@ export function docScreen(cfg) {
     if (params.new) showEditor(null, params.init); else if (params.id) showEditor(Number(params.id)); else showList();
   };
   // بيانات بتستخدمها لوحة الوصول السريع عشان تعرض زر «جديد» لو المستخدم يقدر ينشئ
-  render.newInfo = cfg.canCreate === false ? null : { label: cfg.newLabel || `${cfg.noun} جديد`, perm: cfg.perm };
+  render.newInfo = (typeof cfg.canCreate === 'function' ? cfg.canCreate() : cfg.canCreate) === false ? null : { label: cfg.newLabel || `${cfg.noun} جديد`, perm: cfg.perm };
   return render;
 }
 

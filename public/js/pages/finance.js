@@ -1,4 +1,4 @@
-import { h, GET, POST, L, META, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, labelOf, statusBadge, toast, guard, fieldInput, combo, leafStage } from '../core.js';
+import { h, GET, POST, L, META, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, labelOf, statusBadge, toast, guard, can, fieldInput, combo, leafStage } from '../core.js';
 import { docScreen, dateF, notesF, total } from '../docs-ui.js';
 
 const ACC_F = (x) => x.postable === 1 && x.active !== 0;
@@ -57,11 +57,12 @@ const mkLines = ({ typeList, typeLabel, kind, title, withStage }) => ({
 const disbLines = mkLines({ typeList: 'payment_types', typeLabel: 'نوع الدفع', kind: 'disbursement', title: 'المصروفات والمدفوعات — أضف أكتر من سطر في نفس السند', withStage: true });
 const collLines = mkLines({ typeList: 'receipt_types', typeLabel: 'نوع المقبوض', kind: 'collection', title: 'المقبوضات — أضف أكتر من سطر في نفس السند', withStage: false });
 
-function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind, srcLabel }) {
-  const listMulti = kinds.length > 1; const multi = listMulti && !newKind; const LEGACY = new Set(['receipt', 'payment_other', 'expense', 'supplier_payment']); const kindOpts = () => kinds.map((k) => [k, META.voucher_kinds[k] + (newKind && LEGACY.has(k) ? ' (قديم)' : '')]);
+function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind, srcLabel, unified }) {
+  const listMulti = kinds.length > 1; const multi = listMulti && !newKind; const LEGACY = new Set(['receipt', 'payment_other', 'expense', 'supplier_payment']); const kindOpts = () => kinds.map((k) => [k, META.voucher_kinds[k] + (unified ? (LEGACY.has(k) ? ' (قديم)' : '') : newKind && LEGACY.has(k) ? ' (قديم)' : '')]);
   const amountCol = { k: 'amount', l: 'المبلغ', num: true, fmt: (v) => fmt(v) };
   return docScreen({
-    type: 'voucher', perm, title, noun, newLabel, note, fixed: only ? { only } : listMulti ? {} : { kind: kinds[0] },
+    type: 'voucher', perm, title, ...(unified ? { newButtons: [{ label: 'صرف', init: { kind: 'disbursement' } }, { label: 'قبض', init: { kind: 'collection' } }, { label: 'تحويل', init: { kind: 'transfer' } }] } : {}),
+    ...(unified ? { canCreate: () => can('finance.expenses.create') || can('finance.other.create') || can('finance.custody.create') } : {}), noun, newLabel, note, fixed: only ? { only } : listMulti ? {} : { kind: kinds[0] },
     get filters() { return [...(listMulti ? [{ k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...kindOpts()] }] : []), { k: 'treasury_id', l: 'الخزينة', t: 'fk', ref: 'treasuries' }]; },
     listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, ...(listMulti ? [{ k: 'kind', l: 'النوع', text: (r) => META.voucher_kinds[r.kind] }] : []),
       { k: 'party', l: 'الطرف / البيان', text: (r) => [r.party_text, r.supplier_name, r.category_name, r.custodian_name, r.account_name, r.to_treasury_name && `← ${r.to_treasury_name}`, r.description].filter(Boolean).join(' — ') },
@@ -69,10 +70,11 @@ function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind
     listFoot: (c, rows) => (c.k === 'amount' ? fmt(total(rows.filter((r) => r.status !== 'void'), (r) => r.amount)) : c.k === 'no' ? 'الإجمالي' : ''),
     editor: {
       cols: 3, rebuildOn: ['kind', 'pay_method', 'src_kind'], defaults: () => ({ kind: newKind || kinds[0], amount: null, treasury_id: (L.treasuries.find((x) => x.active !== 0 && (!['disbursement', 'collection'].includes(newKind || kinds[0]) || x.type !== 'bank')) || {}).id }),
-      ...(newKind === 'disbursement' ? { lines: disbLines } : newKind === 'collection' ? { lines: collLines } : {}),
+      ...(unified ? { lines: { ...disbLines, title: 'الأسطر', show: (hd) => hd.kind === 'disbursement' || hd.kind === 'collection', cols: (ctx) => (ctx.header.kind === 'collection' ? collLines : disbLines).cols } } : newKind === 'disbursement' ? { lines: disbLines } : newKind === 'collection' ? { lines: collLines } : {}),
       header: (ctx) => {
         const k = ctx.header.kind; if (k === 'disbursement' || k === 'collection') return disbursementHeader(ctx); const f = [dateF];
-        if (multi || (newKind && k !== newKind)) f.push({ k: 'kind', l: 'نوع السند', t: 'select', options: kindOpts(), lockOnEdit: true, req: 1 });
+        if (unified) { if (TRANSFER_KINDS.includes(k)) f.push({ k: 'kind', l: 'نوع التحويل', t: 'select', options: TRANSFER_KINDS.map((x) => [x, META.voucher_kinds[x]]), req: 1 }); }
+        else if (multi || (newKind && k !== newKind)) f.push({ k: 'kind', l: 'نوع السند', t: 'select', options: kindOpts(), lockOnEdit: true, req: 1 });
         if (k === 'supplier_payment') f.push({ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true, req: 1, lockOnEdit: true, onChange: () => loadInvoices(ctx) }, ...payFields(ctx));
         if (k === 'expense') f.push({ k: 'category_id', l: 'فئة المصروف', t: 'fk', ref: 'expense_categories', req: 1 }, ...srcFields(ctx),
           { k: 'project_id', l: 'المشروع (إجباري للمصروف المباشر)', t: 'fk', ref: 'projects', combo: true, onChange: (v, c) => { const it = byId('project_items', c.header.item_id); if (it && it.project_id !== v) c.setHeader('item_id', null); } },
@@ -137,6 +139,9 @@ function extraPanel(ctx) {
   return null;
 }
 
+const TRANSFER_KINDS = ['transfer', 'custody_issue', 'custody_return'];
+export const vouchersPage = voucherScreen({ perm: null, unified: true, title: 'السندات', noun: 'سند', kinds: ['disbursement', 'collection', 'transfer', 'custody_issue', 'custody_return', 'wage_payment', 'expense', 'supplier_payment', 'payment_other', 'receipt'], srcLabel: 'الخزينة / العهدة',
+  note: 'كل السندات في شاشة واحدة: استخدم الفلاتر للبحث والتحديد. صرف = مصروفات وسداد موردين، قبض = مقبوضات، تحويل = بين خزينتين أو صرف/رد عهدة. صرف الأجور من شاشته المستقلة.' });
 export const expensesVoucherPage = voucherScreen({ perm: 'finance.expenses', title: 'سندات المدفوعات', noun: 'سند', kinds: ['disbursement', 'expense', 'supplier_payment', 'payment_other'], newKind: 'disbursement', only: 'expenses', srcLabel: 'مكان الصرف', newLabel: 'سند صرف جديد',
   note: 'سند واحد تصرف بيه أكتر من مصروف وتسدد أكتر من مورد. اختر مكان الصرف (خزينة / بنك / عهدة) وبعدين أضف الأسطر. المصروف المباشر لازم له مشروع ومرحلة تصنيع، وسداد المورد بيتوزع تلقائياً على أقدم فواتيره المفتوحة والباقي بيفضل دفعة مقدمة. أنواع المدفوعات بتتكوّد من الإعدادات.' });
 export const wagePaymentsPage = voucherScreen({ perm: 'finance.wages', title: 'صرف الأجور والمرتبات', noun: 'سند صرف أجور', kinds: ['wage_payment'], newLabel: 'صرف أجور', note: 'اصرف مستحقات كشوف اليوميات والمرتبات الشهرية من خزينة أو عهدة.' });

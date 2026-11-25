@@ -22,8 +22,8 @@ const NAV = [
     ['returns', 'مرتجعات الشراء', pur.preturnsPage], ['supplier-statement', 'كشف حساب مورد', pur.supplierStatementPage], ['supplier-balances', 'أرصدة الموردين', pur.supplierBalancesPage]] },
   { id: 'hr', ico: '☺', title: 'الموارد البشرية', items: [['labor', 'يوميات العمالة', hr.laborSheetsPage], ['labor-advances', 'سلف عمال يومية', hr.laborAdvancesPage], ['payroll', 'الرواتب الشهرية', hr.payrollPage]] },
   { id: 'finance', ico: '$', title: 'الإدارة المالية', items: [
-    ['treasuries', 'أرصدة الخزن والعهد', fin.treasuriesPage], ['custody', 'سندات العهد والتحويلات', fin.custodyVouchersPage], ['expenses', 'سندات المدفوعات', fin.expensesVoucherPage],
-    ['other', 'سندات المقبوضات', fin.otherVouchersPage], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
+    ['treasuries', 'أرصدة الخزن والعهد', fin.treasuriesPage], ['vouchers', 'السندات', fin.vouchersPage], ['custody', 'سندات العهد والتحويلات', fin.custodyVouchersPage, true], ['expenses', 'سندات المدفوعات', fin.expensesVoucherPage, true],
+    ['other', 'سندات المقبوضات', fin.otherVouchersPage, true], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
     ['custody-statement', 'كشف حساب عهد', fin.custodyStatementPage], ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage, true]] },
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
   { id: 'production', ico: '▤', title: 'الإنتاج التام', items: [['log', 'سجل الإنتاج التام', sal.productionLogPage], ['quantities', 'كميات الإنتاج التام', rep.productionQtyPage]] },
@@ -43,7 +43,7 @@ const NAV = [
   { id: 'permissions', ico: '⚿', title: 'الصلاحيات', admin: true, items: [['users', 'المستخدمون والصلاحيات', usersPage], ['jobs', 'الوظائف', jobsPage], ['audit', 'سجل العمليات', auditPage]] }
 ];
 // صلاحية الصفحة: الموديول 'dashboard' للكل، 'permissions' للمدير بس، والباقي بمفتاح module.page
-const pageOk = (g, k) => g.id === 'dashboard' || (g.admin ? META.me.role === 'admin' : can(`${g.id}.${k}`));
+const pageOk = (g, k) => g.id === 'dashboard' || (g.id === 'finance' && k === 'vouchers' ? ['custody', 'expenses', 'other'].some((x) => can(`finance.${x}`)) : false) || (g.admin ? META.me.role === 'admin' : can(`${g.id}.${k}`));
 const groupOk = (g) => g.items.some(([k, , fn]) => fn && pageOk(g, k)) || (g.id === 'dashboard');
 const open = new Set(['dashboard']);
 
