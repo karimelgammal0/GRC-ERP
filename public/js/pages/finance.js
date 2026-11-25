@@ -63,7 +63,7 @@ function voucherScreen({ title, noun, kinds, newLabel, note, perm, only, newKind
   return docScreen({
     type: 'voucher', perm, title, ...(unified ? { newButtons: [{ label: 'صرف', init: { kind: 'disbursement' } }, { label: 'قبض', init: { kind: 'collection' } }, { label: 'تحويل', init: { kind: 'transfer' } }] } : {}),
     ...(unified ? { canCreate: () => can('finance.expenses.create') || can('finance.other.create') || can('finance.custody.create') } : {}), noun, newLabel, note, fixed: only ? { only } : listMulti ? {} : { kind: kinds[0] },
-    get filters() { return [...(listMulti ? [{ k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...kindOpts()] }] : []), { k: 'treasury_id', l: 'الخزينة', t: 'fk', ref: 'treasuries' }]; },
+    get filters() { return [...(listMulti ? [{ k: 'kind', l: 'النوع', t: 'select', options: [['', 'الكل'], ...kindOpts()] }] : []), unified ? { k: 'src', l: 'جهة الصرف', t: 'select', options: [['', 'الكل'], ...L.treasuries.map((x) => ['t' + x.id, (x.type === 'bank' ? 'بنك: ' : 'خزينة: ') + x.name]), ...(L.custodians || []).map((x) => ['c' + x.id, 'عهدة: ' + x.name])] } : { k: 'treasury_id', l: 'الخزينة', t: 'fk', ref: 'treasuries' }]; },
     listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, ...(listMulti ? [{ k: 'kind', l: 'النوع', text: (r) => META.voucher_kinds[r.kind] }] : []),
       { k: 'party', l: 'الطرف / البيان', text: (r) => [r.party_text, r.supplier_name, r.category_name, r.custodian_name, r.account_name, r.to_treasury_name && `← ${r.to_treasury_name}`, r.description].filter(Boolean).join(' — ') },
       { k: 'src', l: srcLabel || 'من/إلى', text: (r) => [r.treasury_name, r.custodian_name && `عهدة ${r.custodian_name}`].filter(Boolean).join(' / ') }, amountCol, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -140,7 +140,7 @@ function extraPanel(ctx) {
 }
 
 const TRANSFER_KINDS = ['transfer', 'custody_issue', 'custody_return'];
-export const vouchersPage = voucherScreen({ perm: null, unified: true, title: 'السندات', noun: 'سند', kinds: ['disbursement', 'collection', 'transfer', 'custody_issue', 'custody_return', 'wage_payment', 'expense', 'supplier_payment', 'payment_other', 'receipt'], srcLabel: 'الخزينة / العهدة',
+export const vouchersPage = voucherScreen({ perm: null, unified: true, title: 'السندات', noun: 'سند', kinds: ['disbursement', 'collection', 'transfer', 'custody_issue', 'custody_return', 'wage_payment'], srcLabel: 'جهة الصرف',
   note: 'كل السندات في شاشة واحدة: استخدم الفلاتر للبحث والتحديد. صرف = مصروفات وسداد موردين، قبض = مقبوضات، تحويل = بين خزينتين أو صرف/رد عهدة. صرف الأجور من شاشته المستقلة.' });
 export const expensesVoucherPage = voucherScreen({ perm: 'finance.expenses', title: 'سندات المدفوعات', noun: 'سند', kinds: ['disbursement', 'expense', 'supplier_payment', 'payment_other'], newKind: 'disbursement', only: 'expenses', srcLabel: 'مكان الصرف', newLabel: 'سند صرف جديد',
   note: 'سند واحد تصرف بيه أكتر من مصروف وتسدد أكتر من مورد. اختر مكان الصرف (خزينة / بنك / عهدة) وبعدين أضف الأسطر. المصروف المباشر لازم له مشروع ومرحلة تصنيع، وسداد المورد بيتوزع تلقائياً على أقدم فواتيره المفتوحة والباقي بيفضل دفعة مقدمة. أنواع المدفوعات بتتكوّد من الإعدادات.' });
