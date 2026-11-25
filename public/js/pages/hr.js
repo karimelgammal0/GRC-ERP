@@ -1,4 +1,4 @@
-import { h, GET, POST, L, META, fmt, fq, today, monthStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, labelOf, statusBadge, toast, guard, modal, fieldInput, CLASS_OPTS, leafStage } from '../core.js';
+import { h, GET, POST, L, META, fmt, fq, today, monthStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, labelOf, statusBadge, toast, guard, modal, fieldInput, CLASS_OPTS, leafStage, printSheet } from '../core.js';
 import { docScreen, dateF, notesF, total } from '../docs-ui.js';
 
 const empCol = { k: 'employee_id', l: 'العامل', t: 'fk', ref: 'employees', req: 1, combo: true, w: '24%' };
@@ -63,7 +63,45 @@ async function importAdvanceSheets(ctx) {
       toast(`تم الاستيراد من ${chosen.length} كشف: ${added} عامل جديد، ${updated} عامل موجود اتحدثت سلفته`);
     } }, { label: 'إلغاء' }] });
 }
-export const laborSheetsPage = docScreen({ perm: 'hr.labor',
+// ملخص الكشف حسب المرحلة: العامل بدون مرحلة = تكلفة غير مباشرة (سطر لوحده، مش «غير محدد»)
+const INDIRECT = 'تكاليف غير مباشرة';
+const stageSummary = (lines) => {
+  const m = new Map();
+  for (const l of lines) {
+    if (!l.employee_id) continue;
+    const k = l.stage_id ? nameOf('stages', l.stage_id) : INDIRECT; const r = m.get(k) || { name: k, days: 0, ot: 0, basic: 0, otv: 0, wages: 0 };
+    r.days += Number(l.days) || 0; r.ot += Number(l.ot_days) || 0; r.basic += lbBasic(l); r.otv += lbOt(l); r.wages += lbBasic(l) + lbOt(l); m.set(k, r);
+  }
+  const rows = [...m.values()].sort((a, b) => (a.name === INDIRECT) - (b.name === INDIRECT) || a.name.localeCompare(b.name, 'ar'));
+  const sum = (k) => rows.reduce((t, r) => t + r[k], 0);
+  return { rows, tot: { days: sum('days'), ot: sum('ot'), basic: sum('basic'), otv: sum('otv'), wages: sum('wages') } };
+};
+const stageTable = (lines) => {
+  const { rows, tot } = stageSummary(lines);
+  return h('table.lines', h('thead', h('tr', ['المرحلة', 'أيام أساسي', 'أيام سهرات', 'قيمة الأساسي', 'قيمة السهرات', 'إجمالي الأجور'].map((x) => h('th', x)))),
+    h('tbody', rows.map((r) => h('tr', h('td', h('b', r.name)), h('td.num', fq(r.days)), h('td.num', fq(r.ot)), h('td.num', fmt(r.basic)), h('td.num', fmt(r.otv)), h('td.num', fmt(r.wages)))),
+      h('tr.tot', h('td', h('b', 'الإجمالي')), h('td.num', fq(tot.days)), h('td.num', fq(tot.ot)), h('td.num', fmt(tot.basic)), h('td.num', fmt(tot.otv)), h('td.num', fmt(tot.wages)))));
+};
+// طباعة الكشف: صفحة أفقية واحدة، كل الأعمدة + سطر إجماليات + ملخص + ملخص المراحل + التوقيعات
+const printLabor = (doc) => {
+  const lines = groupLines(doc.lines.map((l) => ({ ...l }))); const first = new Set(); const grp = {};
+  lines.forEach((l) => { (grp[l._g] ||= []).push(l); });
+  const net = (l) => { if (first.has(l._g)) return ''; first.add(l._g); return grp[l._g].reduce((a, x) => a + lbNet(x), 0); };
+  const rows = lines.map((l) => { const n = net(l); return [nameOf('employees', l.employee_id), fq(l.days), fq(l.ot_days), fmt(l.rate), fmt(lbBasic(l)), fmt(lbOt(l)), fmt(lbBasic(l) + lbOt(l)),
+    fmt(l.other_additions), fmt(l.other_deductions), fmt(l.advance), n === '' ? '' : fmt(n), nameOf('projects', l.project_id), nameOf('project_items', l.item_id), l.stage_id ? nameOf('stages', l.stage_id) : INDIRECT]; });
+  const T = (f) => lines.reduce((a, l) => a + (Number(f(l)) || 0), 0); const emps = new Set(lines.map((l) => l.employee_id)).size;
+  const wages = T((l) => lbBasic(l) + lbOt(l)), add = T((l) => l.other_additions), ded = T((l) => l.other_deductions), adv = T((l) => l.advance), netT = T(lbNet);
+  const { rows: sr, tot } = stageSummary(lines);
+  printSheet({ title: 'كشف يومية العمالة', no: doc.no, date: doc.date, landscape: true,
+    meta: [['المدة', `${doc.period_from} → ${doc.period_to}`], ['اسم المدة', doc.period_name], ['عدد العاملين', fq(emps)]],
+    cols: ['العامل', 'أيام أساسي', 'أيام سهرات', 'اليومية', 'قيمة الأساسي', 'قيمة السهرات', 'إجمالي الأجر', 'إضافات', 'خصومات', 'سلفة', 'الصافي', 'المشروع', 'البند', 'المرحلة'], rows,
+    foot: ['الإجمالي', fq(T((l) => l.days)), fq(T((l) => l.ot_days)), '', fmt(T(lbBasic)), fmt(T(lbOt)), fmt(wages), fmt(add), fmt(ded), fmt(adv), fmt(netT), '', '', ''],
+    totals: [['عدد العاملين', fq(emps)], ['إجمالي الأجور', fmt(wages)], ['الإضافات', fmt(add)], ['الخصومات', fmt(ded)], ['السلف', fmt(adv)], ['صافي المنصرف', fmt(netT)]],
+    sections: [{ title: 'ملخص حسب المرحلة', cols: ['المرحلة', 'أيام أساسي', 'أيام سهرات', 'قيمة الأساسي', 'قيمة السهرات', 'إجمالي الأجور'], rows: sr.map((r) => [r.name, fq(r.days), fq(r.ot), fmt(r.basic), fmt(r.otv), fmt(r.wages)]),
+      foot: ['الإجمالي', fq(tot.days), fq(tot.ot), fmt(tot.basic), fmt(tot.otv), fmt(tot.wages)] }],
+    notes: doc.notes, module: 'hr', by: doc.created_by_name, sign: ['معدّ الكشف', 'مسؤول الموارد البشرية', 'المدير المالي', 'المدير العام'] });
+};
+export const laborSheetsPage = docScreen({ perm: 'hr.labor', lockable: true, print: printLabor,
   type: 'labor_sheet', title: 'يوميات العمالة', noun: 'كشف يومية', newLabel: 'كشف يومية جديد',
   note: 'سجّل العمالة اليومية: كل عامل بأيامه وأجره، ولو اشتغل في أكتر من مرحلة في نفس المدة اضغط ＋ جنب اسمه لإضافة سطر لمرحلة تانية (الاسم والأجر والسلفة والصافي بيتدمجوا). المشروع اختياري، والمراحل المعروضة هي الرئيسية بس. العمالة المباشرة بتتحمّل على مرحلة التصنيع، وغير المباشرة والإدارية على حساباتها بدون مشروع.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'period_name', l: 'المدة' }, { k: 'period_from', l: 'من' }, { k: 'period_to', l: 'إلى' }, { k: 'date', l: 'التاريخ' }, { k: 'n_lines', l: 'عدد العاملين', num: true }, { k: 'total', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) },
@@ -96,7 +134,8 @@ export const laborSheetsPage = docScreen({ perm: 'hr.labor',
       { k: 'project_id', l: 'المشروع (اختياري)', t: 'fk', ref: 'projects', combo: true, w: '15%', onChange: (v, l, ctx) => { const it = byId('project_items', l.item_id); if (it && it.project_id !== v) { l.item_id = null; ctx.setLines(ctx.lines); } } },
       { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', combo: true, w: '15%', filter: (x, l) => !l.project_id || x.project_id === l.project_id },
       { k: 'stage_id', l: 'المرحلة', t: 'fk', ref: 'stages', filter: leafStage, w: '240px', minW: '240px' }] },
-    totals: (ctx) => [['إجمالي أيام الأساسي', fq(total(ctx.lines, (l) => l.days))], ['إجمالي أيام السهرات', fq(total(ctx.lines, (l) => l.ot_days))], ['صافي المنصرف', fmt(total(ctx.lines, (l) => lbNet(l))), 'ok']],
+    extraTitle: 'ملخص حسب المرحلة', extraLive: true, extra: (ctx) => (ctx.lines.some((l) => l.employee_id) ? stageTable(ctx.lines) : null),
+    totals: (ctx) => [['إجمالي أيام الأساسي', fq(total(ctx.lines, (l) => l.days))], ['إجمالي أيام السهرات', fq(total(ctx.lines, (l) => l.ot_days))], ['إجمالي الأجور', fmt(total(ctx.lines, (l) => lbBasic(l) + lbOt(l)))], ['صافي المنصرف', fmt(total(ctx.lines, (l) => lbNet(l))), 'ok']],
   },
 });
 

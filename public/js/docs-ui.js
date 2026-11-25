@@ -108,6 +108,7 @@ export function docScreen(cfg) {
             ...(E.tools || []).map((t) => h('button.btn.sm', { onclick: guard(async () => { await t.run(ctx); }) }, t.label))));
       };
       const updateTotals = () => {
+        if (E.extraLive) drawExtra();
         totalsHost.replaceChildren(...(E.totals?.(ctx) || []).map(([l, v, cls]) => h('div' + (cls ? '.' + cls : ''), h('small', l), h('b', v))));
       };
       const extraCard = E.extra ? card(E.extraTitle || null, extraHost) : null;

@@ -18,7 +18,7 @@ export const CATALOG = [
   { id: 'purchases', title: 'المشتريات', pages: [
     P('requests', 'طلبات الشراء', [...DOC, ['close', 'إغلاق']]), P('orders', 'أوامر التوريد', [...DOC, ['close', 'إغلاق الأمر']]), P('receipts', 'إذونات الاستلام', DOC), P('invoices', 'فواتير الشراء', DOC),
     P('returns', 'مرتجعات الشراء', DOC), P('supplier-statement', 'كشف حساب مورد'), P('supplier-balances', 'أرصدة الموردين')] },
-  { id: 'hr', title: 'الموارد البشرية', pages: [P('labor', 'يوميات العمالة', DOC), P('labor-advances', 'سلف عمال يومية', DOC), P('payroll', 'الرواتب الشهرية', DOC)] },
+  { id: 'hr', title: 'الموارد البشرية', pages: [P('labor', 'يوميات العمالة', [...DOC, ['reopen', 'إعادة فتح كشف معتمد للتعديل']]), P('labor-advances', 'سلف عمال يومية', DOC), P('payroll', 'الرواتب الشهرية', DOC)] },
   { id: 'finance', title: 'الإدارة المالية', pages: [
     P('treasuries', 'أرصدة الخزن والعهد'), P('custody', 'سندات العهد والتحويلات', DOC), P('expenses', 'سندات المدفوعات (مصروفات وسداد موردين)', DOC), P('other', 'سندات المقبوضات', DOC),
     P('wages', 'صرف الأجور', DOC), P('custody-statement', 'كشف حساب عهد'), P('treasury-statement', 'كشف حساب خزينة (من أرصدة الخزن)')] },
@@ -44,7 +44,7 @@ export const ALL_KEYS = CATALOG.flatMap((m) => m.pages.flatMap((p) => [`${m.id}.
 const ALL_SET = new Set(ALL_KEYS);
 
 // كانت للمدير فقط في النظام القديم — مبتتمنحش تلقائياً للمستخدم القديم
-const LEGACY_EXCLUDE = new Set(['settings.general.edit', 'settings.opening.edit', 'settings.opening.lock', 'settings.opening.unlock', 'accounts.sequences.edit', 'accounts.chart.import', 'accounts.account-links.edit', 'inventory.issues.add_item', 'inventory.issues.reopen', 'inventory.site-transfers.reopen']);
+const LEGACY_EXCLUDE = new Set(['settings.general.edit', 'settings.opening.edit', 'settings.opening.lock', 'settings.opening.unlock', 'accounts.sequences.edit', 'accounts.chart.import', 'accounts.account-links.edit', 'inventory.issues.add_item', 'inventory.issues.reopen', 'inventory.site-transfers.reopen', 'hr.labor.reopen']);
 
 export function userPerms(u) {
   if (!u) return new Set();

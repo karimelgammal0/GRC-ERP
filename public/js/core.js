@@ -240,7 +240,7 @@ export function filterBar(fields, onRun, init = {}) {
 export const tag = (txt) => h('span.tag', txt);
 
 /** طباعة مستند بشكل رسمي (رأس الشركة + بيانات + جدول بنود + إمضاءات) عبر iframe مخفي */
-export function printSheet({ title, no, date, meta = [], cols = [], rows = [], totals = [], notes = '', sign = [], by = '', module = '' }) {
+export function printSheet({ title, no, date, meta = [], cols = [], rows = [], totals = [], notes = '', sign = [], by = '', module = '', landscape = false, foot = null, sections = [] }) {
   const e = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${e(title)} ${e(no)}</title><style>
     body{font-family:Tahoma,Arial,sans-serif;font-size:13px;color:#111;margin:24px}
@@ -250,14 +250,17 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
     table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #444;padding:5px 7px;text-align:right}th{background:#eee}
     td.n{text-align:center}.tot{display:flex;justify-content:flex-end;gap:24px;font-weight:700;margin-bottom:10px}
     .sig{display:flex;justify-content:space-around;margin-top:48px}.sig>div{text-align:center;min-width:140px}.sig .jb{font-weight:700;border-bottom:1px solid #111;padding-bottom:6px}.sig .nm{font-size:14px;min-height:22px;margin-top:34px}
+    ${landscape ? '@page{size:A4 landscape;margin:8mm}body{margin:0;font-size:10px}table{table-layout:auto;font-size:9.5px}th,td{padding:2px 4px}.ttl{font-size:16px;margin:2px 0 6px}.sig{margin-top:22px}.sig .nm{margin-top:18px}.top{padding-bottom:4px;margin-bottom:4px}.co img{max-height:40px}tr{page-break-inside:avoid}' : ''}
+    tfoot td{font-weight:700;background:#f3f3f3}.sec{margin:8px 0 3px;font-weight:700}.tot{flex-wrap:wrap;gap:6px 18px}.sumt{width:auto;min-width:50%}
     .pby{margin-top:28px;font-size:11px;color:#555;text-align:left;direction:rtl}
   </style></head><body>
     <div class="top"><div class="co">${META.settings?.company_logo ? `<img src="${e(META.settings.company_logo)}" alt="">` : ''}<span>${e(META.settings?.company_name || '')}</span></div></div>
     <div class="dn"><span>رقم: <b>${e(no)}</b></span><span>التاريخ: <b>${e(date)}</b></span></div>
     <div class="ttl">${e(title)}</div>
     <div class="meta">${meta.filter((m) => m[1]).map(([k, v]) => `<div><b>${e(k)}:</b> ${e(v)}</div>`).join('')}</div>
-    <table><thead><tr><th>#</th>${cols.map((c) => `<th>${e(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r, i) => `<tr><td class="n">${i + 1}</td>${r.map((c) => `<td>${e(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>
+    <table><thead><tr><th>#</th>${cols.map((c) => `<th>${e(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r, i) => `<tr><td class="n">${i + 1}</td>${r.map((c) => `<td>${e(c)}</td>`).join('')}</tr>`).join('')}</tbody>${foot ? `<tfoot><tr><td></td>${foot.map((c) => `<td class="n">${e(c)}</td>`).join('')}</tr></tfoot>` : ''}</table>
     ${totals.length ? `<div class="tot">${totals.map(([k, v]) => `<span>${e(k)}: ${e(v)}</span>`).join('')}</div>` : ''}
+    ${sections.map((x) => `<div class="sec">${e(x.title)}</div><table class="sumt"><thead><tr>${x.cols.map((c) => `<th>${e(c)}</th>`).join('')}</tr></thead><tbody>${x.rows.map((r) => `<tr>${r.map((c, i) => `<td${i ? ' class="n"' : ''}>${e(c)}</td>`).join('')}</tr>`).join('')}</tbody>${x.foot ? `<tfoot><tr>${x.foot.map((c, i) => `<td${i ? ' class="n"' : ''}>${e(c)}</td>`).join('')}</tr></tfoot>` : ''}</table>`).join('')}
     ${notes ? `<div><b>ملاحظات:</b> ${e(notes)}</div>` : ''}
     <div class="sig">${sign.map((s) => { const names = META.signers?.[module]?.[s] || []; const nm = by && names.includes(by) ? by : names.join(' / '); return `<div><div class="jb">${e(s)}</div><div class="nm">${e(nm)}</div></div>`; }).join('')}</div>
     <div class="pby">طُبع بواسطة: ${e(META.me?.employee_name || META.me?.name || META.me?.username || '')} — ${e(new Date().toLocaleString('en-GB'))}</div></body></html>`;

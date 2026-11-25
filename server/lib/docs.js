@@ -547,6 +547,8 @@ async function checkDims(project_id, item_id, stage_id, needStage) {
   }
 }
 DOCS.labor_sheet = {
+  locked: (cur) => cur.status === 'posted' && !cur.reopened,
+  relock: async (id) => { await run('UPDATE labor_sheets SET reopened=0 WHERE id=?', id); },
   table: 'labor_sheets', lines: 'labor_sheet_lines', fk: 'sheet_id', seq: 'labor_sheet',
   cols: ['date', 'notes', 'period_from', 'period_to', 'period_name'], lineCols: ['employee_id', 'days', 'ot_days', 'rate', 'other_additions', 'other_deductions', 'advance', 'amount', 'cost_class', 'project_id', 'item_id', 'stage_id', 'notes'],
   blank: (l) => !l.employee_id,
