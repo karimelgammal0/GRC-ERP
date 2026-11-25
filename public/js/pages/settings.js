@@ -11,7 +11,7 @@ export function masterPage(name, opts = {}) {
   return async (root) => {
     const M = META.masters[name]; const title = opts.title || M.title;
     const P = opts.perm || `settings.${MASTER_PAGE[name]}`; const canC = can(P + '.create'), canE = can(P + '.edit'), canD = can(P + '.delete');
-    let showInactive = false; let filterVal = {};
+    let showInactive = opts.showInactive ?? (name === 'stages'); let filterVal = {};   // المراحل: المعطّل يظهر بعلامة «معطّل» افتراضياً
     const tableHost = h('div');
     const colDefs = () => [
       { k: 'code', l: 'الكود', w: '110px', render: (r) => h('b', r.code) },
@@ -72,7 +72,7 @@ export function masterPage(name, opts = {}) {
     };
     const bar = h('div.filters', { style: { alignItems: 'center' } },
       opts.filterBy ? (() => { const sel = fieldInput({ t: 'fk', ref: opts.filterRef, combo: true, onChange: (v) => { filterVal[opts.filterBy] = v; load(); } }, null); sel.style.minWidth = '280px'; return h('label.fld', h('span', opts.filterLabel), sel); })() : null,
-      h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('input', { type: 'checkbox', onchange: (e) => { showInactive = e.target.checked; load(); } }), 'إظهار المعطّل'));
+      h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('input', { type: 'checkbox', checked: showInactive, onchange: (e) => { showInactive = e.target.checked; load(); } }), 'إظهار المعطّل'));
     root.replaceChildren(pageHead(title, name === 'project_items' && canC ? h('button.btn', { onclick: downloadTemplate }, '⬇ نموذج Excel') : null, name === 'project_items' && canC ? h('button.btn', { onclick: () => fileIn.click() }, '⬆ رفع من Excel') : null, canC ? h('button.btn.primary', { onclick: () => edit(null) }, '＋ جديد') : null), opts.note ? h('div.note', opts.note) : null, fileIn, bar, tableHost);
     await load();
   };

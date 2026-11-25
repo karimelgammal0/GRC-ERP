@@ -42,9 +42,9 @@ const NAV = [
     ['expense-cats', 'المصروفات', M('expense_categories')], ['payment-types', 'أنواع المدفوعات', M('payment_types')], ['receipt-types', 'أنواع المقبوضات', M('receipt_types')], ['employees', 'العاملين', M('employees')]] },
   { id: 'permissions', ico: '⚿', title: 'الصلاحيات', admin: true, items: [['users', 'المستخدمون والصلاحيات', usersPage], ['jobs', 'الوظائف', jobsPage], ['audit', 'سجل العمليات', auditPage]] }
 ];
-// صلاحية الصفحة: الموديول 'dashboard' للكل، 'permissions' للمدير بس، والباقي بمفتاح module.page
-const pageOk = (g, k) => g.id === 'dashboard' || (g.id === 'finance' && k === 'vouchers' ? ['custody', 'expenses', 'other'].some((x) => can(`finance.${x}`)) : false) || (g.admin ? META.me.role === 'admin' : can(`${g.id}.${k}`));
-const groupOk = (g) => g.items.some(([k, , fn]) => fn && pageOk(g, k)) || (g.id === 'dashboard');
+// صلاحية الصفحة: 'dashboard.home' للوحة التحكم، 'permissions' للمدير بس، والباقي بمفتاح module.page
+const pageOk = (g, k) => g.id === 'dashboard' ? can('dashboard.home') : (g.id === 'finance' && k === 'vouchers' ? ['custody', 'expenses', 'other'].some((x) => can(`finance.${x}`)) : false) || (g.admin ? META.me.role === 'admin' : can(`${g.id}.${k}`));
+const groupOk = (g) => g.items.some(([k, , fn]) => fn && pageOk(g, k));
 const open = new Set(['dashboard']);
 
 function loginView(msg) {
@@ -80,7 +80,7 @@ function shell() {
     mbar.replaceChildren(
       onMenuRoot ? h('span.mb-logo', 'GRC') : h('button.mb-back', { onclick: () => (history.length > 1 ? history.back() : (location.hash = '#/menu/' + (g?.id || 'more'))) }, '›'),
       h('div.mb-title', pageTitle || 'مصنع GRC'));
-    tabbar.replaceChildren(...TABS.filter(([id]) => id === 'more' || id === 'dashboard' || NAV.some((x) => x.id === id && groupOk(x))).map(([id, ico, t, href]) => h('a' + (id === tabId ? '.on' : ''), { href }, h('span.t-ico', ico), t)));
+    tabbar.replaceChildren(...TABS.filter(([id]) => id === 'more' || NAV.some((x) => x.id === id && groupOk(x))).map(([id, ico, t, href]) => h('a' + (id === tabId ? '.on' : ''), { href }, h('span.t-ico', ico), t)));
   };
   const origDraw = draw;
   const drawAll = () => { origDraw(); drawMobile(); };
@@ -123,6 +123,10 @@ async function route() {
   if (!S) return; const { mod, page, params } = parse();
   if (mod === 'menu') { S.draw(); menuScreen(S.view, page); window.scrollTo(0, 0); return; }
   const g = NAV.find((x) => x.id === mod); const it = g?.items.find((i) => i[0] === page);
+  if (mod === 'dashboard' && !pageOk(g, page)) { // مفيش صلاحية للوحة التحكم ← نفتح أول صفحة متاحة للمستخدم
+    const fg = NAV.find((x) => x.id !== 'dashboard' && groupOk(x)); const fi = fg?.items.find(([k, , fn, hid]) => fn && !hid && pageOk(fg, k));
+    if (fi) { location.hash = `#/${fg.id}/${fi[0]}`; return; }
+  }
   open.add(mod); S.draw();
   if (!g || !it?.[2] || !pageOk(g, page)) { S.view.replaceChildren(h('div.empty-state', 'الصفحة غير متاحة')); return; }
   S.view.replaceChildren(h('div.empty-state', 'جاري التحميل…'));

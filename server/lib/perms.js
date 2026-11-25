@@ -12,6 +12,7 @@ const CRUD = [['create', 'إضافة'], ['edit', 'تعديل'], ['delete', 'حذ
 const P = (id, title, actions = []) => ({ id, title, actions });
 
 export const CATALOG = [
+  { id: 'dashboard', title: 'لوحة التحكم', pages: [P('home', 'نظرة عامة')] },
   { id: 'inventory', title: 'المخازن', pages: [
     P('issues', 'صرف للإنتاج والتشغيل', [...DOC, ['add_item', 'إضافة بند مشروع من الشاشة'], ['reopen', 'إعادة فتح إذن معتمد للتعديل']]), P('site-transfers', 'تحويلات المواقع', [...DOC, ['reopen', 'إعادة فتح إذن معتمد للتعديل']]), P('returns', 'مرتجع للمخزن', DOC), P('adjustments', 'جرد وتسويات', DOC),
     P('balances', 'أرصدة المخزون'), P('stock-card', 'كارت الصنف'), P('moves', 'حركة المخزون')] },
