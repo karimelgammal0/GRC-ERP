@@ -138,7 +138,7 @@ export function docScreen(cfg) {
       host.replaceChildren(
         h('div.crumb', h('a', { href: '#', onclick: (e) => { e.preventDefault(); showList(); } }, '← ' + cfg.title)),
         h('div.doc-head', noEl, doc ? statusBadge(doc.status) : null, h('span.grow'),
-          doc ? h('button.btn.sm', { onclick: () => (cfg.print ? cfg.print(doc) : window.print()) }, '🖨 طباعة') : null,
+          doc || cfg.printDraft ? h('button.btn.sm', { onclick: () => (doc ? (cfg.print ? cfg.print(doc) : window.print()) : cfg.printDraft(ctx)) }, '🖨 طباعة') : null,
           doc && cfg.print2 ? h('button.btn.sm', { onclick: () => cfg.print2.fn(doc) }, cfg.print2.label) : null,
           locked && can(cfg.perm + '.reopen') ? h('button.btn.sm', { onclick: reopenIt }, '🔓 إعادة فتح') : null,
           doc && !voided && cfg.canVoid !== false && (!cfg.perm || can(cfg.perm + '.void')) ? h('button.btn.sm.danger', { onclick: voidIt }, 'إلغاء المستند') : null),

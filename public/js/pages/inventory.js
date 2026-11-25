@@ -150,6 +150,9 @@ const adjustmentPrint = (doc) => printSheet({ title: 'جرد وتسوية', no: 
 
 // ---------------- جرد وتسوية ----------------
 export const adjustmentsPage = docScreen({ perm: 'inventory.adjustments', print: adjustmentPrint,
+  // طباعة جرد جديد لسه متحفظش (من اللي على الشاشة)
+  printDraft: (ctx) => { const st = (l) => ctx.stock?.[l.material_id]; adjustmentPrint({ no: 'جرد جديد', date: ctx.header.date, warehouse_id: ctx.header.warehouse_id, notes: ctx.header.notes,
+    lines: (ctx.lines || []).filter((l) => l.material_id).map((l) => { const sys = st(l)?.qty ?? 0; const cnt = Number(l.counted_qty) || 0; return { material_id: l.material_id, system_qty: sys, counted_qty: cnt, diff_qty: cnt - sys, value: (cnt - sys) * (st(l)?.avg_cost ?? 0) }; }) }); },
   type: 'stock_adjustment', title: 'الجرد والتسوية', noun: 'جرد', newLabel: 'جرد جديد',
   note: 'أدخل الكمية الفعلية المجرودة؛ النظام يحسب الفرق عن رصيد الدفتر ويسوّيه (العجز بالمتوسط المرجح، والزيادة بمتوسط التكلفة الحالي) ويرحّل القيد.',
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'net_value', l: 'صافي الفرق (قيمة)', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
@@ -157,7 +160,7 @@ export const adjustmentsPage = docScreen({ perm: 'inventory.adjustments', print:
     cols: 3, defaults: () => ({ warehouse_id: defaultWh() }),
     header: (ctx) => [dateF, { k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses', req: 1, lockOnEdit: true, onChange: () => mapStock(ctx) }, { ...notesF, wide: false }],
     lines: { center: true, blank: () => ({ material_id: null, counted_qty: null }), cols: [
-      { k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', req: 1, w: '38%' }, { k: 'counted_qty', l: 'الكمية المجرودة', t: 'number', w: '140px' },
+      { k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', req: 1, w: '38%' }, { l: 'الوحدة', calc: (l) => unitOf(l.material_id), w: '90px' }, { k: 'counted_qty', l: 'الكمية المجرودة', t: 'number', w: '140px' },
       { l: 'رصيد الدفتر', calc: (l, c) => (c.doc ? l.system_qty : (c.stock?.[l.material_id]?.qty ?? 0)), fmt: fq },
       { l: 'الفرق', calc: (l, c) => (c.doc ? l.diff_qty : (Number(l.counted_qty) || 0) - (c.stock?.[l.material_id]?.qty ?? 0)), fmt: fq },
       { l: 'قيمة الفرق', calc: (l, c) => (c.doc ? l.value : ((Number(l.counted_qty) || 0) - (c.stock?.[l.material_id]?.qty ?? 0)) * (c.stock?.[l.material_id]?.avg_cost ?? 0)), fmt: (v) => fmt(v) }],
