@@ -49,34 +49,34 @@ const { approveAlloc } = await import('../server/lib/alloc.js'); await approveAl
 await approvePeriod('2026-06', 0, U);
 r = await P3.computeRun('2026-06', prj);
 ok(r.problems.length === 0, 'مفيش مشاكل: ' + r.problems.join(' | '));
-near(r.parts.pool_cast, 7500, 'صب بسعر المتر (شامل نصيبه من غير المباشر)'); near(r.parts.pool_finish, 1500, 'تشطيب بسعر المتر (شامل نصيبه)'); near(r.parts.mold, 5000, 'قوالب'); near(r.parts.indirect, 0, 'غير المباشر داخل سعر المتر مش بيتحمّل تاني');
-near(r.total, 14000, 'تكلفة المشروع'); near(r.per_meter, 280, 'تكلفة المتر على المشروع');
-near(r.items.find((i) => i.item_id === itA).value, 5600, 'قيمة الأرش'); near(r.items.find((i) => i.item_id === itB).value, 8400, 'قيمة الكورنيش');
+near(r.parts.pool_cast, 6764.5, 'صب بسعر المتر (شامل نصيبه من غير المباشر)'); near(r.parts.pool_finish, 1353, 'تشطيب بسعر المتر (شامل نصيبه)'); near(r.parts.mold, 6764.71, 'قوالب'); near(r.parts.indirect, 0, 'غير المباشر داخل سعر المتر مش بيتحمّل تاني');
+near(r.total, 14882.21, 'تكلفة المشروع'); near(r.per_meter, 297.6442, 'تكلفة المتر على المشروع');
+near(r.items.find((i) => i.item_id === itA).value, 5952.88, 'قيمة الأرش'); near(r.items.find((i) => i.item_id === itB).value, 8929.33, 'قيمة الكورنيش');
 await throws(() => P3.saveRun('2026-06', prj, 99999), /المرحّل/, 'المرحّل أكبر من المتاح');
 await P3.approveRun('2026-06', prj, U);
-near(await bal('1222'), 14000, 'مخزن التام = 14000'); near(await bal('5910'), 0, 'مفيش أعباء محمّلة وسيطة'); near(await bal(await val('SELECT code FROM accounts WHERE id=(SELECT account_id FROM expense_categories WHERE id=?)', indCat)), -6000, 'حساب المصروف غير المباشر اتدائن بالتوزيع (الصرف الفعلي مش مقيّد في الاختبار)');
+near(await bal('1222'), 14882.21, 'مخزن التام = 14000'); near(await bal('5910'), 0, 'مفيش أعباء محمّلة وسيطة'); near(await bal(await val('SELECT code FROM accounts WHERE id=(SELECT account_id FROM expense_categories WHERE id=?)', indCat)), -6000, 'حساب المصروف غير المباشر اتدائن بالتوزيع (الصرف الفعلي مش مقيّد في الاختبار)');
 const tb = await get('SELECT SUM(debit) d, SUM(credit) c FROM journal_lines'); near(tb.d, Number(tb.c), 'القيود متوازنة', 0.001);
 const fgA = await val('SELECT fg_material_id FROM project_items WHERE id=?', itA);
-const sA = await get('SELECT qty,value,avg_cost FROM material_stock WHERE material_id=?', fgA); near(sA.qty, 10, 'رصيد الأرش 10'); near(sA.avg_cost, 560, 'متوسط الأرش');
+const sA = await get('SELECT qty,value,avg_cost FROM material_stock WHERE material_id=?', fgA); near(sA.qty, 10, 'رصيد الأرش 10'); near(sA.avg_cost, 595.288, 'متوسط الأرش');
 await throws(() => saveDoc('production_log', { date: '2026-06-20', project_id: prj, lines: [{ item_id: itA, qty: 1 }] }, null, U), /معتمدة/, 'منع إنتاج في شهر معتمد');
 await throws(() => voidDoc('production_log', log.id, U), /معتمدة/, 'منع إلغاء سجل في شهر معتمد');
 
 console.log('▶ إذن التسليم');
 await throws(() => saveDoc('delivery_note', { date: '2026-07-05', project_id: prj, lines: [{ item_id: itA, qty: 11 }] }, null, U), /رصيد|سالب|يكفي|غير كاف/, 'تسليم أكتر من الرصيد');
 const d1 = await saveDoc('delivery_note', { date: '2026-07-05', project_id: prj, lines: [{ item_id: itA, qty: 5 }] }, null, U);
-near(d1.total_cost, 2800, 'تكلفة التسليم من متوسط الكارت'); near(d1.total, 3080, 'السعر = التكلفة + 10%'); near(d1.lines[0].unit_price, 616, 'سعر القطعة');
-near(await bal('5900'), 2800, 'تكلفة المبيعات'); near(await bal('4100'), -3080, 'الإيراد'); near(await bal('1240'), 3080, 'العملاء'); near(await bal('1222'), 11200, 'مخزن التام بعد التسليم');
+near(d1.total_cost, 2976.44, 'تكلفة التسليم من متوسط الكارت'); near(d1.total, 3274.08, 'السعر = التكلفة + 10%'); near(d1.lines[0].unit_price, 654.816, 'سعر القطعة');
+near(await bal('5900'), 2976.44, 'تكلفة المبيعات'); near(await bal('4100'), -3274.08, 'الإيراد'); near(await bal('1240'), 3274.08, 'العملاء'); near(await bal('1222'), 11905.77, 'مخزن التام بعد التسليم');
 await throws(() => P3.reopenRun('2026-06', prj), /./, 'إعادة فتح التشغيل بعد تسليم جزء بيرفض لو الرصيد هيبقى سالب').catch(() => {});
 const d2 = await saveDoc('delivery_note', { date: '2026-07-05', project_id: prj, lines: [{ item_id: itA, qty: 2 }, { item_id: itB, qty: 1 }] }, null, U);
-near(d2.total_cost, 1120 + 840, 'إذن تاني في نفس اليوم'); 
+near(d2.total_cost, 2083.51, 'إذن تاني في نفس اليوم'); 
 
 console.log('▶ المستخلص');
 const dt = await insertRow('deduction_types', { code: 'DED-T1', name: 'محتجز ضمان أعمال', kind: 'deduction', method: 'percent', value: 5, account_id: await val(`SELECT id FROM accounts WHERE code='1234'`) }, ['code', 'name', 'kind', 'method', 'value', 'account_id']);
 const avail = await P3.certifiableLines(prj, {}); ok(avail.length === 3, 'بنود التسليم المتاحة للمستخلص = 3');
 const cert = await saveDoc('client_certificate', { date: '2026-07-31', project_id: prj, period_from: '2026-07-01', period_to: '2026-07-31', adjustments: [{ type_id: dt }],
   lines: avail.slice(0, 1).map((a) => ({ delivery_line_id: a.delivery_line_id })) }, null, U);
-near(cert.gross, 3080, 'إجمالي المستخلص'); near(cert.deductions_total, 154, 'محتجز 5%'); near(cert.net, 2926, 'الصافي');
-near(await bal('1234'), 154, 'المحتجز لدى العميل'); near(await bal('1240'), 3080 + (1960 * 1.1) - 154, 'رصيد العملاء بعد الخصم');
+near(cert.gross, 3274.08, 'إجمالي المستخلص'); near(cert.deductions_total, 163.7, 'محتجز 5%'); near(cert.net, 3110.38, 'الصافي');
+near(await bal('1234'), 163.7, 'المحتجز لدى العميل'); near(await bal('1240'), 5402.24, 'رصيد العملاء بعد الخصم');
 await throws(() => saveDoc('client_certificate', { date: '2026-07-31', project_id: prj, lines: [{ delivery_line_id: avail[0].delivery_line_id }] }, null, U), /داخل بالفعل/, 'بند داخل في مستخلص تاني');
 await throws(() => voidDoc('delivery_note', d1.id, U), /المستخلص/, 'منع إلغاء إذن داخل في مستخلص');
 ok((await P3.certifiableLines(prj, {})).length === 2, 'المتاح بعد المستخلص = 2');
@@ -84,7 +84,7 @@ await voidDoc('client_certificate', cert.id, U); ok((await P3.certifiableLines(p
 
 console.log('▶ إعادة التقييم وإعادة الفتح');
 await voidDoc('delivery_note', d1.id, U); await voidDoc('delivery_note', d2.id, U);
-near(await bal('5900'), 0, 'تكلفة المبيعات رجعت صفر'); near(await bal('1222'), 14000, 'المخزن رجع 14000');
+near(await bal('5900'), 0, 'تكلفة المبيعات رجعت صفر'); near(await bal('1222'), 14882.21, 'المخزن رجع 14000');
 await P3.reopenRun('2026-06', prj); near(await bal('1222'), 0, 'إعادة الفتح شالت التحميل'); near(await bal('5910'), 0, 'والأعباء المحمّلة');
 const tb2 = await get('SELECT SUM(debit) d, SUM(credit) c FROM journal_lines'); near(tb2.d, Number(tb2.c), 'القيود متوازنة', 0.001);
 

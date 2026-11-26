@@ -22,7 +22,7 @@ export async function computeAlloc(month) {
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح (YYYY-MM)');
   const out = { month, problems: [], pool: [], targets: [], reclass: [], total: 0 };
   const cfg = await getConfig();
-  const ids = [...new Set([...(await leaves(cfg.cast_stage_id)), ...(await leaves(cfg.finish_stage_id)), ...(await leaves(cfg.grg_stage_id))])];
+  const ids = [...new Set([...(await leaves(cfg.cast_stage_id)), ...(await leaves(cfg.finish_stage_id)), ...(await leaves(cfg.grg_stage_id)), ...(await leaves(cfg.mold_stage_id))])];
   if (!ids.length) { out.problems.push('اربط مراحل الصب والتشطيب من «ربط المراحل والمواد»'); return out; }
   // ---- المصدر (دائن): أجور غير مباشرة + كل فئة مصروف غير مباشر على حسابها ----
   const lab = r2(num(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE substr(date,1,7)=? AND cost_class='indirect' AND cost_type='labor'`, month)));
@@ -35,7 +35,7 @@ export async function computeAlloc(month) {
   }
   // ---- مواد التشغيل غير المباشر المصروفة في الشهر (على مواد مخزنية 5120) ----
   const stockAcc = await acc('acc_stock_materials');
-  const matInd = r2(num(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE substr(date,1,7)=? AND cost_class='indirect' AND cost_type='material'`, month)));
+  const matInd = r2(num(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE substr(date,1,7)=? AND cost_class='indirect' AND cost_type='material' AND source_type='issue'`, month)));   // أذون صرف التشغيل غير المباشر بس (الجرد ومرتجع المشتريات قيدهم على حساب تاني)
   // ---- المواد المضافة للخلطة (GRG: لكل شيكارة جبس، GRP: لكل كجم بوليستر): لو مش مصروفة فعلاً لمرحلة صب النوع بتتحسب بالمعيار وبتتخصم من مواد الغير مباشر ----
   const delta = new Map(); let reclassTotal = 0;
   for (const kind of ['GRG', 'GRP']) {
@@ -47,7 +47,7 @@ export async function computeAlloc(month) {
       const need = r4(sys.bags * a.ratio); if (!(need > 0)) continue;
       const issued = num(await val(`SELECT COALESCE(SUM(qty),0) FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_type='material' AND stage_id IN (${kIds.join(',')}) AND source_type NOT IN ('ialloc','ireclass')`, month, a.material_id));
       if (issued > 0) continue;
-      const r = await get(`SELECT COALESCE(SUM(qty),0) q, COALESCE(SUM(amount),0) a FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_class='indirect' AND cost_type='material'`, month, a.material_id);
+      const r = await get(`SELECT COALESCE(SUM(qty),0) q, COALESCE(SUM(amount),0) a FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_class='indirect' AND cost_type='material' AND source_type='issue'`, month, a.material_id);
       const q = num(r.q); if (!(q > 0)) continue;
       const dq = Math.min(need, q), da = r2(num(r.a) * dq / q);
       out.reclass.push({ kind, material_id: a.material_id, name: await val('SELECT name FROM materials WHERE id=?', a.material_id), to_stage_id: to, qty: r4(dq), amount: da });
