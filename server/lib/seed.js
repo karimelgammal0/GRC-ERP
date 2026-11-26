@@ -44,7 +44,7 @@ async function ensurePhase3Accounts() {
 export async function ensureBaseData() {
   await ensurePhase3Accounts();
   // سحب حسابات فروق الأسعار وعجز/زيادة المخزون (بقت تسويات بتروح للتكلفة والمخزن مباشرة)
-  await run(`DELETE FROM settings WHERE key IN ('acc_price_variance','acc_inventory_adjust')`);
+  await run(`DELETE FROM settings WHERE key IN ('acc_price_variance','acc_inventory_adjust','acc_overhead_absorbed')`);   // «أعباء محمّلة» اتشالت: الربط القديم كان بيمنع حذف حسابها
   for (const code of ['5700', '5800']) {
     const a = await get('SELECT id, name FROM accounts WHERE code=?', code);
     if (a && /فروق أسعار|عجز وزيادة/.test(a.name)) {
