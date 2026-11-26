@@ -15,6 +15,7 @@ function stageTable(b, { perBag = false, bags = 0, perCol = 'معيار الشي
     { k: 'l', name: 'أجور العمال (يوميات)', amount: b.labor_daily },
     { k: 'l', name: 'المرتبات الشهرية', amount: b.labor_monthly },
     ...(b.expense ? [{ k: 'l', name: 'مصروفات مباشرة على المرحلة', amount: b.expense }] : []),
+    ...(b.auto_additives ? [{ k: 'l', name: 'مواد مضافة محسوبة تلقائياً (من الغير مباشر)', amount: b.auto_additives }] : []),
     { k: 'g', name: `إجمالي تكلفة مرحلة ${b.name}`, amount: b.total },
     { k: 'g', name: `تكلفة المتر المسطح — ${b.name}`, amount: b.per_m2, bold: true },
   ];
@@ -31,9 +32,21 @@ export async function configPage(root, params = {}) {
   const host = h('div');
   const load = async () => {
     const c = await GET('/costs/config', kind ? { kind } : {}); kind = c.kind; const bm = c.basis_meta;
-    const f = formGrid([
+    const isG = String(kind).toUpperCase() === 'GRG';   // GRG: مرحلة واحدة (صب GRG) بدون تشطيب
+    const f = formGrid(isG ? [{ k: 'grg_stage_id', l: 'مرحلة صب GRG (المرحلة الوحيدة للنوع)', t: 'fk', ref: 'stages', req: 1, readonly: !canEdit }] : [
       { k: 'cast_stage_id', l: 'مرحلة الصب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit }, { k: 'finish_stage_id', l: 'مرحلة التشطيب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit },
       { k: 'mold_stage_id', l: 'مرحلة القوالب (على المشروع)', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, readonly: !canEdit }], c, 3);
+    // مواد مضافة لخلطة GRG: كل سطر = صنف + معيار (كمية لكل شيكارة جبس معيارية)
+    const adds = (c.grg_additives || []).map((a) => ({ ...a })); const addBox = h('div');
+    const drawAdds = () => addBox.replaceChildren(adds.length ? h('table.tbl.compact', h('thead', h('tr', ['الصنف المضاف', 'المعيار لكل شيكارة جبس', 'الوحدة', ''].map((x) => h('th', x)))), h('tbody', adds.map((a, i) => h('tr',
+      h('td', nameOf('materials', a.material_id) || a.material_id),
+      h('td', h('input', { type: 'number', step: 'any', min: 0, value: a.ratio, disabled: !canEdit, style: { width: '110px' }, onchange: (e) => { a.ratio = Number(e.target.value); } })),
+      h('td', byId('materials', a.material_id)?.unit_id ? nameOf('units', byId('materials', a.material_id).unit_id) : ''),
+      h('td', canEdit ? h('button.btn.sm', { onclick: () => { adds.splice(i, 1); drawAdds(); } }, 'حذف') : null)))))
+      : h('div.note', 'مفيش مواد مضافة للخلطة لسه — ضيف الأصناف اللي بتتضاف على شيكارة الجبس.'));
+    const addPick = fieldInput({ t: 'fk', ref: 'materials', combo: true, filter: (x) => !adds.some((a) => a.material_id === x.id) }, null); addPick.style.minWidth = '280px';
+    const addAdd = h('button.btn', { onclick: () => { const id = addPick.get(); if (!id || adds.some((a) => a.material_id === id)) return; adds.push({ material_id: id, ratio: 1 }); addPick.set?.(null); drawAdds(); } }, '＋ إضافة مادة للخلطة');
+    drawAdds();
     const rows = c.candidates.map((m) => ({ m, sel: m.selected, kg: m.kg }));
     const tbl = h('div'); const warn = h('div');
     const drawRows = () => {
@@ -50,14 +63,16 @@ export async function configPage(root, params = {}) {
     const add = h('button.btn', { onclick: () => { const id = pick.get(); const m = id && byId('materials', id); if (!m) return; if (!rows.some((r) => r.m.id === m.id)) rows.push({ m: { id: m.id, name: m.name }, sel: true, kg: bm.std || 1 }); pick.set?.(null); drawRows(); } }, '＋ إضافة صنف');
     const save = guard(async () => {
       const sel = rows.filter((r) => r.sel);
-      await PUT('/costs/config', { ...f.values(), basis: { kind, ids: sel.map((r) => r.m.id), factor: Object.fromEntries(rows.map((r) => [r.m.id, Number(r.kg) || 1])) } }); toast('تم الحفظ'); await load();
+      await PUT('/costs/config', { ...f.values(), ...(isG ? { grg_additives: adds.map((a) => ({ material_id: a.material_id, ratio: a.ratio })) } : {}), basis: { kind, ids: sel.map((r) => r.m.id), factor: Object.fromEntries(rows.map((r) => [r.m.id, Number(r.kg) || 1])) } }); toast('تم الحفظ'); await load();
     });
     const tabs = h('div', { style: { display: 'flex', gap: '8px', margin: '4px 0 10px', flexWrap: 'wrap' } }, c.kinds.map((k) => h('button.btn.sm' + (k === kind ? '.primary' : ''), { onclick: () => { kind = k; load(); } }, k)));
-    host.replaceChildren(card('المراحل', f.el),
+    host.replaceChildren(card(isG ? 'مرحلة GRG' : 'المراحل', f.el),
       card(`أساس المتر المنتج حسب نوع المنتج التام`, tabs,
         h('div.note', `نوع ${kind}: المتر المنتج = كمية ${bm.title.replace(/^ال/, '')} المصروفة للصب ${bm.divide ? '÷' : '×'} ${bm.spread_label} (${bm.per_unit}) بيتدخل شهرياً في «تكلفة المتر».${bm.bagged ? ` الوحدة المعيارية شيكارة ${bm.std} كجم.` : ' الكمية بوحدة الصنف نفسها × المعامل (كجم لكل وحدة) — سيبه 1 لو الصنف بالكيلو.'}`),
         tbl, warn,
         canEdit ? h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' } }, h('span', 'إضافة صنف تاني للأساس:'), pick, add) : null),
+      isG ? card('المواد المضافة للخلطة (بالنسبة لشيكارة الجبس)', h('div.note', `كل سطر = مادة بتتضاف للخلطة ومعيارها لكل شيكارة جبس معيارية (${bm.std} كجم). المادة اللي مش موجودة ضمن مصروفات صب GRG بتتحسب تلقائياً (الشكاير × المعيار × التكلفة) وبتتخصم من كميات وتكلفة الغير مباشر لنفس الشهر.`), addBox,
+        canEdit ? h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' } }, h('span', 'مادة مضافة:'), addPick, addAdd) : null) : null,
       canEdit ? h('div', { style: { marginTop: '12px' } }, h('button.btn.primary', { onclick: save }, 'حفظ')) : null);
   };
   root.replaceChildren(pageHead('ربط المراحل والمواد'), host);
@@ -101,14 +116,18 @@ export async function unitCostPage(root, params = {}) {
       pv ? h('div.note', 'عرض تحليلي لمشروع واحد: معدل الفرد هو معدل الشهر الواحد لكل المشروعات، والاعتماد يتم على مستوى الشهر (بدون اختيار مشروع).') : null,
       approved && s.drift ? h('div.note.bad', `تنبيه: الأرقام الحالية اختلفت عن وقت الاعتماد (السعر الحالي ${blank(s.live_unit_cost?.total)} مقابل المعتمد ${blank(u.total)}) — السعر المعتمد لسه ثابت. أعد فتح الشهر لو عايز تحدّثه.`) : null,
       h('div.kpis', kpi(bm.qty_label, fq(i.bags), 'من المنصرف بالنظام'), kpi(bm.spread_label, i.spread_rate ? fq(i.spread_rate) : '—', bm.per_unit),
-        kpi('المتر المسطح المنتج', i.area ? fmt(i.area) : '—', 'م²'), kpi('تكلفة الصب / م²', blank(u.cast)), kpi('تكلفة التشطيب / م²', blank(u.finish)), kpi('سعر المتر الإجمالي', blank(u.total), 'صب + تشطيب', 'ok')),
+        kpi('المتر المسطح المنتج', i.area ? fmt(i.area) : '—', 'م²'), kpi(s.kind === 'GRG' ? 'تكلفة صب GRG / م²' : 'تكلفة الصب / م²', blank(u.cast)), ...(s.stage_ids?.finish?.length ? [kpi('تكلفة التشطيب / م²', blank(u.finish))] : []), kpi('سعر المتر الإجمالي', blank(u.total), s.stage_ids?.finish?.length ? 'صب + تشطيب' : 'صب', 'ok')),
       i.cement_lines?.some((x) => x.kg_guessed) ? h('div.note.bad', `⚠ وزن الوحدة متخمّن (${bm.std} كجم) للأصناف: ` + i.cement_lines.filter((x) => x.kg_guessed).map((x) => x.name).join('، ') + ' — راجعه من «ربط المراحل والمواد» لأنه بيأثر على المتر المنتج.') : null,
       i.cement_lines?.length ? card(bm.lines_title, table({ name: bm.lines_title, search: false, compact: true, rows: i.cement_lines, cols: [{ k: 'name', l: 'الصنف', render: (r) => matLink(r.material_id, r.name), text: (r) => r.name }, { k: 'qty', l: 'الكمية المصروفة', num: true, fmt: (v) => fq(v) }, { k: 'kg', l: bm.factor_label, num: true, fmt: (v) => fq(v) }, { k: 'std_bags', l: bm.std_col, num: true, fmt: (v) => fq(v) }], foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'std_bags' ? fq(i.bags_system) : '') })) : null,
-      h('div.chart-grid', stageTable(s.cast, { perBag: true, perCol: bm.per_col }), stageTable(s.finish)),
-      card(`مرحلة ${s.mold?.name || 'القوالب'} — محمّلة على المشروع (لا تدخل في سعر المتر)`, s.mold ? table({ name: 'القوالب', search: false, compact: true, rows: s.mold.by_project,
-        cols: [{ k: 'name', l: 'المشروع' }, { k: 'material', l: 'أصناف', num: true, fmt: (v) => fmt(v) }, { k: 'labor', l: 'عمالة', num: true, fmt: (v) => fmt(v) }, { k: 'expense', l: 'مصروفات', num: true, fmt: (v) => fmt(v) }, { k: 'direct', l: 'مباشر', num: true, fmt: (v) => fmt(v) }, { k: 'allocated', l: 'موزّع من «غير محدد»', num: true, fmt: (v) => (v ? fmt(v) : '') }, { k: 'total', l: 'الإجمالي', num: true, fmt: (v) => fmt(v) }],
-        foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'total' ? fmt(s.mold.total) : ''), empty: 'لا توجد تكاليف قوالب في هذا الشهر' }) : h('div.note', 'مرحلة القوالب غير مربوطة.')),
-      s.mold?.allocated_unassigned ? h('div.note', 'تكلفة القوالب اللي من غير مشروع اتوزعت على المشروعات بنسبة تكلفة قوالب كل مشروع من إجمالي الشهر.') : null,
+      // الصفحة بتعرض المراحل المتكوّدة للنوع فقط (GRG: صب GRG بس)
+      h('div.chart-grid', ...[s.stage_ids?.cast?.length ? stageTable(s.cast, { perBag: true, perCol: bm.per_col }) : null, s.stage_ids?.finish?.length ? stageTable(s.finish) : null].filter(Boolean)),
+      !s.stage_ids?.cast?.length && !s.stage_ids?.finish?.length ? h('div.note.bad', `مفيش مراحل متكوّدة لنوع ${s.kind} — اربطها من «ربط المراحل والمواد».`) : null,
+      s.additives?.lines?.length ? card('المواد المضافة للخلطة (بالنسبة لشيكارة الجبس)', table({ name: 'المواد المضافة GRG', search: false, compact: true, rows: s.additives.lines,
+        cols: [{ k: 'name', l: 'الصنف', render: (r) => matLink(r.material_id, r.name), text: (r) => r.name }, { k: 'unit', l: 'الوحدة' }, { k: 'ratio', l: 'المعيار / شيكارة', num: true, fmt: (v) => fq(v) },
+          { k: 'expected_qty', l: 'الكمية المعيارية', num: true, fmt: (v) => fq(v) }, { k: 'issued_qty', l: 'المصروف لصب GRG', num: true, fmt: (v) => fq(v) },
+          { k: 'auto', l: 'الاحتساب', render: (r) => (r.auto ? badge('تلقائي', 'warn') : badge('فعلي', 'ok')), text: (r) => (r.auto ? 'تلقائي' : 'فعلي') },
+          { k: 'amount', l: 'القيمة', num: true, fmt: (v) => fmt(v) }, { k: 'deduct_qty', l: 'مخصوم من الغير مباشر (كمية)', num: true, fmt: (v) => (v ? fq(v) : '') }, { k: 'deduct_amount', l: 'مخصوم من الغير مباشر (قيمة)', num: true, fmt: (v) => (v ? fmt(v) : '') }],
+        foot: (c) => (c.k === 'name' ? 'الإجمالي (التلقائي)' : c.k === 'amount' ? fmt(s.additives.auto_total) : c.k === 'deduct_amount' ? fmt(s.additives.deduct_total) : '') })) : null,
       acts.some(Boolean) ? h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '14px 0' } }, acts) : null,
     );
   };
@@ -129,7 +148,7 @@ export async function historyPage(root) {
           { k: 'status', l: 'الحالة', render: (r) => (r.status === 'approved' ? badge(r.drift ? 'معتمد — الأرقام اختلفت' : 'معتمد', r.drift ? 'warn' : 'ok') : badge('مسودة', 'warn')), text: (r) => (r.status === 'approved' ? 'معتمد' : 'مسودة') },
           { k: 'bags', l: 'الشكاير', num: true, fmt: (v) => fq(v) }, { k: 'spread_rate', l: 'معدل الفرد', num: true, fmt: (v) => fq(v) }, { k: 'area', l: 'المتر المنتج', num: true, fmt: (v) => fmt(v) },
           { k: 'cast_total', l: 'تكلفة الصب', num: true, fmt: (v) => fmt(v) }, { k: 'finish_total', l: 'تكلفة التشطيب', num: true, fmt: (v) => fmt(v) },
-          { k: 'cast_per_m2', l: 'صب / م²', num: true, fmt: blank }, { k: 'finish_per_m2', l: 'تشطيب / م²', num: true, fmt: blank }, { k: 'unit_cost', l: 'سعر المتر', num: true, fmt: blank }, { k: 'mold_total', l: 'قوالب (على المشروع)', num: true, fmt: (v) => fmt(v) }] }));
+          { k: 'cast_per_m2', l: 'صب / م²', num: true, fmt: blank }, { k: 'finish_per_m2', l: 'تشطيب / م²', num: true, fmt: blank }, { k: 'unit_cost', l: 'سعر المتر', num: true, fmt: blank }] }));
   }, {});
   root.replaceChildren(pageHead('سجل أسعار المتر'), bar, host);
   bar.run();

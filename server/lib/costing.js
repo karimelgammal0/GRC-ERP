@@ -8,7 +8,7 @@ import { all, get, run, val, AppError, r2, r4, num } from '../db.js';
 import { getSetting, setSetting } from './core.js';
 
 export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
-const CFG_KEYS = { cast: 'cost_stage_cast', finish: 'cost_stage_finish', mold: 'cost_stage_mold', cement: 'cost_cement_materials', kg: 'cost_cement_kg', basis: 'cost_basis' };
+const CFG_KEYS = { cast: 'cost_stage_cast', finish: 'cost_stage_finish', mold: 'cost_stage_mold', cement: 'cost_cement_materials', kg: 'cost_cement_kg', basis: 'cost_basis', grg: 'cost_stage_grg', adds: 'cost_grg_additives' };
 export const STD_BAG_KG = 50;   // الوحدة المعيارية: شيكارة 50 كجم
 const json = (v, d) => { try { return v ? JSON.parse(v) : d; } catch { return d; } };
 /** وزن وحدة الصنف بالكيلو: المحدد في الإعدادات، وإلا من الاسم (مثال «*30ك»)، وإلا 50 */
@@ -27,6 +27,8 @@ export async function getConfig() {
     cast_stage_id: await pick('cast', byName(/صب/)), finish_stage_id: await pick('finish', byName(/تشطيب/)), mold_stage_id: await pick('mold', byName(/قوالب|قالب/)),
     cement_material_ids: json(await getSetting(CFG_KEYS.cement), []).map(Number), cement_kg: json(await getSetting(CFG_KEYS.kg), {}),
     basis: json(await getSetting(CFG_KEYS.basis), {}),   // أصناف أساس المتر المنتج لغير GRC: { GRP: { ids, factor }, GRG: {...} }
+    grg_stage_id: Number(await getSetting(CFG_KEYS.grg)) || (await all('SELECT id, name FROM stages WHERE active=1 ORDER BY seq')).find((x) => /grg/i.test(x.name) && !/تشطيب/.test(x.name))?.id || null,   // مرحلة صب GRG (المرحلة الوحيدة للنوع)
+    grg_additives: json(await getSetting(CFG_KEYS.adds), []).map((a) => ({ material_id: Number(a.material_id), ratio: Number(a.ratio) })).filter((a) => a.material_id && a.ratio > 0),   // مواد مضافة لخلطة GRG: كمية لكل شيكارة جبس معيارية
   };
 }
 // ---------- أساس المتر المنتج لكل نوع منتج ----------
@@ -58,6 +60,21 @@ export async function saveConfig(b) {
     if (v && !(await get('SELECT 1 FROM stages WHERE id=? AND parent_id IS NULL', v))) throw new AppError('اختيار غير موجود (لازم مرحلة رئيسية)');
     await setSetting(CFG_KEYS[k], v);
   }
+  if (b.grg_stage_id !== undefined) {
+    const v = b.grg_stage_id === '' || b.grg_stage_id === null ? null : Number(b.grg_stage_id);
+    if (v && !(await get('SELECT 1 FROM stages WHERE id=?', v))) throw new AppError('مرحلة GRG غير موجودة');
+    await setSetting(CFG_KEYS.grg, v);
+  }
+  if (b.grg_additives !== undefined) {
+    const seen = new Set(); const list = [];
+    for (const a of b.grg_additives || []) {
+      const id = Number(a.material_id), ratio = Number(a.ratio); if (!id) continue;
+      if (!(ratio > 0 && ratio <= 100000)) throw new AppError('معيار المادة المضافة لازم يكون أكبر من صفر');
+      if (!(await get('SELECT 1 FROM materials WHERE id=?', id))) throw new AppError('صنف مضاف غير موجود');
+      if (seen.has(id)) throw new AppError('الصنف المضاف متكرر'); seen.add(id); list.push({ material_id: id, ratio });
+    }
+    await setSetting(CFG_KEYS.adds, JSON.stringify(list));
+  }
   if (b.cement_material_ids !== undefined) await setSetting(CFG_KEYS.cement, JSON.stringify((b.cement_material_ids || []).map(Number).filter(Boolean)));
   if (b.cement_kg !== undefined) {
     const map = {}; for (const [id, kg] of Object.entries(b.cement_kg || {})) { const n = Number(kg); if (!(n > 0 && n <= 1000)) throw new AppError('وزن الشيكارة غير صحيح'); map[Number(id)] = n; }
@@ -74,7 +91,7 @@ export async function saveConfig(b) {
     else { const cur = json(await getSetting(CFG_KEYS.basis), {}); cur[key] = { ids: finalIds, factor }; await setSetting(CFG_KEYS.basis, JSON.stringify(cur)); }
   }
   const c = await getConfig();
-  const ids = [c.cast_stage_id, c.finish_stage_id, c.mold_stage_id].filter(Boolean);
+  const ids = [c.cast_stage_id, c.finish_stage_id, c.mold_stage_id].filter(Boolean);   // مرحلة GRG مستقلة عن الأدوار دي
   if (new Set(ids).size !== ids.length) throw new AppError('كل مرحلة لازم تتربط بدور مختلف (صب / تشطيب / قوالب)');
   return c;
 }
@@ -94,6 +111,37 @@ async function kindStageIds(parentId, kind) {
   const subs = await all(`SELECT id FROM stages WHERE parent_id=? AND active=1 AND UPPER(name) LIKE ?`, parentId, `%${String(kind).toUpperCase()}%`);
   if (subs.length) return subs.map((s) => s.id);
   return String(kind).toUpperCase() === 'GRC' ? [parentId] : [];
+}
+
+/** مراحل GRG: مرحلة «صب GRG» المربوطة (أو المطابقة بالاسم) + فروعها النشطة. النوع ده ملوش تشطيب */
+async function grgStageIds(cfg) {
+  if (!cfg.grg_stage_id) return [];
+  const kids = await all('SELECT id FROM stages WHERE parent_id=? AND active=1', cfg.grg_stage_id);
+  return [cfg.grg_stage_id, ...kids.map((k) => k.id)];
+}
+const isGRG = (kind) => String(kind).toUpperCase() === 'GRG';
+
+/** المواد المضافة لخلطة GRG (معيار لكل شيكارة جبس معيارية):
+ *  لو الصنف مصروف فعلاً لصب GRG بنستخدم الفعلي؛ لو مش موجود ضمن الصب بيتحسب تلقائياً (الكمية المعيارية × التكلفة)
+ *  وبيتخصم من كميات/تكلفة الغير مباشرة لنفس الشهر عشان ما يتحسبش مرتين */
+async function grgAdditives(cfg, month, bags, castBlock) {
+  const lines = [];
+  for (const a of cfg.grg_additives || []) {
+    const m = await get('SELECT m.id, m.name, u.name unit FROM materials m LEFT JOIN units u ON u.id=m.unit_id WHERE m.id=?', a.material_id);
+    if (!m) continue;
+    const expected = r4(bags * a.ratio);
+    const act = castBlock?.materials.find((x) => Number(x.material_id) === a.material_id);
+    const issued = num(act?.qty), auto = !(issued > 0);
+    const ind = await get(`SELECT COALESCE(SUM(qty),0) q, COALESCE(SUM(amount),0) a FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_type='material' AND cost_class='indirect'`, month, a.material_id);
+    const indQ = num(ind?.q), indA = num(ind?.a);
+    const stockAvg = num(await val('SELECT SUM(value)/NULLIF(SUM(qty),0) FROM material_stock WHERE material_id=? AND qty>0', a.material_id));
+    const unitCost = indQ > 0 ? indA / indQ : stockAvg;
+    const dq = auto ? Math.min(expected, Math.max(indQ, 0)) : 0;
+    lines.push({ material_id: a.material_id, name: m.name, unit: m.unit || '', ratio: a.ratio, expected_qty: expected, issued_qty: r4(issued), auto,
+      qty: auto ? expected : r4(issued), unit_cost: r4(unitCost), amount: auto ? r2(expected * unitCost) : r2(num(act?.amount)),
+      deduct_qty: r4(dq), deduct_amount: auto && indQ > 0 ? r2(indA * dq / indQ) : 0 });
+  }
+  return { lines, auto_total: r2(lines.filter((l) => l.auto).reduce((t, l) => t + l.amount, 0)), deduct_total: r2(lines.reduce((t, l) => t + l.deduct_amount, 0)) };
 }
 
 /** أسطر تكلفة مرحلة في شهر مجمّعة: أصناف بالصنف + أجور يومية + مرتبات شهرية + مصروفات مباشرة */
@@ -162,19 +210,25 @@ export async function computeLive(month, projectId = 0, inputs = null, kind = ''
   if (!MONTH_RE.test(month || '')) throw new AppError('الشهر غير صحيح (YYYY-MM)');
   const cfg = await getConfig(); const saved = await getPeriod(month, 0, kind);   // معدل الفرد والإعدادات شهرية واحدة لكل المشروعات
   const spread = num(inputs?.spread_rate ?? saved?.spread_rate);
-  const castIds = await kindStageIds(cfg.cast_stage_id, kind), finishIds = await kindStageIds(cfg.finish_stage_id, kind);
-  const [cast, finish, mold] = [await stageBlock(cfg.cast_stage_id, castIds, month, projectId), await stageBlock(cfg.finish_stage_id, finishIds, month, projectId), await moldBlock(cfg.mold_stage_id, month, projectId)];
+  const grg = isGRG(kind);   // GRG: مرحلة واحدة فقط (صب GRG) بدون تشطيب
+  const castIds = grg ? await grgStageIds(cfg) : await kindStageIds(cfg.cast_stage_id, kind), finishIds = grg ? [] : await kindStageIds(cfg.finish_stage_id, kind);
+  const [cast, finish, mold] = [await stageBlock(grg ? cfg.grg_stage_id : cfg.cast_stage_id, castIds, month, projectId), grg ? null : await stageBlock(cfg.finish_stage_id, finishIds, month, projectId), await moldBlock(cfg.mold_stage_id, month, projectId)];
   const sys = await systemBags(cfg, kind, castIds, month, projectId);
   const bags = sys.bags;   // الشكاير دايماً من المنصرف بالنظام (مفيش إدخال يدوي)
   const bs = basisOf(kind);
   const area = bs.divide ? (spread > 0 ? r2(bags / spread) : 0) : r2(bags * spread);   // GRP: كمية البوليستر ÷ معدل الفرد (كجم/م²)؛ غيره: الكمية × المعدل (م²/شيكارة)
+  let additives = null;
+  if (grg && cast) {
+    additives = await grgAdditives(cfg, month, bags, cast);
+    cast.auto_additives = additives.auto_total; cast.total = r2(cast.total + additives.auto_total);   // المضاف تلقائياً بيدخل في تكلفة صب GRG
+  }
   if (cast) for (const m of cast.materials) m.per_bag = bags > 0 ? r4(m.qty / bags) : null;   // معيار الشيكارة
   const per = (b) => (b && area > 0 ? r2(b.total / area) : null);
   if (cast) cast.per_m2 = per(cast); if (finish) finish.per_m2 = per(finish);
   const unit_cost = { cast: cast?.per_m2 ?? null, finish: finish?.per_m2 ?? null, total: area > 0 ? r2((cast?.total || 0) / area + (finish?.total || 0) / area) : null };
   return { month, kind, project_id: projectId || 0, config: cfg, stage_ids: { cast: castIds, finish: finishIds },
     inputs: { cement_lines: sys.lines, bags_system: sys.bags, bags, spread_rate: spread, area, basis: { ...basisOf(kind), pats: undefined } },
-    cast, finish, mold, unit_cost, pool_total: r2((cast?.total || 0) + (finish?.total || 0)) };
+    cast, finish, mold, additives, unit_cost, pool_total: r2((cast?.total || 0) + (finish?.total || 0)) };
 }
 
 /** الشيت الكامل: المعتمد بيرجع من الـ snapshot (ثابت) + تنبيه لو الأرقام الحية اختلفت بعد الاعتماد */
@@ -210,8 +264,10 @@ export async function approvePeriod(month, projectId, user, kind = '') {
   const live = await computeLive(month, pid, null, kind);
   if (!(live.inputs.spread_rate > 0)) throw new AppError(`أدخل ${basisOf(kind).spread_label} قبل الاعتماد`);
   if (!(live.inputs.bags > 0)) throw new AppError(`لا توجد كميات ${isCement(kind) ? 'أسمنت' : basisOf(kind).title.replace(/^ال/, '')} مصروفة للصب في هذا الشهر — تأكد من أصناف الأساس في «ربط المراحل والمواد»`);
-  if (!live.config.cast_stage_id || !live.config.finish_stage_id) throw new AppError('اربط مرحلتي الصب والتشطيب من إعدادات التكاليف');
-  if (!live.stage_ids.cast.length || !live.stage_ids.finish.length) throw new AppError(`مفيش مراحل فرعية لنوع ${kind} تحت الصب والتشطيب — اسم المرحلة الفرعية لازم يحتوي على ${kind}`);
+  if (isGRG(kind)) {
+    if (!live.stage_ids.cast.length) throw new AppError('اربط مرحلة «صب GRG» من «ربط المراحل والمواد»');
+  } else if (!live.config.cast_stage_id || !live.config.finish_stage_id) throw new AppError('اربط مرحلتي الصب والتشطيب من إعدادات التكاليف');
+  if (!isGRG(kind) && (!live.stage_ids.cast.length || !live.stage_ids.finish.length)) throw new AppError(`مفيش مراحل فرعية لنوع ${kind} تحت الصب والتشطيب — اسم المرحلة الفرعية لازم يحتوي على ${kind}`);
   await run(`UPDATE unit_cost_periods SET status='approved', snapshot=?, approved_by=?, approved_at=to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS') WHERE id=?`, JSON.stringify(live), user?.id ?? null, cur.id);
   return await getSheet(month, pid, kind);
 }
@@ -232,7 +288,7 @@ export async function history({ from, to } = {}) {
     const s = await getSheet(r.month, r.project_id, r.kind);
     out.push({ month: s.month, kind: r.kind, project_id: s.project_id, project_name: s.project_id ? await val('SELECT name FROM projects WHERE id=?', s.project_id) : 'كل المشاريع', status: s.status,
       bags: s.inputs.bags, spread_rate: s.inputs.spread_rate, area: s.inputs.area, cast_total: s.cast?.total ?? 0, finish_total: s.finish?.total ?? 0,
-      cast_per_m2: s.unit_cost.cast, finish_per_m2: s.unit_cost.finish, unit_cost: s.unit_cost.total, mold_total: s.mold?.total ?? 0, drift: !!s.drift });
+      cast_per_m2: s.unit_cost.cast, finish_per_m2: s.unit_cost.finish, unit_cost: s.unit_cost.total, drift: !!s.drift });
   }
   return out;
 }
