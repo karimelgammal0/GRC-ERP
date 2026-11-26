@@ -8,7 +8,7 @@ import { all, get, run, val, AppError, r2, r4, num } from '../db.js';
 import { getSetting, setSetting } from './core.js';
 
 export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
-const CFG_KEYS = { cast: 'cost_stage_cast', finish: 'cost_stage_finish', mold: 'cost_stage_mold', cement: 'cost_cement_materials', kg: 'cost_cement_kg', basis: 'cost_basis', grg: 'cost_stage_grg', adds: 'cost_grg_additives' };
+const CFG_KEYS = { cast: 'cost_stage_cast', finish: 'cost_stage_finish', mold: 'cost_stage_mold', cement: 'cost_cement_materials', kg: 'cost_cement_kg', basis: 'cost_basis', grg: 'cost_stage_grg', adds: 'cost_grg_additives', adds_grp: 'cost_grp_additives' };
 export const STD_BAG_KG = 50;   // الوحدة المعيارية: شيكارة 50 كجم
 const json = (v, d) => { try { return v ? JSON.parse(v) : d; } catch { return d; } };
 /** وزن وحدة الصنف بالكيلو: المحدد في الإعدادات، وإلا من الاسم (مثال «*30ك»)، وإلا 50 */
@@ -38,6 +38,7 @@ export async function getConfig() {
     basis: json(await getSetting(CFG_KEYS.basis), {}),   // أصناف أساس المتر المنتج لغير GRC: { GRP: { ids, factor }, GRG: {...} }
     grg_stage_id: await grgStagePick(),   // مرحلة صب GRG (المرحلة الوحيدة للنوع) — مش ممكن تكون مرحلة قوالب
     grg_additives: json(await getSetting(CFG_KEYS.adds), []).map((a) => ({ material_id: Number(a.material_id), ratio: Number(a.ratio) })).filter((a) => a.material_id && a.ratio > 0),   // مواد مضافة لخلطة GRG: كمية لكل شيكارة جبس معيارية
+    grp_additives: json(await getSetting(CFG_KEYS.adds_grp), []).map((a) => ({ material_id: Number(a.material_id), ratio: Number(a.ratio) })).filter((a) => a.material_id && a.ratio > 0),   // مواد مضافة لخلطة GRP: كمية لكل كجم بوليستر
   };
 }
 // ---------- أساس المتر المنتج لكل نوع منتج ----------
@@ -76,15 +77,16 @@ export async function saveConfig(b) {
     if (st && (MOLD_RE.test(st.name) || MOLD_RE.test(st.pname || ''))) throw new AppError('مرحلة GRG لازم تكون مرحلة «صب GRG» مش مرحلة قوالب');
     await setSetting(CFG_KEYS.grg, v);
   }
-  if (b.grg_additives !== undefined) {
+  for (const [field, key] of [['grg_additives', CFG_KEYS.adds], ['grp_additives', CFG_KEYS.adds_grp]]) {
+    if (b[field] === undefined) continue;
     const seen = new Set(); const list = [];
-    for (const a of b.grg_additives || []) {
+    for (const a of b[field] || []) {
       const id = Number(a.material_id), ratio = Number(a.ratio); if (!id) continue;
       if (!(ratio > 0 && ratio <= 100000)) throw new AppError('معيار المادة المضافة لازم يكون أكبر من صفر');
       if (!(await get('SELECT 1 FROM materials WHERE id=?', id))) throw new AppError('صنف مضاف غير موجود');
       if (seen.has(id)) throw new AppError('الصنف المضاف متكرر'); seen.add(id); list.push({ material_id: id, ratio });
     }
-    await setSetting(CFG_KEYS.adds, JSON.stringify(list));
+    await setSetting(key, JSON.stringify(list));
   }
   if (b.cement_material_ids !== undefined) await setSetting(CFG_KEYS.cement, JSON.stringify((b.cement_material_ids || []).map(Number).filter(Boolean)));
   if (b.cement_kg !== undefined) {
@@ -117,7 +119,7 @@ export const kindOf = async (k) => {
   if (!hit) throw new AppError(`نوع المنتج التام «${v}» غير متكوّد أو معطّل`); return hit;
 };
 /** مراحل نوع إنتاج تحت مرحلة رئيسية (صب/تشطيب): المراحل الفرعية اللي اسمها فيه GRC أو GRP؛ ولو مفيش فرعية للنوع GRC بنرجع للمرحلة الرئيسية نفسها (توافق مع البيانات القديمة) */
-async function kindStageIds(parentId, kind) {
+export async function kindStageIds(parentId, kind) {
   if (!parentId) return [];
   const subs = await all(`SELECT id FROM stages WHERE parent_id=? AND active=1 AND UPPER(name) LIKE ?`, parentId, `%${String(kind).toUpperCase()}%`);
   if (subs.length) return subs.map((s) => s.id);
@@ -135,9 +137,11 @@ const isGRG = (kind) => String(kind).toUpperCase() === 'GRG';
 /** المواد المضافة لخلطة GRG (معيار لكل شيكارة جبس معيارية):
  *  لو الصنف مصروف فعلاً لصب GRG بنستخدم الفعلي؛ لو مش موجود ضمن الصب بيتحسب تلقائياً (الكمية المعيارية × التكلفة)
  *  وبيتخصم من كميات/تكلفة الغير مباشرة لنفس الشهر عشان ما يتحسبش مرتين */
-async function grgAdditives(cfg, month, bags, castBlock) {
+/** المواد المضافة لخلطة النوع (GRG: لكل شيكارة جبس، GRP: لكل كجم بوليستر) */
+export const additivesOf = (cfg, kind) => (isGRG(kind) ? cfg.grg_additives : String(kind).toUpperCase() === 'GRP' ? cfg.grp_additives : []) || [];
+async function kindAdditives(cfg, kind, month, bags, castBlock) {
   const lines = [];
-  for (const a of cfg.grg_additives || []) {
+  for (const a of additivesOf(cfg, kind)) {
     const m = await get('SELECT m.id, m.name, u.name unit FROM materials m LEFT JOIN units u ON u.id=m.unit_id WHERE m.id=?', a.material_id);
     if (!m) continue;
     const expected = r4(bags * a.ratio);
@@ -229,7 +233,7 @@ export async function computeLive(month, projectId = 0, inputs = null, kind = ''
   const bs = basisOf(kind);
   const area = bs.divide ? (spread > 0 ? r2(bags / spread) : 0) : r2(bags * spread);   // GRP: كمية البوليستر ÷ معدل الفرد (كجم/م²)؛ غيره: الكمية × المعدل (م²/شيكارة)
   let additives = null;
-  if (grg && cast) additives = await grgAdditives(cfg, month, bags, cast);   // عرض فقط: النقل الفعلي لتكلفة المضاف بيتم في «توزيع غير المباشر» ويظهر هنا كمصروف على صب GRG
+  if (cast && additivesOf(cfg, kind).length) additives = await kindAdditives(cfg, kind, month, bags, cast);   // عرض فقط: النقل الفعلي لتكلفة المضاف بيتم في «توزيع غير المباشر» ويظهر هنا كمصروف على صب GRG
   if (cast) for (const m of cast.materials) m.per_bag = bags > 0 ? r4(m.qty / bags) : null;   // معيار الشيكارة
   const per = (b) => (b && area > 0 ? r2(b.total / area) : null);
   if (cast) cast.per_m2 = per(cast); if (finish) finish.per_m2 = per(finish);

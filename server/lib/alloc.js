@@ -8,7 +8,7 @@
 import { all, get, run, val, tx, insertRow, AppError, r2, r4, num } from '../db.js';
 import { acc } from './core.js';
 import { replaceJournal, deleteJournals } from './gl.js';
-import { getConfig, systemBags, grgStageIds, MONTH_RE } from './costing.js';
+import { getConfig, systemBags, grgStageIds, kindStageIds, additivesOf, MONTH_RE } from './costing.js';
 
 const dc = (account_id, amount, extra = {}) => (amount >= 0 ? { account_id, debit: amount, credit: 0, ...extra } : { account_id, debit: 0, credit: -amount, ...extra });
 const cr = (account_id, amount, extra = {}) => dc(account_id, -amount, extra);
@@ -33,20 +33,22 @@ export async function computeAlloc(month) {
     if (!x.account_id) { out.problems.push(`فئة المصروف «${x.name || 'بدون فئة'}» غير مربوطة بحساب`); continue; }
     out.pool.push({ key: `cat${x.category_id}`, category_id: x.category_id, account_id: x.account_id, name: x.name, amount: amt });
   }
-  // ---- نقل مواد GRG المضافة (لو مش مصروفة فعلاً لصب GRG) ----
-  const grgIds = await grgStageIds(cfg); const delta = new Map();
-  if (grgIds.length && cfg.grg_additives.length) {
-    const sys = await systemBags(cfg, 'GRG', grgIds, month, 0);
-    const to = (await leaves(cfg.grg_stage_id))[0];
-    for (const a of cfg.grg_additives) {
+  // ---- نقل المواد المضافة للخلطة (GRG: لكل شيكارة جبس، GRP: لكل كجم بوليستر) لو مش مصروفة فعلاً لمرحلة صب النوع ----
+  const delta = new Map();
+  for (const kind of ['GRG', 'GRP']) {
+    const kIds = kind === 'GRG' ? await grgStageIds(cfg) : await kindStageIds(cfg.cast_stage_id, 'GRP'); const adds = additivesOf(cfg, kind);
+    if (!kIds.length || !adds.length) continue;
+    const sys = await systemBags(cfg, kind, kIds, month, 0);
+    const to = kind === 'GRG' ? (await leaves(cfg.grg_stage_id))[0] : kIds[0];
+    for (const a of adds) {
       const need = r4(sys.bags * a.ratio); if (!(need > 0)) continue;
-      const issued = num(await val(`SELECT COALESCE(SUM(qty),0) FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_type='material' AND stage_id IN (${grgIds.join(',')}) AND source_type NOT IN ('ialloc','ireclass')`, month, a.material_id));
+      const issued = num(await val(`SELECT COALESCE(SUM(qty),0) FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_type='material' AND stage_id IN (${kIds.join(',')}) AND source_type NOT IN ('ialloc','ireclass')`, month, a.material_id));
       if (issued > 0) continue;
       let left = need;
       for (const r of await all(`SELECT stage_id, SUM(qty) q, SUM(amount) a FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_class='indirect' AND cost_type='material' AND source_type='issue'
-          AND stage_id IS NOT NULL AND stage_id NOT IN (${grgIds.join(',')}) GROUP BY stage_id ORDER BY stage_id`, month, a.material_id)) {
+          AND stage_id IS NOT NULL AND stage_id NOT IN (${kIds.join(',')}) GROUP BY stage_id ORDER BY stage_id`, month, a.material_id)) {
         const q = num(r.q); if (!(q > 0) || left <= 0) continue; const dq = Math.min(left, q), da = r2(num(r.a) * dq / q); left = r4(left - dq);
-        out.reclass.push({ material_id: a.material_id, name: await val('SELECT name FROM materials WHERE id=?', a.material_id), from_stage_id: r.stage_id, to_stage_id: to, qty: r4(dq), amount: da });
+        out.reclass.push({ kind, material_id: a.material_id, name: await val('SELECT name FROM materials WHERE id=?', a.material_id), from_stage_id: r.stage_id, to_stage_id: to, qty: r4(dq), amount: da });
         delta.set(to, r2((delta.get(to) || 0) + da)); delta.set(r.stage_id, r2((delta.get(r.stage_id) || 0) - da));
       }
     }

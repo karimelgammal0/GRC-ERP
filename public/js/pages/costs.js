@@ -37,13 +37,13 @@ export async function configPage(root, params = {}) {
       { k: 'cast_stage_id', l: 'مرحلة الصب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit }, { k: 'finish_stage_id', l: 'مرحلة التشطيب', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, req: 1, readonly: !canEdit },
       { k: 'mold_stage_id', l: 'مرحلة القوالب (على المشروع)', t: 'fk', ref: 'stages', filter: (x) => !x.parent_id, readonly: !canEdit }], c, 3);
     // مواد مضافة لخلطة GRG: كل سطر = صنف + معيار (كمية لكل شيكارة جبس معيارية)
-    const adds = (c.grg_additives || []).map((a) => ({ ...a })); const addBox = h('div');
-    const drawAdds = () => addBox.replaceChildren(adds.length ? h('table.tbl.compact', h('thead', h('tr', ['الصنف المضاف', 'المعيار لكل شيكارة جبس', 'الوحدة', ''].map((x) => h('th', x)))), h('tbody', adds.map((a, i) => h('tr',
+    const hasAdds = ['GRG', 'GRP'].includes(String(kind).toUpperCase()); const addsKey = `${String(kind).toLowerCase()}_additives`; const adds = (c[addsKey] || []).map((a) => ({ ...a })); const addBox = h('div');
+    const drawAdds = () => addBox.replaceChildren(adds.length ? h('table.tbl.compact', h('thead', h('tr', ['الصنف المضاف', `المعيار لكل ${bm.unit_short} ${bm.title.replace(/^ال/, '')}`, 'الوحدة', ''].map((x) => h('th', x)))), h('tbody', adds.map((a, i) => h('tr',
       h('td', nameOf('materials', a.material_id) || a.material_id),
       h('td', h('input', { type: 'number', step: 'any', min: 0, value: a.ratio, disabled: !canEdit, style: { width: '110px' }, onchange: (e) => { a.ratio = Number(e.target.value); } })),
       h('td', byId('materials', a.material_id)?.unit_id ? nameOf('units', byId('materials', a.material_id).unit_id) : ''),
       h('td', canEdit ? h('button.btn.sm', { onclick: () => { adds.splice(i, 1); drawAdds(); } }, 'حذف') : null)))))
-      : h('div.note', 'مفيش مواد مضافة للخلطة لسه — ضيف الأصناف اللي بتتضاف على شيكارة الجبس.'));
+      : h('div.note', `مفيش مواد مضافة للخلطة لسه — ضيف الأصناف اللي بتتضاف على ${bm.unit_short} ${bm.title.replace(/^ال/, '')}.`));
     const addPick = fieldInput({ t: 'fk', ref: 'materials', combo: true, filter: (x) => !adds.some((a) => a.material_id === x.id) }, null); addPick.style.minWidth = '280px';
     const addAdd = h('button.btn', { onclick: () => { const id = addPick.get(); if (!id || adds.some((a) => a.material_id === id)) return; adds.push({ material_id: id, ratio: 1 }); addPick.set?.(null); drawAdds(); } }, '＋ إضافة مادة للخلطة');
     drawAdds();
@@ -63,7 +63,7 @@ export async function configPage(root, params = {}) {
     const add = h('button.btn', { onclick: () => { const id = pick.get(); const m = id && byId('materials', id); if (!m) return; if (!rows.some((r) => r.m.id === m.id)) rows.push({ m: { id: m.id, name: m.name }, sel: true, kg: bm.std || 1 }); pick.set?.(null); drawRows(); } }, '＋ إضافة صنف');
     const save = guard(async () => {
       const sel = rows.filter((r) => r.sel);
-      await PUT('/costs/config', { ...f.values(), ...(isG ? { grg_additives: adds.map((a) => ({ material_id: a.material_id, ratio: a.ratio })) } : {}), basis: { kind, ids: sel.map((r) => r.m.id), factor: Object.fromEntries(rows.map((r) => [r.m.id, Number(r.kg) || 1])) } }); toast('تم الحفظ'); await load();
+      await PUT('/costs/config', { ...f.values(), ...(hasAdds ? { [addsKey]: adds.map((a) => ({ material_id: a.material_id, ratio: a.ratio })) } : {}), basis: { kind, ids: sel.map((r) => r.m.id), factor: Object.fromEntries(rows.map((r) => [r.m.id, Number(r.kg) || 1])) } }); toast('تم الحفظ'); await load();
     });
     const tabs = h('div', { style: { display: 'flex', gap: '8px', margin: '4px 0 10px', flexWrap: 'wrap' } }, c.kinds.map((k) => h('button.btn.sm' + (k === kind ? '.primary' : ''), { onclick: () => { kind = k; load(); } }, k)));
     host.replaceChildren(card(isG ? 'مرحلة GRG' : 'المراحل', f.el),
@@ -71,7 +71,7 @@ export async function configPage(root, params = {}) {
         h('div.note', `نوع ${kind}: المتر المنتج = كمية ${bm.title.replace(/^ال/, '')} المصروفة للصب ${bm.divide ? '÷' : '×'} ${bm.spread_label} (${bm.per_unit}) بيتدخل شهرياً في «تكلفة المتر».${bm.bagged ? ` الوحدة المعيارية شيكارة ${bm.std} كجم.` : ' الكمية بوحدة الصنف نفسها × المعامل (كجم لكل وحدة) — سيبه 1 لو الصنف بالكيلو.'}`),
         tbl, warn,
         canEdit ? h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' } }, h('span', 'إضافة صنف تاني للأساس:'), pick, add) : null),
-      isG ? card('المواد المضافة للخلطة (بالنسبة لشيكارة الجبس)', h('div.note', `كل سطر = مادة بتتضاف للخلطة ومعيارها لكل شيكارة جبس معيارية (${bm.std} كجم). المادة اللي مش موجودة ضمن مصروفات صب GRG بتتحسب تلقائياً (الشكاير × المعيار × التكلفة) وبتتخصم من كميات وتكلفة الغير مباشر لنفس الشهر.`), addBox,
+      hasAdds ? card(`المواد المضافة للخلطة (بالنسبة لـ${bm.unit_short} ${bm.title.replace(/^ال/, '')})`, h('div.note', `كل سطر = مادة بتتضاف للخلطة ومعيارها لكل ${bm.unit_short} ${bm.title.replace(/^ال/, '')}${bm.bagged ? ` معيارية (${bm.std} كجم)` : ''}. المادة اللي مش موجودة ضمن مصروفات صب ${kind} بتتحسب بالمعيار وبتتنقل من مرحلة صرفها (تشغيل غير مباشر) لمرحلة الصب عند «توزيع غير المباشر».`), addBox,
         canEdit ? h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' } }, h('span', 'مادة مضافة:'), addPick, addAdd) : null) : null,
       canEdit ? h('div', { style: { marginTop: '12px' } }, h('button.btn.primary', { onclick: save }, 'حفظ')) : null);
   };
@@ -122,7 +122,7 @@ export async function unitCostPage(root, params = {}) {
       // الصفحة بتعرض المراحل المتكوّدة للنوع فقط (GRG: صب GRG بس)
       h('div.chart-grid', ...[s.stage_ids?.cast?.length ? stageTable(s.cast, { perBag: true, perCol: bm.per_col }) : null, s.stage_ids?.finish?.length ? stageTable(s.finish) : null].filter(Boolean)),
       !s.stage_ids?.cast?.length && !s.stage_ids?.finish?.length ? h('div.note.bad', `مفيش مراحل متكوّدة لنوع ${s.kind} — اربطها من «ربط المراحل والمواد».`) : null,
-      s.additives?.lines?.length ? card('المواد المضافة للخلطة (بالنسبة لشيكارة الجبس)', table({ name: 'المواد المضافة GRG', search: false, compact: true, rows: s.additives.lines,
+      s.additives?.lines?.length ? card(`المواد المضافة للخلطة (بالنسبة لـ${bm.unit_short} ${bm.title.replace(/^ال/, '')})`, table({ name: 'المواد المضافة', search: false, compact: true, rows: s.additives.lines,
         cols: [{ k: 'name', l: 'الصنف', render: (r) => matLink(r.material_id, r.name), text: (r) => r.name }, { k: 'unit', l: 'الوحدة' }, { k: 'ratio', l: 'المعيار / شيكارة', num: true, fmt: (v) => fq(v) },
           { k: 'expected_qty', l: 'الكمية المعيارية', num: true, fmt: (v) => fq(v) }, { k: 'issued_qty', l: 'المصروف لصب GRG', num: true, fmt: (v) => fq(v) },
           { k: 'auto', l: 'الاحتساب', render: (r) => (r.auto ? badge('تلقائي', 'warn') : badge('فعلي', 'ok')), text: (r) => (r.auto ? 'تلقائي' : 'فعلي') },
@@ -213,8 +213,8 @@ export async function allocPage(root, params = {}) {
       card('المستلم — مدين (إنتاج تحت التشغيل للمرحلة)', table({ name: 'مستلم-التوزيع', search: false, compact: true, rows: a.targets || [], empty: 'لا يوجد',
         cols: [{ k: 'name', l: 'المرحلة' }, { k: 'account_id', l: 'الحساب', render: (r) => nameOf('accounts', r.account_id), text: (r) => nameOf('accounts', r.account_id) }, { k: 'base', l: 'تكلفة المرحلة (الأساس)', num: true, fmt: (v) => fmt(v) }, { k: 'share', l: 'النسبة', num: true, fmt: (v) => fq(v * 100) + '%' }, { k: 'amount', l: 'نصيبها', num: true, fmt: (v) => fmt(v) }],
         foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'amount' ? fmt(a.total) : '') })),
-      (a.reclass || []).length ? card('نقل مواد GRG المضافة (غير مصروفة لصب GRG)', table({ name: 'نقل-GRG', search: false, compact: true, rows: a.reclass,
-        cols: [{ k: 'name', l: 'الصنف' }, { k: 'from_stage_id', l: 'من مرحلة', render: (r) => nameOf('stages', r.from_stage_id), text: (r) => nameOf('stages', r.from_stage_id) }, { k: 'to_stage_id', l: 'إلى مرحلة', render: (r) => nameOf('stages', r.to_stage_id), text: (r) => nameOf('stages', r.to_stage_id) }, { k: 'qty', l: 'الكمية', num: true, fmt: (v) => fq(v) }, { k: 'amount', l: 'القيمة', num: true, fmt: (v) => fmt(v) }] })) : null,
+      (a.reclass || []).length ? card('نقل المواد المضافة للخلطة (غير مصروفة لمرحلة الصب)', table({ name: 'نقل-GRG', search: false, compact: true, rows: a.reclass,
+        cols: [{ k: 'kind', l: 'النوع' }, { k: 'name', l: 'الصنف' }, { k: 'from_stage_id', l: 'من مرحلة', render: (r) => nameOf('stages', r.from_stage_id), text: (r) => nameOf('stages', r.from_stage_id) }, { k: 'to_stage_id', l: 'إلى مرحلة', render: (r) => nameOf('stages', r.to_stage_id), text: (r) => nameOf('stages', r.to_stage_id) }, { k: 'qty', l: 'الكمية', num: true, fmt: (v) => fq(v) }, { k: 'amount', l: 'القيمة', num: true, fmt: (v) => fmt(v) }] })) : null,
       h('div', { style: { display: 'flex', gap: '8px', margin: '14px 0' } },
         !approved && can('costs.alloc.approve') ? h('button.btn.primary', { onclick: guard(async () => { if (!(await confirmBox(`اعتماد توزيع التكاليف غير المباشرة لشهر ${month}؟ هيتعمل القيد وتدخل التكاليف في تكلفة مراحل الصب والتشطيب.`, 'اعتماد'))) return; await POST('/costs/alloc/approve', { month }); toast('تم اعتماد التوزيع'); await reload(); }) }, '✔ اعتماد التوزيع') : null,
         approved && can('costs.alloc.reopen') ? h('button.btn', { onclick: guard(async () => { if (await confirmBox('إعادة فتح التوزيع بتشيل القيد وتكاليف التوزيع من المراحل. متأكد؟', 'إعادة فتح', true)) { await POST('/costs/alloc/reopen', { month }); await reload(); } }) }, 'إعادة فتح') : null));
