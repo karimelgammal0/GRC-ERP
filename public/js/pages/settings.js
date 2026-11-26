@@ -190,12 +190,12 @@ function permEditor(initial) {
   const box = (k) => { const c = h('input', { type: 'checkbox', checked: sel.has(k) }); boxes.set(k, c); return c; };
   const put = (k, on) => { on ? sel.add(k) : sel.delete(k); const c = boxes.get(k); if (c) c.checked = on; };
   const keysOf = (m) => m.pages.flatMap((p) => [`${m.id}.${p.id}`, ...p.actions.map(([a]) => `${m.id}.${p.id}.${a}`)]);
-  const counts = new Map();
-  const upd = () => counts.forEach((el, id) => { const m = META.catalog.find((x) => x.id === id); const ks = keysOf(m); el.textContent = `${ks.filter((k) => sel.has(k)).length} / ${ks.length}`; });
+  const counts = new Map(), mods = new Map(), dets = [];
+  const upd = () => counts.forEach((el, id) => { const m = META.catalog.find((x) => x.id === id); const ks = keysOf(m); const n = ks.filter((k) => sel.has(k)).length; el.textContent = `${n} / ${ks.length}`; const mb = mods.get(id); if (mb) { mb.checked = n === ks.length && n > 0; mb.indeterminate = n > 0 && n < ks.length; } });
   const el = h('div.perm-editor', META.catalog.map((m) => {
     const cnt = h('small.muted'); counts.set(m.id, cnt);
-    const mb = h('input', { type: 'checkbox', title: 'تحديد / إلغاء كل صلاحيات الموديول', onchange: () => { keysOf(m).forEach((k) => put(k, mb.checked)); upd(); } });
-    return h('details.perm-mod', { open: m.pages.some((p) => sel.has(`${m.id}.${p.id}`)) }, h('summary', mb, h('b', ' ' + m.title), ' ', cnt),
+    const mb = h('input', { type: 'checkbox', title: 'تحديد / إلغاء كل صلاحيات الموديول', onclick: (e) => e.stopPropagation(), onchange: () => { keysOf(m).forEach((k) => put(k, mb.checked)); upd(); } }); mods.set(m.id, mb);
+    const dt = h('details.perm-mod', { open: m.pages.some((p) => sel.has(`${m.id}.${p.id}`)) }, h('summary', mb, h('b', ' ' + m.title), ' ', cnt),
       h('table.perm', h('tbody', m.pages.map((p) => {
         const pk = `${m.id}.${p.id}`; const pb = box(pk);
         pb.onchange = () => { put(pk, pb.checked); if (!pb.checked) p.actions.forEach(([a]) => put(`${pk}.${a}`, false)); upd(); };
@@ -205,9 +205,10 @@ function permEditor(initial) {
           return h('label.act', ab, ' ' + l);
         })));
       }))));
+    dets.push(dt); return dt;
   }));
   upd();
-  const all = (on) => { META.catalog.forEach((m) => keysOf(m).forEach((k) => put(k, on))); upd(); };
+  const all = (on) => { if (!on) sel.clear(); META.catalog.forEach((m) => keysOf(m).forEach((k) => put(k, on))); dets.forEach((d) => { d.open = on; }); upd(); };
   return { el, get: () => [...sel], all, bar: h('div.actions', h('button.btn.sm', { type: 'button', onclick: () => all(true) }, 'تحديد الكل'), h('button.btn.sm', { type: 'button', onclick: () => all(false) }, 'إلغاء الكل')) };
 }
 
