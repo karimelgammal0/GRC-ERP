@@ -236,8 +236,8 @@ export async function movesPage(root) {
         const sum = (dir, k) => shown.filter((r) => r.direction === dir).reduce((t, r) => t + (Number(r[k]) || 0), 0);
         if (i === 0) return `الإجماليات (${shown.length} حركة)`;
         if (c.k === 'direction') return `وارد ${shown.filter((r) => r.direction === 'in').length} / صادر ${shown.filter((r) => r.direction === 'out').length}`;
-        if (c.k === 'qty') return h('div', h('div', `وارد: ${fmt(sum('in', 'qty'))}`), h('div', `صادر: ${fmt(sum('out', 'qty'))}`), h('div', `الصافي: ${fmt(sum('in', 'qty') - sum('out', 'qty'))}`));
-        if (c.k === 'value') return h('div', h('div', `وارد: ${fmt(sum('in', 'value'))}`), h('div', `صادر: ${fmt(sum('out', 'value'))}`), h('div', `الصافي: ${fmt(sum('in', 'value') - sum('out', 'value'))}`));
+        if (c.k === 'qty') return h('div', h('div', `وارد كمية: ${fmt(sum('in', 'qty'))}`), h('div', `صادر كمية: ${fmt(sum('out', 'qty'))}`), h('div', `الصافي كمية: ${fmt(sum('in', 'qty') - sum('out', 'qty'))}`));
+        if (c.k === 'value') return h('div', h('div', `وارد قيمة: ${fmt(sum('in', 'value'))}`), h('div', `صادر قيمة: ${fmt(sum('out', 'value'))}`), h('div', `الصافي قيمة: ${fmt(sum('in', 'value') - sum('out', 'value'))}`));
         return '';
       } }));
   };
