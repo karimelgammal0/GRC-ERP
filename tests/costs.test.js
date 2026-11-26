@@ -115,6 +115,7 @@ await savePeriod({ month: '2026-09', kind: 'GRP', spread_rate: 2 }, { id: 1 }); 
 near((await getSheet('2026-09', 0, 'GRP')).inputs.spread_rate, 2, 'معدل GRP مستقل'); near((await getSheet('2026-09', 0, 'GRC')).inputs.spread_rate, 3, 'معدل GRC مستقل');
 const ap = await approvePeriod('2026-09', 0, { id: 1 }, 'GRP'); ok(ap.status === 'approved' && ap.kind === 'GRP', 'اعتماد GRP'); ok((await getSheet('2026-09', 0, 'GRC')).status === 'draft', 'GRC لسه مسودة');
 await throws(() => computeLive('2026-09', 0, null, 'XYZ'), /نوع المنتج التام/, 'نوع غير صحيح');
+await throws(() => saveConfig({ grg_stage_id: st['القوالب'] }), /قوالب/, 'مرحلة GRG مش ممكن تكون قوالب');
 console.log('▶ GRG: مرحلة واحدة + مواد مضافة بمعيار شيكارة الجبس + توزيع غير المباشر');
 ok(gg.stage_ids.finish.length === 0 && gg.finish === null, 'GRG مفيهوش تشطيب'); ok(gg.stage_ids.cast.includes(gcast3), 'مرحلة صب GRG بالاسم');
 const add1 = await mk('RM-G3', 'مادة مضافة تلقائية (اختبار)'), add2 = await mk('RM-G4', 'مادة مضافة مصروفة (اختبار)');

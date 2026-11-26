@@ -18,6 +18,15 @@ export const kgGuessed = (m, map = {}) => !Number(map[m.id]) && !/(\d+(?:\.\d+)?
 // «اسمنت» بأي كتابة (اسمنت / أسمنت / إسمنت)
 const NORM = (col) => `REPLACE(REPLACE(REPLACE(${col},'أ','ا'),'إ','ا'),'آ','ا')`;
 
+const MOLD_RE = /قوالب|قالب/;
+/** مرحلة صب GRG: المحفوظة في الإعدادات (لو مش قوالب)، وإلا بالاسم: GRG + «صب» (في اسمها أو اسم أبوها) وبدون «قوالب» */
+async function grgStagePick() {
+  const rows = await all('SELECT s.id, s.name, p.name pname FROM stages s LEFT JOIN stages p ON p.id=s.parent_id WHERE s.active=1 ORDER BY s.seq, s.id');
+  const bad = (x) => MOLD_RE.test(x.name || '') || MOLD_RE.test(x.pname || '');
+  const saved = Number(await getSetting(CFG_KEYS.grg));
+  const sv = rows.find((x) => x.id === saved); if (sv && !bad(sv)) return saved;
+  return rows.find((x) => /grg/i.test(x.name) && /صب/.test(`${x.name} ${x.pname || ''}`) && !bad(x))?.id ?? null;
+}
 /** ربط المراحل والمواد: من الإعدادات، وإلا بالاسم (صب / تشطيب / قوالب) */
 export async function getConfig() {
   const stages = await all('SELECT id, name FROM stages WHERE active=1 AND parent_id IS NULL ORDER BY seq');
@@ -27,7 +36,7 @@ export async function getConfig() {
     cast_stage_id: await pick('cast', byName(/صب/)), finish_stage_id: await pick('finish', byName(/تشطيب/)), mold_stage_id: await pick('mold', byName(/قوالب|قالب/)),
     cement_material_ids: json(await getSetting(CFG_KEYS.cement), []).map(Number), cement_kg: json(await getSetting(CFG_KEYS.kg), {}),
     basis: json(await getSetting(CFG_KEYS.basis), {}),   // أصناف أساس المتر المنتج لغير GRC: { GRP: { ids, factor }, GRG: {...} }
-    grg_stage_id: Number(await getSetting(CFG_KEYS.grg)) || (await all('SELECT id, name FROM stages WHERE active=1 ORDER BY seq')).find((x) => /grg/i.test(x.name) && /صب/.test(x.name))?.id || null,   // مرحلة صب GRG (المرحلة الوحيدة للنوع)
+    grg_stage_id: await grgStagePick(),   // مرحلة صب GRG (المرحلة الوحيدة للنوع) — مش ممكن تكون مرحلة قوالب
     grg_additives: json(await getSetting(CFG_KEYS.adds), []).map((a) => ({ material_id: Number(a.material_id), ratio: Number(a.ratio) })).filter((a) => a.material_id && a.ratio > 0),   // مواد مضافة لخلطة GRG: كمية لكل شيكارة جبس معيارية
   };
 }
@@ -62,7 +71,9 @@ export async function saveConfig(b) {
   }
   if (b.grg_stage_id !== undefined) {
     const v = b.grg_stage_id === '' || b.grg_stage_id === null ? null : Number(b.grg_stage_id);
-    if (v && !(await get('SELECT 1 FROM stages WHERE id=?', v))) throw new AppError('مرحلة GRG غير موجودة');
+    const st = v ? await get('SELECT s.name, p.name pname FROM stages s LEFT JOIN stages p ON p.id=s.parent_id WHERE s.id=?', v) : null;
+    if (v && !st) throw new AppError('مرحلة GRG غير موجودة');
+    if (st && (MOLD_RE.test(st.name) || MOLD_RE.test(st.pname || ''))) throw new AppError('مرحلة GRG لازم تكون مرحلة «صب GRG» مش مرحلة قوالب');
     await setSetting(CFG_KEYS.grg, v);
   }
   if (b.grg_additives !== undefined) {
