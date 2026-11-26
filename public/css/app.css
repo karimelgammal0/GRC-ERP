@@ -324,3 +324,14 @@ table.perm td.pg { width: 34%; font-weight: 600; } table.perm label.act { displa
   .kpis, .cards-hub { grid-template-columns: 1fr; }
   .mbtn { font-size: 13.5px; min-height: 96px; }
 }
+
+/* منع الجداول العريضة من توسيع أعمدة الشبكة (كانت بتزق الصفحة برّه الشاشة) */
+@media (max-width: 900px) {
+  .chart-grid, .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .kpis, .cards-hub, .mgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fgrid.c1, .fgrid.c2, .fgrid.c3, .fgrid.c4 { grid-template-columns: minmax(0, 1fr); }
+  .filters .fgrid, .filters .fgrid.c2, .filters .fgrid.c3, .filters .fgrid.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chart-grid > *, .grid2 > *, .kpis > *, .cards-hub > *, .fgrid > *, .card, .filters > * { min-width: 0; max-width: 100%; }
+  .main { max-width: 100vw; overflow-x: hidden; }
+}
+@media (max-width: 380px) { .kpis, .cards-hub { grid-template-columns: minmax(0, 1fr); } }
