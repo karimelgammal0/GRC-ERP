@@ -229,10 +229,10 @@ export async function movesPage(root) {
   const host = h('div');
   const run = async (v) => {
     const rows = await GET('/reports/stock-moves', v);
-    host.replaceChildren(table({ name: 'حركة-المخزون', compact: true, rows, cols: [{ k: 'date', l: 'التاريخ' }, { k: 'material_name', l: 'الصنف' }, { k: 'doc_type', l: 'المستند', text: (r) => DOC_LABEL[r.doc_type] || r.doc_type },
+    host.replaceChildren(table({ name: 'حركة-المخزون', compact: true, rows, cols: [{ k: 'date', l: 'التاريخ' }, { k: 'material_name', l: 'الصنف' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'doc_type', l: 'المستند', text: (r) => DOC_LABEL[r.doc_type] || r.doc_type },
       { k: 'party', l: 'الجهة' }, { k: 'direction', l: 'الاتجاه', render: (r) => (r.direction === 'in' ? badge('وارد', 'ok') : badge('صادر', 'warn')) },
       { k: 'qty', l: 'الكمية', num: true, fmt: fq }, { k: 'unit_cost', l: 'التكلفة', num: true, fmt: (n) => fmt(n, 3) }, { k: 'value', l: 'القيمة', num: true, fmt: (n) => fmt(n) }, { k: 'bal_qty', l: 'الرصيد بعدها', num: true, fmt: fq }] }));
   };
-  const fb = filterBar([{ k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', combo: true }, { k: 'direction', l: 'الاتجاه', t: 'select', options: [['', 'الكل'], ['in', 'وارد'], ['out', 'صادر']] }, { k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }], run, { from: monthStart() });
+  const fb = filterBar([{ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses' }, { k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', combo: true }, { k: 'direction', l: 'الاتجاه', t: 'select', options: [['', 'الكل'], ['in', 'وارد'], ['out', 'صادر']] }, { k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }], run, { from: monthStart() });
   root.replaceChildren(pageHead('حركة المخزون'), fb, host); fb.run();
 }
