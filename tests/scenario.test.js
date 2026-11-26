@@ -127,14 +127,13 @@ if (prj3) {
   near(s2.qty - s0.qty, 0, 'إلغاء الوارد بيرجع الرصيد'); near(s2.value - s0.value, 0, 'إلغاء الوارد بيرجع القيمة');
 }
 const iss4 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, stage_id: stage.cast, qty: 5 }] }, null, U);
-await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'overhead', warehouse_id: wh, lines: [{ material_id: T1, qty: 1 }] }, null, U), /حدد المرحلة/, 'صرف تشغيل بدون مرحلة');
 const avgNow = r2(3470 / 210);
 near((await get('SELECT avg_cost FROM material_stock WHERE material_id=?', T1)).avg_cost, 16.5238, 'الصرف لا يغيّر المتوسط', 0.001);
 near((await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty, 125, 'الرصيد بعد الصرف 125');
 // ربط التكلفة بالأستاذ
 const cl = async (w) => await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE ${w}`);
 near(await cl(`project_id=${prj} AND stage_id=${stage.cast} AND item_id=${item1}`), iss1.lines[0].total, 'تكلفة المشروع/البند/مرحلة الصب');
-near(await glBal('1224'), iss1.lines[0].total + iss4.lines[0].total, 'حساب إنتاج تحت التشغيل — الصب (شامل المواد غير المباشرة الموزعة على المرحلة)'); near(await glBal('5120'), 0, 'مواد مخزنية حساب عبور بيتصفّر');
+near(await glBal('1224'), iss1.lines[0].total, 'حساب إنتاج تحت التشغيل — الصب (الصرف الإنتاجي بس)'); near(await glBal('5120'), iss4.lines[0].total, 'المواد غير المباشرة على مواد مخزنية لحد التوزيع الشهري');
 near(await glBal('1223'), iss2.lines[0].total, 'حساب القوالب');
 near(await glBal('5200'), iss3.lines[0].total, 'أصناف محولة للمواقع'); near(await glBal('5300'), 0, 'المواد غير المباشرة راحت إنتاج تحت التشغيل مش 5300');
 near(await cl(`cost_class='indirect'`), iss4.lines[0].total, 'تكلفة غير مباشرة بدون مشروع');
@@ -145,7 +144,7 @@ await saveDoc('purchase_invoice', { date: '2026-11-05', supplier_id: sup, wareho
 const iss1b = await get('SELECT * FROM stock_issue_lines WHERE issue_id=?', iss1.id);
 ok(iss1b.unit_cost > 20, `تكلفة الصرف القديم اتحدثت (${iss1b.unit_cost})`);
 near(await cl(`project_id=${prj} AND stage_id=${stage.cast}`), iss1b.total, 'التكلفة في التقرير اتحدثت');
-near(await glBal('1224'), await cl(`stage_id=${stage.cast} AND source_type='issue'`), 'القيد اتحدّث'); near(await glBal('5120'), 0, 'مواد مخزنية لسه صفر بعد التحديث');
+near(await glBal('1224'), await cl(`stage_id=${stage.cast} AND source_type='issue' AND cost_class<>'indirect'`), 'القيد اتحدّث'); near(await glBal('5120'), await cl(`cost_class='indirect'`), 'مواد غير مباشرة لسه على مواد مخزنية بعد التحديث');
 // الاتساق: قيمة المخزون = حساب 1201 دائماً
 near(await stockTotal(), await glBal('1221'), 'قيمة المخزون = الأستاذ بعد إعادة التقييم');
 // إلغاء الفاتورة بأثر رجعي يرجع الأرقام

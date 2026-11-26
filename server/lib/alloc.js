@@ -33,8 +33,11 @@ export async function computeAlloc(month) {
     if (!x.account_id) { out.problems.push(`فئة المصروف «${x.name || 'بدون فئة'}» غير مربوطة بحساب`); continue; }
     out.pool.push({ key: `cat${x.category_id}`, category_id: x.category_id, account_id: x.account_id, name: x.name, amount: amt });
   }
-  // ---- نقل المواد المضافة للخلطة (GRG: لكل شيكارة جبس، GRP: لكل كجم بوليستر) لو مش مصروفة فعلاً لمرحلة صب النوع ----
-  const delta = new Map();
+  // ---- مواد التشغيل غير المباشر المصروفة في الشهر (على مواد مخزنية 5120) ----
+  const stockAcc = await acc('acc_stock_materials');
+  const matInd = r2(num(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE substr(date,1,7)=? AND cost_class='indirect' AND cost_type='material'`, month)));
+  // ---- المواد المضافة للخلطة (GRG: لكل شيكارة جبس، GRP: لكل كجم بوليستر): لو مش مصروفة فعلاً لمرحلة صب النوع بتتحسب بالمعيار وبتتخصم من مواد الغير مباشر ----
+  const delta = new Map(); let reclassTotal = 0;
   for (const kind of ['GRG', 'GRP']) {
     const kIds = kind === 'GRG' ? await grgStageIds(cfg) : await kindStageIds(cfg.cast_stage_id, 'GRP'); const adds = additivesOf(cfg, kind);
     if (!kIds.length || !adds.length) continue;
@@ -44,19 +47,19 @@ export async function computeAlloc(month) {
       const need = r4(sys.bags * a.ratio); if (!(need > 0)) continue;
       const issued = num(await val(`SELECT COALESCE(SUM(qty),0) FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_type='material' AND stage_id IN (${kIds.join(',')}) AND source_type NOT IN ('ialloc','ireclass')`, month, a.material_id));
       if (issued > 0) continue;
-      let left = need;
-      for (const r of await all(`SELECT stage_id, SUM(qty) q, SUM(amount) a FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_class='indirect' AND cost_type='material' AND source_type='issue'
-          AND stage_id IS NOT NULL AND stage_id NOT IN (${kIds.join(',')}) GROUP BY stage_id ORDER BY stage_id`, month, a.material_id)) {
-        const q = num(r.q); if (!(q > 0) || left <= 0) continue; const dq = Math.min(left, q), da = r2(num(r.a) * dq / q); left = r4(left - dq);
-        out.reclass.push({ kind, material_id: a.material_id, name: await val('SELECT name FROM materials WHERE id=?', a.material_id), from_stage_id: r.stage_id, to_stage_id: to, qty: r4(dq), amount: da });
-        delta.set(to, r2((delta.get(to) || 0) + da)); delta.set(r.stage_id, r2((delta.get(r.stage_id) || 0) - da));
-      }
+      const r = await get(`SELECT COALESCE(SUM(qty),0) q, COALESCE(SUM(amount),0) a FROM cost_lines WHERE substr(date,1,7)=? AND material_id=? AND cost_class='indirect' AND cost_type='material'`, month, a.material_id);
+      const q = num(r.q); if (!(q > 0)) continue;
+      const dq = Math.min(need, q), da = r2(num(r.a) * dq / q);
+      out.reclass.push({ kind, material_id: a.material_id, name: await val('SELECT name FROM materials WHERE id=?', a.material_id), to_stage_id: to, qty: r4(dq), amount: da });
+      delta.set(to, r2((delta.get(to) || 0) + da)); reclassTotal = r2(reclassTotal + da);
     }
   }
+  const matPool = r2(matInd - reclassTotal);
+  if (matPool > 0) out.pool.unshift({ key: 'mat', account_id: stockAcc, name: 'مواد تشغيل غير مباشرة (مواد مخزنية)', amount: matPool });
   // ---- المستهدف (مدين): المراحل بنسبة تكلفة كل مرحلة في الشهر ----
   let base = [];
   for (const id of ids) {
-    const b = r2(num(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE substr(date,1,7)=? AND stage_id=? AND cost_class<>'transfer' AND source_type NOT IN ('ialloc','ireclass')`, month, id)) + (delta.get(id) || 0));
+    const b = r2(num(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE substr(date,1,7)=? AND stage_id=? AND cost_class NOT IN ('transfer','indirect') AND source_type NOT IN ('ialloc','ireclass')`, month, id)) + (delta.get(id) || 0));
     base.push({ stage_id: id, name: await val('SELECT name FROM stages WHERE id=?', id), account_id: await stageAcc(id), base: Math.max(b, 0) });
   }
   const B = base.reduce((t, x) => t + x.base, 0); const P = r2(out.pool.reduce((t, x) => t + x.amount, 0));
@@ -93,18 +96,17 @@ async function _approve(month, user) {
   const id = cur ? cur.id : await insertRow('indirect_allocations', { month }, ['month']);
   await run(`DELETE FROM cost_lines WHERE source_type IN ('ialloc','ireclass') AND source_id=?`, id);
   const date = monthEnd(month); const lines = []; const desc = `توزيع تكاليف غير مباشرة ${month}`;
-  for (const m of r.reclass) {   // نقل مادة مضافة من مرحلة صرفها لصب GRG
-    const fa = await stageAcc(m.from_stage_id), ta = await stageAcc(m.to_stage_id);
-    if (!fa || !ta) throw new AppError('مراحل نقل مواد GRG لازم تكون مربوطة بحساب إنتاج تحت التشغيل');
-    lines.push(dc(ta, m.amount, { stage_id: m.to_stage_id }), cr(fa, m.amount, { stage_id: m.from_stage_id }));
-    for (const [sg, sgn] of [[m.to_stage_id, 1], [m.from_stage_id, -1]])
-      await insertRow('cost_lines', { date, source_type: 'ireclass', source_id: id, cost_type: 'material', cost_class: 'direct', stage_id: sg, material_id: m.material_id, qty: sgn * m.qty, amount: sgn * m.amount, description: `نقل مادة مضافة GRG — ${desc}` }, CL);
+  for (const m of r.reclass) {   // مادة مضافة للخلطة: (إنتاج تحت التشغيل لمرحلة الصب ← مواد مخزنية)
+    const ta = await stageAcc(m.to_stage_id), sa = await acc('acc_stock_materials');
+    if (!ta) throw new AppError('مرحلة الصب لازم تكون مربوطة بحساب إنتاج تحت التشغيل');
+    lines.push(dc(ta, m.amount, { stage_id: m.to_stage_id }), cr(sa, m.amount));
+    await insertRow('cost_lines', { date, source_type: 'ireclass', source_id: id, cost_type: 'material', cost_class: 'direct', stage_id: m.to_stage_id, material_id: m.material_id, qty: m.qty, amount: m.amount, description: `مادة مضافة للخلطة — ${desc}` }, CL);
   }
   for (const t of r.targets) lines.push(dc(t.account_id, t.amount, { stage_id: t.stage_id }));
   for (const p of r.pool) lines.push(cr(p.account_id, p.amount));
   for (const l of r.lines || []) {
     const p = r.pool.find((x) => x.key === l.pool);
-    await insertRow('cost_lines', { date, source_type: 'ialloc', source_id: id, cost_type: 'expense', cost_class: 'direct', stage_id: l.stage_id, category_id: p.category_id ?? null, qty: 0, amount: l.amount, description: `${desc} — ${p.name}` }, CL);
+    await insertRow('cost_lines', { date, source_type: 'ialloc', source_id: id, cost_type: p.key === 'mat' ? 'material' : 'expense', cost_class: 'direct', stage_id: l.stage_id, category_id: p.category_id ?? null, qty: 0, amount: l.amount, description: `${desc} — ${p.name}` }, CL);
   }
   await replaceJournal({ date, source_type: 'ialloc', source_id: id, description: desc, lines });
   await run(`UPDATE indirect_allocations SET status='approved', snapshot=?, approved_by=?, approved_at=to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS') WHERE id=?`, JSON.stringify(r), user?.id ?? null, id);

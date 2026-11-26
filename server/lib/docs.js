@@ -324,14 +324,11 @@ async function issueAccount(kind, stage_id) {
     if (!a) throw new AppError(`المرحلة «${await nm('stages', stage_id)}» غير مربوطة بحساب إنتاج تحت التشغيل — اربطها من الإعدادات ← المراحل`);
     return a;
   }
-  if (kind === 'overhead') {   // مواد غير مباشرة بتتوزع على مرحلة: إنتاج تحت التشغيل للمرحلة (ولو المرحلة مش مربوطة بحساب بترجع لأصناف التشغيل غير المباشرة)
-    const a = stage_id ? await val('SELECT COALESCE(s.account_id, p.account_id) FROM stages s LEFT JOIN stages p ON p.id=s.parent_id WHERE s.id=?', stage_id) : null;
-    return a || await acc('acc_overhead_materials');
-  }
+  if (kind === 'overhead') return await acc('acc_stock_materials');   // مواد غير مباشرة: (مواد مخزنية ← المخزون) وقت الصرف، وبتتحمّل على إنتاج تحت التشغيل شهرياً من «توزيع غير المباشر»
   return kind === 'site' ? await acc('acc_site_transfer') : await acc('acc_overhead_materials');
 }
 /** صرف إنتاج / تشغيل غير مباشر على مرحلة بيمر على «مواد مخزنية»: (إنتاج تحت التشغيل ← مواد مخزنية) + (مواد مخزنية ← المخزون) */
-const viaStockMaterials = async (kind, costAcc) => kind === 'production' || (kind === 'overhead' && costAcc !== await acc('acc_overhead_materials'));
+const viaStockMaterials = async (kind) => kind === 'production';
 const effectiveKind = async (h) => (h.kind === 'return' ? await val('SELECT kind FROM stock_issues WHERE id=?', h.ref_issue_id) : h.kind === 'site_in' ? 'site' : h.kind);
 
 async function buildIssue(id) {
@@ -359,7 +356,7 @@ async function buildIssue(id) {
   await replaceJournal({
     allowZero: zeroXfer,
     date: h.date, source_type: 'issue', source_id: id, description: `${h.kind === 'return' ? 'مرتجع صرف' : h.kind === 'site_in' ? 'تحويل وارد' : 'صرف'} ${h.no} — ${label}${zeroXfer ? ' (تحويل بدون تكلفة)' : ''}`,
-    lines: (await Promise.all([...byItem.values()].map(async ({ it: item_id, sg, amt }) => { const costAcc = await issueAccount(kind, sg); return { item_id, sg, amt, costAcc, via: await viaStockMaterials(kind, costAcc) }; }))).flatMap(({ item_id, sg, amt, costAcc, via }) => {
+    lines: (await Promise.all([...byItem.values()].map(async ({ it: item_id, sg, amt }) => { const costAcc = await issueAccount(kind, sg); return { item_id, sg, amt, costAcc, via: await viaStockMaterials(kind) }; }))).flatMap(({ item_id, sg, amt, costAcc, via }) => {
       const dims = { project_id: h.project_id, item_id, stage_id: sg };
       if (via) { const sm = stockMat; return sign === 1 ? [dc(costAcc, amt, dims), cr(sm, amt, dims), dc(sm, amt, dims), cr(inv, amt)] : [dc(sm, amt, dims), cr(costAcc, amt, dims), dc(inv, amt), cr(sm, amt, dims)]; }
       return sign === 1 ? [dc(costAcc, amt, dims), cr(inv, amt)] : [dc(inv, amt), cr(costAcc, amt, dims)];
@@ -413,7 +410,6 @@ DOCS.stock_issue = {
       for (const l of lines) l.stage_id = null;
     }
     if (p.kind === 'overhead') { p.project_id = null; p.site_id = null; for (const l of lines) l.item_id = null; }
-    if (p.kind === 'overhead') for (const l of lines) if (!l.stage_id) throw new AppError(`حدد المرحلة للصنف «${await nm('materials', l.material_id)}»`);
     if (p.kind !== 'return') { p.item_id = null; p.stage_id = null; if (p.kind === 'site' || p.kind === 'site_in') for (const l of lines) l.item_id = null; }
     for (const l of lines) { if (p.kind === 'site_in') { if (l.in_cost === '' || l.in_cost === undefined || l.in_cost === null) l.in_cost = null; else if (!(Number(l.in_cost) >= 0)) throw new AppError('تكلفة الوحدة غير صحيحة'); } else l.in_cost = null; }
     if (p.project_id) await must('projects', p.project_id, 'المشروع');

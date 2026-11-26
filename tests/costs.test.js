@@ -128,12 +128,13 @@ const { computeAlloc, approveAlloc, reopenAlloc, getAlloc } = await import('../s
 await savePeriod({ month: '2026-09', kind: 'GRG', spread_rate: 4 }, { id: 1 });
 await throws(() => approvePeriod('2026-09', 0, { id: 1 }, 'GRG'), /توزيع التكاليف غير المباشرة/, 'سعر المتر بيتطلب اعتماد توزيع غير المباشر الأول');
 const pre = await computeAlloc('2026-09'); const rc = pre.reclass.find((x) => x.material_id === add1);
-ok(rc && rc.to_stage_id === gcast3 && rc.from_stage_id === st['الصب'], 'نقل المادة المضافة من مرحلة صرفها لصب GRG');
+ok(rc && rc.to_stage_id === gcast3, 'نقل المادة المضافة من مرحلة صرفها لصب GRG');
 near(rc.qty, 15 * 0.4, 'كمية النقل = الشكاير × المعيار'); near(rc.amount, 6 * 20, 'قيمة النقل بتكلفة المرحلة المصروف منها'); ok(!pre.reclass.some((x) => x.material_id === add2), 'المصروفة فعلاً لصب GRG مش بتتنقل');
 await approveAlloc('2026-09', { id: 1 });
 const gl5 = await val(`SELECT COALESCE(SUM(jl.debit-jl.credit),0) FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id WHERE je.source_type='ialloc'`); near(gl5, 0, 'قيد التوزيع متوازن');
 gg = await computeLive('2026-09', 0, { spread_rate: 4 }, 'GRG');
-near(gg.cast.total, 1000 + 500 + 90 + 120, 'تكلفة صب GRG بعد نقل المضاف'); near(gg.unit_cost.total, (1000 + 500 + 90 + 120) / 60, 'سعر متر GRG (صب فقط)');
+const shareG = (await getAlloc('2026-09')).targets.find((t) => t.stage_id === gcast3)?.amount || 0; ok(shareG > 0, 'مرحلة صب GRG واخدة نصيب من توزيع الباقي');
+near(gg.cast.total, 1000 + 500 + 90 + 120 + shareG, 'تكلفة صب GRG بعد نقل المضاف ونصيب التوزيع'); near(gg.unit_cost.total, (1000 + 500 + 90 + 120 + shareG) / 60, 'سعر متر GRG (صب فقط)');
 ok(!gg.additives.lines.find((x) => x.material_id === add1).auto, 'بعد النقل المادة بقت فعلية على صب GRG');
 await savePeriod({ month: '2026-09', kind: 'GRG', spread_rate: 4 }, { id: 1 }); const ag = await approvePeriod('2026-09', 0, { id: 1 }, 'GRG'); ok(ag.status === 'approved', 'اعتماد GRG بمرحلة واحدة');
 await throws(() => reopenAlloc('2026-09'), /سعر المتر معتمد/, 'مينفعش إعادة فتح التوزيع وسعر المتر معتمد');
@@ -146,7 +147,7 @@ await throws(() => saveConfig({ grp_additives: [{ material_id: add3, ratio: -1 }
 await saveConfig({ grp_additives: [{ material_id: add3, ratio: 0.2 }] });
 ok((await getConfig()).grp_additives.length === 1, 'اتحفظت مواد GRP');
 const preP = await computeAlloc('2026-09'); const rp = preP.reclass.find((x) => x.material_id === add3);
-ok(rp && rp.kind === 'GRP' && rp.to_stage_id === pcast && rp.from_stage_id === st['الصب'], 'نقل مادة GRP المضافة لصب GRP');
+ok(rp && rp.kind === 'GRP' && rp.to_stage_id === pcast, 'نقل مادة GRP المضافة لصب GRP');
 near(rp.qty, 25 * 0.2, 'كمية النقل = كجم البوليستر × المعيار'); near(rp.amount, 5 * 10, 'قيمة النقل بتكلفة الصرف غير المباشر');
 const pa = await computeLive('2026-09', 0, { spread_rate: 2 }, 'GRP');
 ok(pa.additives && pa.additives.lines.find((x) => x.material_id === add3)?.auto, 'ظهرت في ورقة GRP كمحسوبة تلقائياً');
