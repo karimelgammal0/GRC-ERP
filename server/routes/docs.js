@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { all, get, run, val, AppError, r2 } from '../db.js';
-import { DOCS, saveDoc, voidDoc, getDoc, invoiceOpenAmount, VOUCHER_KINDS } from '../lib/docs.js';
+import { DOCS, saveDoc, voidDoc, restoreDoc, getDoc, invoiceOpenAmount, VOUCHER_KINDS } from '../lib/docs.js';
 import { stockOf } from '../lib/stock.js';
 import { nextNo, peekNo, audit } from '../lib/core.js';
 import { can, need, canModule, maskEmployees } from '../lib/perms.js';
@@ -134,6 +134,7 @@ export async function docRouter() {
     res.json(await saveDoc(req.params.type, req.body, id, req.user));
   });
   await r.post('/:type/:id/void', async (req, res) => { known(req.params.type); const id = Number(req.params.id); allow(req, req.params.type, await kindOf(req.params.type, id), 'void'); res.json(await voidDoc(req.params.type, id, req.user)); });
+  await r.post('/:type/:id/restore', async (req, res) => { known(req.params.type); const id = Number(req.params.id); allow(req, req.params.type, await kindOf(req.params.type, id), 'void'); res.json(await restoreDoc(req.params.type, id, req.user)); });
   await r.post('/:type/:id/reopen', async (req, res) => {
     known(req.params.type); const id = Number(req.params.id);
     const type = req.params.type; const D = DOCS[type];

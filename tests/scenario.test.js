@@ -5,7 +5,7 @@ process.env.PGLITE_MEMORY = '1'; process.env.NO_LISTEN = '1';
 const { all, get, val, run, r2, AppError, initSchema, insertRow } = await import('../server/db.js');
 await initSchema();
 const { seedAll } = await import('../server/lib/seed.js');
-const { saveDoc, voidDoc } = await import('../server/lib/docs.js');
+const { saveDoc, voidDoc, restoreDoc } = await import('../server/lib/docs.js');
 const { applyOpening, lockOpening } = await import('../server/lib/opening.js');
 const { setSetting, acc, getSetting } = await import('../server/lib/core.js');
 
@@ -97,6 +97,11 @@ near(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE source_type
 near(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE source_type='issue' AND source_id=${issM.id} AND item_id=${item2}`), issM.lines[1].total, 'إذن واحد: تكلفة البند الثاني');
 await throws(async () => await saveDoc('stock_issue', { date: '2026-11-07', kind: 'production', warehouse_id: wh, project_id: prj, lines: [{ material_id: T1, item_id: item1, stage_id: stage.cast, qty: 1 }, { material_id: T1, item_id: item1, stage_id: stage.cast, qty: 1 }] }, null, U), /مكرر/, 'نفس الصنف على نفس البند');
 await voidDoc('stock_issue', issM.id, U);
+{ const stk0 = (await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty, g0 = await glBal('1224');
+  const rs = await restoreDoc('stock_issue', issM.id, U); ok(rs.status === 'posted', 'استرجاع إذن ملغي');
+  ok((await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty < stk0, 'الاسترجاع رجّع خصم المخزون'); ok(await glBal('1224') !== g0, 'الاسترجاع رجّع القيد');
+  await throws(() => restoreDoc('stock_issue', issM.id, U), /غير ملغي/, 'مينفعش استرجاع إذن مش ملغي');
+  await voidDoc('stock_issue', issM.id, U); near((await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty, stk0, 'إلغاء تاني رجّع المخزون'); near(await glBal('1224'), g0, 'والقيد'); }
 const iss3 = await saveDoc('stock_issue', { date: '2026-11-07', kind: 'site', warehouse_id: wh, project_id: prj, site_id: site, lines: [{ material_id: T1, qty: 10 }] }, null, U);
 // التحويل لموقع: الموقع مطلوب بس لو المشروع متكود له مواقع
 await run(`INSERT INTO sites(code,name,project_id) VALUES('SITE-T2','موقع مشروع تاني',?)`, prj2); const site2 = await val(`SELECT id FROM sites WHERE code='SITE-T2'`);

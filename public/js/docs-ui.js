@@ -165,6 +165,10 @@ export function docScreen(cfg) {
         if (!(await confirmBox(`إعادة فتح ${cfg.noun} ${doc.no} للتعديل؟ بعد حفظ التعديل بيتقفل تاني تلقائياً.`, 'إعادة فتح'))) return;
         await POST(`/doc/${cfg.type}/${id}/reopen`); toast('تم فتح الإذن للتعديل'); showEditor(id);
       });
+      const restoreIt = guard(async () => {
+        if (!(await confirmBox(`استرجاع ${cfg.noun} ${doc.no}؟ هيرجع معتمد وتتعاد حركة المخزون والقيود.`, 'استرجاع المستند'))) return;
+        await POST(`/doc/${cfg.type}/${id}/restore`); toast('تم الاسترجاع'); showEditor(id);
+      });
       const voidIt = guard(async () => {
         if (!(await confirmBox(`إلغاء ${cfg.noun} ${doc.no}؟ سيتم عكس أثره على المخزون والحسابات.`, 'إلغاء المستند', true))) return;
         await POST(`/doc/${cfg.type}/${id}/void`); toast('تم الإلغاء'); showList();
@@ -185,7 +189,7 @@ export function docScreen(cfg) {
           doc && !voided && cfg.canVoid !== false && (!cfg.perm || can(cfg.perm + '.void')) ? h('button.btn.sm.danger', { onclick: voidIt }, 'إلغاء المستند') : null),
         locked ? h('div.note', 'الإذن معتمد ومقفول للتعديل. لإضافة بنود أنشئ إذن جديد' + (can(cfg.perm + '.reopen') ? '، أو اضغط «إعادة فتح» للتعديل عليه.' : '، أو اطلب من صاحب الصلاحية إعادة فتحه.')) : null,
         cfg.lockable && doc?.reopened && !voided ? h('div.note.bad', 'الإذن مفتوح للتعديل — بعد حفظ التعديل بيتقفل تاني.') : null,
-        voided ? h('div.note.bad', 'هذا المستند ملغي — للعرض فقط.') : noEdit ? h('div.note', 'عرض فقط — ليس لديك صلاحية التعديل على هذا المستند.') : null,
+        voided ? h('div.note.bad', 'هذا المستند ملغي — للعرض فقط.', doc && cfg.canVoid !== false && (!cfg.perm || can(cfg.perm + '.void')) ? h('button.btn.sm', { style: { marginInlineStart: '12px' }, onclick: restoreIt }, 'استرجاع المستند') : null) : noEdit ? h('div.note', 'عرض فقط — ليس لديك صلاحية التعديل على هذا المستند.') : null,
         doc && !readonly ? h('div.note', 'تعديل المستند يعكس أثره القديم ويرحّل الجديد تلقائياً (المخزون والتكلفة والقيود).') : null,
         E.intro ? h('div.note', E.intro) : null,
         card(null, headerHost), hasLines ? card(E.lines.title || 'البنود', linesHost, E.footer ? footerHost : null) : (E.footer ? card(null, footerHost) : null), extraCard,

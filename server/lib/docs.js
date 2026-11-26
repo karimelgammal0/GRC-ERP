@@ -70,6 +70,23 @@ export async function voidDoc(type, id, user) {
   });
 }
 
+/** استرجاع مستند ملغي: بيرجع status='posted' ويعيد الترحيل (مخزون + قيود) من نفس البنود؛ لو الرصيد/الشروط مش مسمحة بيرفض */
+export async function restoreDoc(type, id, user) {
+  const D = DOCS[type];
+  return await tx(async () => {
+    const cur = await get(`SELECT * FROM ${D.table} WHERE id=?`, id);
+    if (!cur) throw new AppError('المستند غير موجود', 404);
+    if (cur.status !== 'void') throw new AppError('المستند غير ملغي');
+    if (!D.post) throw new AppError('الاسترجاع غير مدعوم لهذا المستند');
+    await run(`UPDATE ${D.table} SET status='posted' WHERE id=?`, id);
+    await D.validate?.({ ...cur, lines: await all(`SELECT * FROM ${D.lines} WHERE ${D.fk}=?`, id) }, await all(`SELECT * FROM ${D.lines} WHERE ${D.fk}=?`, id), id);
+    const doc = await getDoc(type, id);
+    await D.post(doc, user, cur);
+    await audit(user, 'restore', type, id, { no: cur.no });
+    return await getDoc(type, id);
+  });
+}
+
 // ============================================================
 //  طلبات الشراء
 // ============================================================
