@@ -193,3 +193,31 @@ export async function projectsCostPage(root, params = {}) {
   root.replaceChildren(pageHead('تكاليف مشروعات'), fb, host); fb.run();
   if (params.project_id) detail(params.month || curMonth(), Number(params.project_id));
 }
+
+// ---------- توزيع التكاليف غير المباشرة (شهري) — قبل اعتماد سعر المتر ----------
+export async function allocPage(root, params = {}) {
+  const host = h('div');
+  const fb = filterBar([{ k: 'month', l: 'الشهر', t: 'month', req: 1 }], async (v) => { await load(v.month || curMonth()); }, { month: params.month || curMonth() });
+  const load = async (month) => {
+    const a = await GET('/costs/alloc', { month }); const approved = a.status === 'approved';
+    const reload = () => load(month);
+    host.replaceChildren(
+      h('div.row', { style: { display: 'flex', gap: '8px', margin: '8px 0' } }, approved ? badge(`معتمد ${a.approved_at || ''}`, 'ok') : badge(a.status === 'new' ? 'لم يُعتمد بعد' : 'مسودة', 'warn')),
+      h('div.note', 'آخر الشهر: التكاليف غير المباشرة (أجور غير مباشرة + مصروفات التشغيل غير المباشرة) بتتوزع على مراحل الصب والتشطيب بنسبة تكلفة كل مرحلة: مدين إنتاج تحت التشغيل للمرحلة ودائن حساب المصروف نفسه. لازم يتعتمد قبل اعتماد سعر المتر. والمواد غير المباشرة بتتوزع وقت الصرف على المرحلة.'),
+      ...(a.problems || []).map((p) => h('div.note.bad', '⚠ ' + p)),
+      approved && a.drift !== null && a.drift !== undefined ? h('div.note.bad', `تنبيه: التكاليف غير المباشرة اتغيّرت بعد الاعتماد (الحالي ${fmt(a.drift)} مقابل المعتمد ${fmt(a.total)}) — أعد فتح التوزيع لو عايز تحدّثه.`) : null,
+      h('div.kpis', kpi('إجمالي غير المباشر الموزَّع', fmt(a.total)), kpi('عدد البنود', String((a.pool || []).length)), kpi('المراحل المستلمة', String((a.targets || []).length))),
+      card('المصدر — دائن (حسابات المصروف غير المباشر)', table({ name: 'مصدر-التوزيع', search: false, compact: true, rows: a.pool || [], empty: 'لا توجد تكاليف غير مباشرة في الشهر ده',
+        cols: [{ k: 'name', l: 'البند' }, { k: 'account_id', l: 'الحساب', render: (r) => nameOf('accounts', r.account_id), text: (r) => nameOf('accounts', r.account_id) }, { k: 'amount', l: 'المبلغ', num: true, fmt: (v) => fmt(v) }],
+        foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'amount' ? fmt(a.total) : '') })),
+      card('المستلم — مدين (إنتاج تحت التشغيل للمرحلة)', table({ name: 'مستلم-التوزيع', search: false, compact: true, rows: a.targets || [], empty: 'لا يوجد',
+        cols: [{ k: 'name', l: 'المرحلة' }, { k: 'account_id', l: 'الحساب', render: (r) => nameOf('accounts', r.account_id), text: (r) => nameOf('accounts', r.account_id) }, { k: 'base', l: 'تكلفة المرحلة (الأساس)', num: true, fmt: (v) => fmt(v) }, { k: 'share', l: 'النسبة', num: true, fmt: (v) => fq(v * 100) + '%' }, { k: 'amount', l: 'نصيبها', num: true, fmt: (v) => fmt(v) }],
+        foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'amount' ? fmt(a.total) : '') })),
+      (a.reclass || []).length ? card('نقل مواد GRG المضافة (غير مصروفة لصب GRG)', table({ name: 'نقل-GRG', search: false, compact: true, rows: a.reclass,
+        cols: [{ k: 'name', l: 'الصنف' }, { k: 'from_stage_id', l: 'من مرحلة', render: (r) => nameOf('stages', r.from_stage_id), text: (r) => nameOf('stages', r.from_stage_id) }, { k: 'to_stage_id', l: 'إلى مرحلة', render: (r) => nameOf('stages', r.to_stage_id), text: (r) => nameOf('stages', r.to_stage_id) }, { k: 'qty', l: 'الكمية', num: true, fmt: (v) => fq(v) }, { k: 'amount', l: 'القيمة', num: true, fmt: (v) => fmt(v) }] })) : null,
+      h('div', { style: { display: 'flex', gap: '8px', margin: '14px 0' } },
+        !approved && can('costs.alloc.approve') ? h('button.btn.primary', { onclick: guard(async () => { if (!(await confirmBox(`اعتماد توزيع التكاليف غير المباشرة لشهر ${month}؟ هيتعمل القيد وتدخل التكاليف في تكلفة مراحل الصب والتشطيب.`, 'اعتماد'))) return; await POST('/costs/alloc/approve', { month }); toast('تم اعتماد التوزيع'); await reload(); }) }, '✔ اعتماد التوزيع') : null,
+        approved && can('costs.alloc.reopen') ? h('button.btn', { onclick: guard(async () => { if (await confirmBox('إعادة فتح التوزيع بتشيل القيد وتكاليف التوزيع من المراحل. متأكد؟', 'إعادة فتح', true)) { await POST('/costs/alloc/reopen', { month }); await reload(); } }) }, 'إعادة فتح') : null));
+  };
+  root.replaceChildren(pageHead('توزيع التكاليف غير المباشرة'), fb, host); fb.run();
+}

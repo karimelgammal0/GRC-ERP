@@ -88,14 +88,12 @@ export async function computeRun(month, projectId, carryIn = null) {
   const kinds = [...new Set(prod.map((r) => r.kind || 'GRC'))];
   const cfg = (await computeLive(month, 0, null, '')).config;
   // سعر المتر لكل نوع (لازم يكون معتمد)
-  const unit = {}; let indDeduct = 0;
+  const unit = {};
   for (const k of kinds) {
     const p = await getPeriod(month, 0, k);
     if (p?.status !== 'approved') { out.problems.push(`اعتمد سعر متر ${k} لشهر ${month} من «تكلفة المتر» أولاً`); continue; }
     const s = await getSheet(month, 0, k);
-    const autoPer = s.additives && num(s.inputs?.area) > 0 ? num(s.additives.auto_total) / num(s.inputs.area) : 0;   // GRG: مضافات اتحسبت تلقائياً (مش في WIP) بسعر المتر
-    unit[k] = { cast: num(s.unit_cost.cast), finish: num(s.unit_cost.finish), auto: autoPer, cast_stage_id: String(k).toUpperCase() === 'GRG' ? cfg.grg_stage_id : cfg.cast_stage_id };
-    indDeduct += num(s.additives?.deduct_total);   // المضافات التلقائية بتتخصم من الغير مباشر لنفس الشهر
+    unit[k] = { cast: num(s.unit_cost.cast), finish: num(s.unit_cost.finish), cast_stage_id: String(k).toUpperCase() === 'GRG' ? cfg.grg_stage_id : cfg.cast_stage_id };
   }
   // قوالب المشروع (شامل نصيبه من القوالب غير المسنَدة)
   const live = await computeLive(month, 0, null, '');
@@ -106,19 +104,17 @@ export async function computeRun(month, projectId, carryIn = null) {
   const otherRows = await all(`SELECT COALESCE(c.stage_id,0) stage_id, SUM(c.amount) amt FROM cost_lines c
     WHERE substr(c.date,1,7)=? AND c.project_id=? AND c.cost_class='direct' ${famSql} GROUP BY COALESCE(c.stage_id,0)`, month, projectId);
   const other = r2(otherRows.reduce((t, r) => t + num(r.amt), 0));
-  // غير المباشر: الشهر كله بيتوزع على المشروعات بنسبة المتر التام
-  const indPool = r2(Math.max(0, num(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE substr(date,1,7)=? AND cost_class='indirect'`, month)) - indDeduct));
-  const share = allMeters > 0 ? meters / allMeters : 0;
-  const indirect = r2(indPool * share);
+  // غير المباشر اتوزّع قبل كده على مراحل الصب والتشطيب (خطوة «توزيع غير المباشر») فهو داخل سعر المتر
+  const indPool = 0, share = 0, indirect = 0;
   if (carry < 0 || carry > r2(mold + other) + 0.004) out.problems.push(`المرحّل لنصف المصنّع لازم يكون بين صفر و ${r2(mold + other)} (قوالب + مباشر خارج المتر)`);
   const extras = r2(mold + other - carry + indirect);
   const extraPer = meters > 0 ? extras / meters : 0;
-  let poolCast = 0, poolFinish = 0, poolAuto = 0; const castByStage = {}; const items = [];
+  let poolCast = 0, poolFinish = 0; const castByStage = {}; const items = [];
   for (const r of prod) {
     const k = r.kind || 'GRC', u = unit[k] || { cast: 0, finish: 0, auto: 0 }; const m = num(r.meters);
-    const castV = r2(m * u.cast), finV = r2(m * u.finish), extV = r2(m * extraPer), autoV = r2(m * (u.auto || 0));
-    poolCast += castV; poolFinish += finV; poolAuto += autoV;
-    const csid = u.cast_stage_id || cfg.cast_stage_id; castByStage[csid] = r2((castByStage[csid] || 0) + castV - autoV);
+    const castV = r2(m * u.cast), finV = r2(m * u.finish), extV = r2(m * extraPer);
+    poolCast += castV; poolFinish += finV;
+    const csid = u.cast_stage_id || cfg.cast_stage_id; castByStage[csid] = r2((castByStage[csid] || 0) + castV);
     items.push({ item_id: r.item_id, name: r.name, kind: k, qty: r4(r.qty), meters: r4(m), pool: r2(castV + finV), extras: extV, value: r2(castV + finV + extV) });
   }
   // فرق التقريب على آخر بند عشان إجمالي البنود = إجمالي تكلفة المشروع
@@ -132,23 +128,9 @@ export async function computeRun(month, projectId, carryIn = null) {
   const credits = [];
   const addCr = (account_id, amount, label, stage_id = null) => { if (amount && account_id) credits.push({ account_id, amount: r2(amount), label, stage_id }); };
   for (const [sid, amt] of Object.entries(castByStage)) addCr(await stageAcc(Number(sid)), amt, 'صب (سعر المتر)', Number(sid));
-  if (poolAuto) addCr(await acc('acc_overhead_materials'), poolAuto, 'مواد مضافة محسوبة تلقائياً (GRG) — من أصناف التشغيل غير المباشرة');
   addCr(await stageAcc(cfg.finish_stage_id), poolFinish, 'تشطيب (سعر المتر)', cfg.finish_stage_id);
   addCr(await stageAcc(cfg.mold_stage_id), mold * f, 'قوالب', cfg.mold_stage_id);
   for (const r of otherRows) addCr((await stageAcc(r.stage_id)) || (await stageAcc(cfg.finish_stage_id)), num(r.amt) * f, 'مباشر على المشروع', r.stage_id || null);
-  // غير المباشر بيتحمّل بالدائن على حساباته نفسها (مفيش حساب وسيط): أصناف تشغيل / أجور غير مباشرة / كل فئة مصروف على حسابها
-  if (indirect && indPool > 0) {
-    const rowsI = await all(`SELECT c.cost_type, c.category_id, SUM(c.amount) amt FROM cost_lines c WHERE substr(c.date,1,7)=? AND c.cost_class='indirect' GROUP BY c.cost_type, c.category_id`, month);
-    const buckets = new Map(); const fallback = await acc('acc_overhead_absorbed');
-    for (const x of rowsI) {
-      const a = x.cost_type === 'material' ? await acc('acc_overhead_materials') : x.cost_type === 'labor' ? await acc('acc_indirect_labor')
-        : ((x.category_id && await val('SELECT account_id FROM expense_categories WHERE id=?', x.category_id)) || fallback);
-      buckets.set(a, r2((buckets.get(a) || 0) + num(x.amt)));
-    }
-    const matAcc = await acc('acc_overhead_materials');
-    if (indDeduct && buckets.has(matAcc)) buckets.set(matAcc, r2(buckets.get(matAcc) - indDeduct));   // اللي اتحسب تلقائياً لـ GRG اتحمّل لوحده فوق
-    for (const [a, amt] of buckets) if (amt > 0) addCr(a, amt * share, 'تحميل غير مباشر على الإنتاج');
-  }
   const credSum = r2(credits.reduce((t, c) => t + c.amount, 0));
   if (credits.length && credSum !== target) { const big = credits.reduce((a, b) => (b.amount > a.amount ? b : a)); big.amount = r2(big.amount + target - credSum); }
   Object.assign(out, { items, credits, total: target, per_meter: meters > 0 ? r4(target / meters) : 0,

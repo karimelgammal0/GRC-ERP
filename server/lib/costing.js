@@ -114,7 +114,7 @@ async function kindStageIds(parentId, kind) {
 }
 
 /** مراحل GRG: مرحلة «صب GRG» المربوطة (أو المطابقة بالاسم) + فروعها النشطة. النوع ده ملوش تشطيب */
-async function grgStageIds(cfg) {
+export async function grgStageIds(cfg) {
   if (!cfg.grg_stage_id) return [];
   const kids = await all('SELECT id FROM stages WHERE parent_id=? AND active=1', cfg.grg_stage_id);
   return [cfg.grg_stage_id, ...kids.map((k) => k.id)];
@@ -189,7 +189,7 @@ async function moldBlock(stageId, month, projectId) {
 }
 
 /** كمية أساس المتر (أسمنت/بوليستر/جبس حسب النوع) المصروفة للصب في الشهر محوّلة للوحدة المعيارية (أسمنت: شيكارة 50 كجم) */
-async function systemBags(cfg, kind, castIds, month, projectId) {
+export async function systemBags(cfg, kind, castIds, month, projectId) {
   if (!castIds.length) return { lines: [], bags: 0 };
   const bc = basisCfg(cfg, kind); const bs = basisOf(kind); const pc = patCond(kind);
   let cond, cp;
@@ -218,10 +218,7 @@ export async function computeLive(month, projectId = 0, inputs = null, kind = ''
   const bs = basisOf(kind);
   const area = bs.divide ? (spread > 0 ? r2(bags / spread) : 0) : r2(bags * spread);   // GRP: كمية البوليستر ÷ معدل الفرد (كجم/م²)؛ غيره: الكمية × المعدل (م²/شيكارة)
   let additives = null;
-  if (grg && cast) {
-    additives = await grgAdditives(cfg, month, bags, cast);
-    cast.auto_additives = additives.auto_total; cast.total = r2(cast.total + additives.auto_total);   // المضاف تلقائياً بيدخل في تكلفة صب GRG
-  }
+  if (grg && cast) additives = await grgAdditives(cfg, month, bags, cast);   // عرض فقط: النقل الفعلي لتكلفة المضاف بيتم في «توزيع غير المباشر» ويظهر هنا كمصروف على صب GRG
   if (cast) for (const m of cast.materials) m.per_bag = bags > 0 ? r4(m.qty / bags) : null;   // معيار الشيكارة
   const per = (b) => (b && area > 0 ? r2(b.total / area) : null);
   if (cast) cast.per_m2 = per(cast); if (finish) finish.per_m2 = per(finish);
@@ -261,6 +258,8 @@ export async function approvePeriod(month, projectId, user, kind = '') {
   kind = await kindOf(kind); const pid = 0; const cur = await getPeriod(month, pid, kind);
   if (!cur) throw new AppError(`احفظ ${basisOf(kind).spread_label} للشهر أولاً`);
   if (cur.status === 'approved') throw new AppError('الشهر معتمد بالفعل');
+  { const A = await import('./alloc.js'); const al = await A.getAlloc(month);   // التوزيع الشهري لازم يتعتمد قبل سعر المتر عشان التكاليف غير المباشرة تدخل فيه
+    if (al.status !== 'approved' && (al.pool.length || al.reclass.length)) throw new AppError(`اعتمد «توزيع التكاليف غير المباشرة» لشهر ${month} أولاً`); }
   const live = await computeLive(month, pid, null, kind);
   if (!(live.inputs.spread_rate > 0)) throw new AppError(`أدخل ${basisOf(kind).spread_label} قبل الاعتماد`);
   if (!(live.inputs.bags > 0)) throw new AppError(`لا توجد كميات ${isCement(kind) ? 'أسمنت' : basisOf(kind).title.replace(/^ال/, '')} مصروفة للصب في هذا الشهر — تأكد من أصناف الأساس في «ربط المراحل والمواد»`);

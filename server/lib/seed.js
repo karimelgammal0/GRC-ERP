@@ -25,18 +25,19 @@ const MAPPING = {
   acc_custody: '1213', acc_opening_equity: '3400', acc_site_transfer: '5200', acc_overhead_materials: '5300',
   acc_indirect_labor: '5100', acc_admin_labor: '6100',
   acc_ar: '1240', acc_fg: '1222', acc_cogs: '5900', acc_revenue: '4100', acc_vat_out: '2122', acc_overhead_absorbed: '5910',
+  acc_direct_wages: '5110', acc_stock_materials: '5120',
 };
 
 /** حسابات المرحلة 3 للقواعد الموجودة (الجديدة بتتكوّن من ملف الدليل): بتتضاف لو ناقصة وبتتربط لو الربط فاضي */
 async function ensurePhase3Accounts() {
   if (!Number(await val('SELECT COUNT(*) FROM accounts'))) return;
   const rows = readChartFile(); const ids = Object.fromEntries((await all('SELECT id, code FROM accounts')).map((a) => [a.code, a.id]));
-  for (const code of ['1233', '1234', '1240', '2160', '5900', '5910']) {
+  for (const code of ['1233', '1234', '1240', '2160', '5900', '5910', '5110', '5120']) {
     if (ids[code]) continue; const r = rows.find((x) => x.code === code);
     ids[code] = await insertRow('accounts', { code, name: r.name, type: r.type, postable: r.postable, active: r.active, parent_id: r.parent ? ids[r.parent] ?? null : null }, ['code', 'name', 'type', 'postable', 'active', 'parent_id']);
   }
   await run(`UPDATE accounts SET name='مخزن المنتجات التامة' WHERE code='1222' AND name LIKE '%لاحقاً%'`);
-  for (const k of ['acc_fg', 'acc_cogs', 'acc_revenue', 'acc_vat_out', 'acc_overhead_absorbed'])
+  for (const k of ['acc_fg', 'acc_cogs', 'acc_revenue', 'acc_vat_out', 'acc_overhead_absorbed', 'acc_direct_wages', 'acc_stock_materials'])
     if (!Number(await getSetting(k)) && ids[MAPPING[k]]) await setSetting(k, ids[MAPPING[k]]);
 }
 

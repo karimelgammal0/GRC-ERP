@@ -24,6 +24,8 @@ export const ACC_KEYS = {
   acc_revenue: 'إيرادات المبيعات (توريد)',
   acc_vat_out: 'ضريبة القيمة المضافة — مبيعات',
   acc_overhead_absorbed: 'أعباء غير مباشرة محمّلة على الإنتاج',
+  acc_direct_wages: 'أجور عمال ومرتبات تشغيل (مباشرة)',
+  acc_stock_materials: 'مواد مخزنية (مستهلكة في الإنتاج)',
 };
 export async function acc(key) {
   const id = Number(await getSetting(key));

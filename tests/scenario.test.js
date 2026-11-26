@@ -134,9 +134,9 @@ near((await get('SELECT qty FROM material_stock WHERE material_id=?', T1)).qty, 
 // ربط التكلفة بالأستاذ
 const cl = async (w) => await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE ${w}`);
 near(await cl(`project_id=${prj} AND stage_id=${stage.cast} AND item_id=${item1}`), iss1.lines[0].total, 'تكلفة المشروع/البند/مرحلة الصب');
-near(await glBal('1224'), iss1.lines[0].total, 'حساب إنتاج تحت التشغيل — الصب');
+near(await glBal('1224'), iss1.lines[0].total + iss4.lines[0].total, 'حساب إنتاج تحت التشغيل — الصب (شامل المواد غير المباشرة الموزعة على المرحلة)'); near(await glBal('5120'), 0, 'مواد مخزنية حساب عبور بيتصفّر');
 near(await glBal('1223'), iss2.lines[0].total, 'حساب القوالب');
-near(await glBal('5200'), iss3.lines[0].total, 'أصناف محولة للمواقع'); near(await glBal('5300'), iss4.lines[0].total, 'غير مباشر');
+near(await glBal('5200'), iss3.lines[0].total, 'أصناف محولة للمواقع'); near(await glBal('5300'), 0, 'المواد غير المباشرة راحت إنتاج تحت التشغيل مش 5300');
 near(await cl(`cost_class='indirect'`), iss4.lines[0].total, 'تكلفة غير مباشرة بدون مشروع');
 
 section('6) حركة بأثر رجعي → إعادة تقييم الصرف');
@@ -145,7 +145,7 @@ await saveDoc('purchase_invoice', { date: '2026-11-05', supplier_id: sup, wareho
 const iss1b = await get('SELECT * FROM stock_issue_lines WHERE issue_id=?', iss1.id);
 ok(iss1b.unit_cost > 20, `تكلفة الصرف القديم اتحدثت (${iss1b.unit_cost})`);
 near(await cl(`project_id=${prj} AND stage_id=${stage.cast}`), iss1b.total, 'التكلفة في التقرير اتحدثت');
-near(await glBal('1224'), iss1b.total, 'القيد اتحدّث');
+near(await glBal('1224'), await cl(`stage_id=${stage.cast} AND source_type='issue'`), 'القيد اتحدّث'); near(await glBal('5120'), 0, 'مواد مخزنية لسه صفر بعد التحديث');
 // الاتساق: قيمة المخزون = حساب 1201 دائماً
 near(await stockTotal(), await glBal('1221'), 'قيمة المخزون = الأستاذ بعد إعادة التقييم');
 // إلغاء الفاتورة بأثر رجعي يرجع الأرقام
@@ -172,7 +172,7 @@ near(await stockTotal(), await glBal('1221'), 'الاتساق بعد التعد�
 section('8) الجرد والتسوية');
 const adj = await saveDoc('stock_adjustment', { date: '2026-11-09', warehouse_id: wh, lines: [{ material_id: T1, counted_qty: 140 }] }, null, U);
 near(adj.lines[0].diff_qty, -25, 'عجز 25'); ok(adj.lines[0].value < 0, 'قيمة العجز سالبة');
-near(await glBal('5300'), iss4.lines[0].total - adj.lines[0].value, 'عجز الجرد في الأستاذ (مواد غير مباشرة)'); near(await cl("source_type='adjustment'"), -adj.lines[0].value, 'عجز الجرد في التكلفة'); near(await stockTotal(), await glBal('1221'), 'الاتساق بعد الجرد');
+near(await glBal('5300'), -adj.lines[0].value, 'عجز الجرد في الأستاذ (مواد غير مباشرة)'); near(await cl("source_type='adjustment'"), -adj.lines[0].value, 'عجز الجرد في التكلفة'); near(await stockTotal(), await glBal('1221'), 'الاتساق بعد الجرد');
 
 section('9) سداد الموردين وكشف الحساب');
 const openInv = invB.id;

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { can, canModule, need } from '../lib/perms.js';
 import { audit } from '../lib/core.js';
 import * as P3 from '../lib/phase3.js';
+import { getAlloc, approveAlloc, reopenAlloc } from '../lib/alloc.js';
 import { getConfig, basisCandidates, basisOf, productKinds, kindOf as kindFor, saveConfig, getSheet, savePeriod, approvePeriod, reopenPeriod, history } from '../lib/costing.js';
 
 export function costsRouter() {
@@ -22,6 +23,10 @@ export function costsRouter() {
     need(req.user, 'costs.unit-cost.reopen'); const s = await reopenPeriod(String(req.body.month || ''), req.body.project_id, req.body.kind);
     await audit(req.user, 'reopen', 'unit_cost_period', null, { month: s.month, project_id: s.project_id }); res.json(s);
   });
+  // ---- توزيع التكاليف غير المباشرة (شهري) ----
+  r.get('/alloc', async (req, res) => { need(req.user, 'costs.alloc'); res.json(await getAlloc(String(req.query.month || ''))); });
+  r.post('/alloc/approve', async (req, res) => { need(req.user, 'costs.alloc.approve'); const x = await approveAlloc(String(req.body.month || ''), req.user); await audit(req.user, 'approve', 'indirect_allocation', null, { month: x.month, total: x.total }); res.json(x); });
+  r.post('/alloc/reopen', async (req, res) => { need(req.user, 'costs.alloc.reopen'); const x = await reopenAlloc(String(req.body.month || '')); await audit(req.user, 'reopen', 'indirect_allocation', null, { month: x.month }); res.json(x); });
   // ---- تكلفة المنتج التام لكل مشروع وشهر ----
   r.get('/runs', async (req, res) => { need(req.user, 'costs.projects-cost'); res.json(await P3.monthOverview(String(req.query.month || ''))); });
   r.get('/run', async (req, res) => { need(req.user, 'costs.projects-cost'); res.json(await P3.getRun(String(req.query.month || ''), Number(req.query.project_id))); });

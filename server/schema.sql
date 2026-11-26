@@ -675,3 +675,10 @@ CREATE TABLE IF NOT EXISTS finished_types (
 );
 INSERT INTO finished_types (code, name) SELECT 'FGT-01', 'GRC' WHERE NOT EXISTS (SELECT 1 FROM finished_types);
 INSERT INTO finished_types (code, name) SELECT 'FGT-02', 'GRP' WHERE (SELECT COUNT(*) FROM finished_types) = 1 AND NOT EXISTS (SELECT 1 FROM finished_types WHERE name='GRP');
+
+-- توزيع التكاليف غير المباشرة على مراحل الصب والتشطيب (خطوة شهرية: مدين إنتاج تحت التشغيل / دائن حسابات المصروف غير المباشر)
+CREATE TABLE IF NOT EXISTS indirect_allocations (
+  id SERIAL PRIMARY KEY, month TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'draft',          -- draft | approved
+  snapshot TEXT, approved_by INTEGER, approved_at TEXT
+);

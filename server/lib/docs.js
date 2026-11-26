@@ -324,8 +324,14 @@ async function issueAccount(kind, stage_id) {
     if (!a) throw new AppError(`المرحلة «${await nm('stages', stage_id)}» غير مربوطة بحساب إنتاج تحت التشغيل — اربطها من الإعدادات ← المراحل`);
     return a;
   }
+  if (kind === 'overhead') {   // مواد غير مباشرة بتتوزع على مرحلة: إنتاج تحت التشغيل للمرحلة (ولو المرحلة مش مربوطة بحساب بترجع لأصناف التشغيل غير المباشرة)
+    const a = stage_id ? await val('SELECT COALESCE(s.account_id, p.account_id) FROM stages s LEFT JOIN stages p ON p.id=s.parent_id WHERE s.id=?', stage_id) : null;
+    return a || await acc('acc_overhead_materials');
+  }
   return kind === 'site' ? await acc('acc_site_transfer') : await acc('acc_overhead_materials');
 }
+/** صرف إنتاج / تشغيل غير مباشر على مرحلة بيمر على «مواد مخزنية»: (إنتاج تحت التشغيل ← مواد مخزنية) + (مواد مخزنية ← المخزون) */
+const viaStockMaterials = async (kind, costAcc) => kind === 'production' || (kind === 'overhead' && costAcc !== await acc('acc_overhead_materials'));
 const effectiveKind = async (h) => (h.kind === 'return' ? await val('SELECT kind FROM stock_issues WHERE id=?', h.ref_issue_id) : h.kind === 'site_in' ? 'site' : h.kind);
 
 async function buildIssue(id) {
@@ -347,14 +353,15 @@ async function buildIssue(id) {
     }, ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'project_id', 'item_id', 'stage_id', 'site_id', 'material_id', 'qty', 'amount', 'description']);
   }
   total = r2(total);
-  const inv = await acc('acc_inventory_raw');
+  const inv = await acc('acc_inventory_raw'); const stockMat = await acc('acc_stock_materials');
   const label = { production: 'إنتاج', site: 'تحويل لموقع', overhead: 'تشغيل غير مباشر' }[kind];
   const zeroXfer = (kind === 'site') && total === 0 && !!Number(await val('SELECT zero_cost_transfer FROM warehouses WHERE id=?', h.warehouse_id));
   await replaceJournal({
     allowZero: zeroXfer,
     date: h.date, source_type: 'issue', source_id: id, description: `${h.kind === 'return' ? 'مرتجع صرف' : h.kind === 'site_in' ? 'تحويل وارد' : 'صرف'} ${h.no} — ${label}${zeroXfer ? ' (تحويل بدون تكلفة)' : ''}`,
-    lines: (await Promise.all([...byItem.values()].map(async ({ it: item_id, sg, amt }) => ({ item_id, sg, amt, costAcc: await issueAccount(kind, sg) })))).flatMap(({ item_id, sg, amt, costAcc }) => {
+    lines: (await Promise.all([...byItem.values()].map(async ({ it: item_id, sg, amt }) => { const costAcc = await issueAccount(kind, sg); return { item_id, sg, amt, costAcc, via: await viaStockMaterials(kind, costAcc) }; }))).flatMap(({ item_id, sg, amt, costAcc, via }) => {
       const dims = { project_id: h.project_id, item_id, stage_id: sg };
+      if (via) { const sm = stockMat; return sign === 1 ? [dc(costAcc, amt, dims), cr(sm, amt, dims), dc(sm, amt, dims), cr(inv, amt)] : [dc(sm, amt, dims), cr(costAcc, amt, dims), dc(inv, amt), cr(sm, amt, dims)]; }
       return sign === 1 ? [dc(costAcc, amt, dims), cr(inv, amt)] : [dc(inv, amt), cr(costAcc, amt, dims)];
     }),
   });
@@ -538,6 +545,13 @@ async function laborAccount(cls, stage_id) {
   }
   return cls === 'indirect' ? await acc('acc_indirect_labor') : await acc('acc_admin_labor');
 }
+/** أجور مباشرة: (إنتاج تحت التشغيل ← أجور مباشرة) + (أجور مباشرة ← المستحقات) — الطرف التاني بيتضاف مع سطور المستحقات */
+async function wageLines(cls, stage_id, cost, dims) {
+  const wip = await laborAccount(cls, stage_id);
+  if (cls !== 'direct') return [dc(wip, cost, dims)];
+  const w = await acc('acc_direct_wages');
+  return [dc(wip, cost, dims), cr(w, cost, dims), dc(w, cost, dims)];
+}
 async function checkDims(project_id, item_id, stage_id, needStage) {
   if (needStage && !stage_id) throw new AppError('العمالة المباشرة لازم يتحدد لها مرحلة التصنيع');
   if (item_id) {
@@ -600,7 +614,7 @@ DOCS.labor_sheet = {
       const cost = r2(l.days * l.rate + l.ot_days * l.rate + l.other_additions);
       total += l.amount; ded += l.other_deductions;
       const dims = { project_id: l.project_id, item_id: l.item_id, stage_id: l.stage_id };
-      out.push(dc(await laborAccount(l.cost_class, l.stage_id), cost, { ...dims, employee_id: l.employee_id }));
+      out.push(...await wageLines(l.cost_class, l.stage_id, cost, { ...dims, employee_id: l.employee_id }));
       netByEmp.set(l.employee_id, r2((netByEmp.get(l.employee_id) || 0) + l.amount));
       if (l.advance) out.push(cr(await acc('acc_employee_advances'), l.advance, { employee_id: l.employee_id }));
       await insertRow('cost_lines', { date: doc.date, source_type: 'labor', source_id: doc.id, source_line_id: l.id, cost_type: 'labor', cost_class: l.cost_class, ...dims,
@@ -709,7 +723,7 @@ DOCS.payroll = {
         const amt = k === allocs.length - 1 ? r2(cost - used) : r2(cost * a.percent / 100); used = r2(used + amt);
         if (l.cost_class === 'direct') await insertRow('payroll_allocations', { line_id: l.id, project_id: a.project_id, item_id: a.item_id, stage_id: a.stage_id, percent: a.percent }, ['line_id', 'project_id', 'item_id', 'stage_id', 'percent']);
         const dims = { project_id: a.project_id, item_id: a.item_id, stage_id: a.stage_id };
-        out.push(dc(await laborAccount(l.cost_class, a.stage_id), amt, { ...dims, employee_id: l.employee_id }));
+        out.push(...await wageLines(l.cost_class, a.stage_id, amt, { ...dims, employee_id: l.employee_id }));
         await insertRow('cost_lines', { date: doc.date, source_type: 'payroll', source_id: doc.id, source_line_id: l.id, cost_type: 'labor', cost_class: l.cost_class, ...dims,
           employee_id: l.employee_id, qty: 1, amount: amt, description: `${doc.no} — ${doc.month}` },
         ['date', 'source_type', 'source_id', 'source_line_id', 'cost_type', 'cost_class', 'project_id', 'item_id', 'stage_id', 'employee_id', 'qty', 'amount', 'description']);
