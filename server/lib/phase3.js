@@ -132,11 +132,23 @@ export async function computeRun(month, projectId, carryIn = null) {
   const credits = [];
   const addCr = (account_id, amount, label, stage_id = null) => { if (amount && account_id) credits.push({ account_id, amount: r2(amount), label, stage_id }); };
   for (const [sid, amt] of Object.entries(castByStage)) addCr(await stageAcc(Number(sid)), amt, 'صب (سعر المتر)', Number(sid));
-  if (poolAuto) addCr(await acc('acc_overhead_absorbed'), poolAuto, 'مواد مضافة محسوبة تلقائياً (GRG)');
+  if (poolAuto) addCr(await acc('acc_overhead_materials'), poolAuto, 'مواد مضافة محسوبة تلقائياً (GRG) — من أصناف التشغيل غير المباشرة');
   addCr(await stageAcc(cfg.finish_stage_id), poolFinish, 'تشطيب (سعر المتر)', cfg.finish_stage_id);
   addCr(await stageAcc(cfg.mold_stage_id), mold * f, 'قوالب', cfg.mold_stage_id);
   for (const r of otherRows) addCr((await stageAcc(r.stage_id)) || (await stageAcc(cfg.finish_stage_id)), num(r.amt) * f, 'مباشر على المشروع', r.stage_id || null);
-  if (indirect) addCr(await acc('acc_overhead_absorbed'), indirect, 'أعباء غير مباشرة محمّلة');
+  // غير المباشر بيتحمّل بالدائن على حساباته نفسها (مفيش حساب وسيط): أصناف تشغيل / أجور غير مباشرة / كل فئة مصروف على حسابها
+  if (indirect && indPool > 0) {
+    const rowsI = await all(`SELECT c.cost_type, c.category_id, SUM(c.amount) amt FROM cost_lines c WHERE substr(c.date,1,7)=? AND c.cost_class='indirect' GROUP BY c.cost_type, c.category_id`, month);
+    const buckets = new Map(); const fallback = await acc('acc_overhead_absorbed');
+    for (const x of rowsI) {
+      const a = x.cost_type === 'material' ? await acc('acc_overhead_materials') : x.cost_type === 'labor' ? await acc('acc_indirect_labor')
+        : ((x.category_id && await val('SELECT account_id FROM expense_categories WHERE id=?', x.category_id)) || fallback);
+      buckets.set(a, r2((buckets.get(a) || 0) + num(x.amt)));
+    }
+    const matAcc = await acc('acc_overhead_materials');
+    if (indDeduct && buckets.has(matAcc)) buckets.set(matAcc, r2(buckets.get(matAcc) - indDeduct));   // اللي اتحسب تلقائياً لـ GRG اتحمّل لوحده فوق
+    for (const [a, amt] of buckets) if (amt > 0) addCr(a, amt * share, 'تحميل غير مباشر على الإنتاج');
+  }
   const credSum = r2(credits.reduce((t, c) => t + c.amount, 0));
   if (credits.length && credSum !== target) { const big = credits.reduce((a, b) => (b.amount > a.amount ? b : a)); big.amount = r2(big.amount + target - credSum); }
   Object.assign(out, { items, credits, total: target, per_meter: meters > 0 ? r4(target / meters) : 0,
