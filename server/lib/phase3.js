@@ -93,7 +93,7 @@ export async function computeRun(month, projectId, carryIn = null) {
     const p = await getPeriod(month, 0, k);
     if (p?.status !== 'approved') { out.problems.push(`اعتمد سعر متر ${k} لشهر ${month} من «تكلفة المتر» أولاً`); continue; }
     const s = await getSheet(month, 0, k);
-    unit[k] = { cast: num(s.unit_cost.cast), finish: num(s.unit_cost.finish), cast_stage_id: String(k).toUpperCase() === 'GRG' ? cfg.grg_stage_id : cfg.cast_stage_id };
+    unit[k] = { cast: num(s.unit_cost.cast), finish: num(s.unit_cost.finish), cast_ids: s.stage_ids?.cast || [], finish_ids: s.stage_ids?.finish || [], cast_stage_id: String(k).toUpperCase() === 'GRG' ? cfg.grg_stage_id : cfg.cast_stage_id };
   }
   // قوالب المشروع (شامل نصيبه من القوالب غير المسنَدة)
   const live = await computeLive(month, 0, null, '');
@@ -109,12 +109,13 @@ export async function computeRun(month, projectId, carryIn = null) {
   if (carry < 0 || carry > r2(mold + other) + 0.004) out.problems.push(`المرحّل لنصف المصنّع لازم يكون بين صفر و ${r2(mold + other)} (قوالب + مباشر خارج المتر)`);
   const extras = r2(mold + other - carry + indirect);
   const extraPer = meters > 0 ? extras / meters : 0;
-  let poolCast = 0, poolFinish = 0; const castByStage = {}; const items = [];
+  let poolCast = 0, poolFinish = 0; const byStageIds = []; const items = [];
   for (const r of prod) {
     const k = r.kind || 'GRC', u = unit[k] || { cast: 0, finish: 0, auto: 0 }; const m = num(r.meters);
     const castV = r2(m * u.cast), finV = r2(m * u.finish), extV = r2(m * extraPer);
     poolCast += castV; poolFinish += finV;
-    const csid = u.cast_stage_id || cfg.cast_stage_id; castByStage[csid] = r2((castByStage[csid] || 0) + castV);
+    byStageIds.push({ ids: u.cast_ids?.length ? u.cast_ids : [u.cast_stage_id || cfg.cast_stage_id], amt: castV, label: 'صب (سعر المتر)' });
+    if (finV) byStageIds.push({ ids: u.finish_ids?.length ? u.finish_ids : [cfg.finish_stage_id], amt: finV, label: 'تشطيب (سعر المتر)' });
     items.push({ item_id: r.item_id, name: r.name, kind: k, qty: r4(r.qty), meters: r4(m), pool: r2(castV + finV), extras: extV, value: r2(castV + finV + extV) });
   }
   // فرق التقريب على آخر بند عشان إجمالي البنود = إجمالي تكلفة المشروع
@@ -127,8 +128,12 @@ export async function computeRun(month, projectId, carryIn = null) {
   const f = mold + other > 0 ? (mold + other - carry) / (mold + other) : 1;
   const credits = [];
   const addCr = (account_id, amount, label, stage_id = null) => { if (amount && account_id) credits.push({ account_id, amount: r2(amount), label, stage_id }); };
-  for (const [sid, amt] of Object.entries(castByStage)) addCr(await stageAcc(Number(sid)), amt, 'صب (سعر المتر)', Number(sid));
-  addCr(await stageAcc(cfg.finish_stage_id), poolFinish, 'تشطيب (سعر المتر)', cfg.finish_stage_id);
+  // الدائن على إنتاج تحت التشغيل بكل فروع المرحلة: موزّع على المراحل الفرعية للنوع بنسبة تكلفة كل فرع في الشهر
+  for (const g of byStageIds) {
+    const w = []; for (const id of g.ids) w.push(Math.max(num(await val(`SELECT COALESCE(SUM(amount),0) FROM cost_lines WHERE substr(date,1,7)=? AND stage_id=? AND cost_class<>'transfer'`, month, id)), 0));
+    const W = w.reduce((t, x) => t + x, 0); let left = g.amt;
+    for (const [i, id] of g.ids.entries()) { const v = i === g.ids.length - 1 ? left : r2(g.amt * (W > 0 ? w[i] / W : 1 / g.ids.length)); left = r2(left - v); addCr(await stageAcc(id), v, g.label, id); }
+  }
   addCr(await stageAcc(cfg.mold_stage_id), mold * f, 'قوالب', cfg.mold_stage_id);
   for (const r of otherRows) addCr((await stageAcc(r.stage_id)) || (await stageAcc(cfg.finish_stage_id)), num(r.amt) * f, 'مباشر على المشروع', r.stage_id || null);
   const credSum = r2(credits.reduce((t, c) => t + c.amount, 0));
