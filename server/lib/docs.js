@@ -549,7 +549,7 @@ async function laborAccount(cls, stage_id) {
 async function wageLines(cls, stage_id, cost, dims) {
   const wip = await laborAccount(cls, stage_id);
   if (cls !== 'direct') return [dc(wip, cost, dims)];
-  const w = await acc('acc_direct_wages');
+  const w = await acc('acc_indirect_labor');
   return [dc(wip, cost, dims), cr(w, cost, dims), dc(w, cost, dims)];
 }
 async function checkDims(project_id, item_id, stage_id, needStage) {

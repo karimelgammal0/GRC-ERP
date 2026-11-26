@@ -196,7 +196,7 @@ const sheet = await saveDoc('labor_sheet', { date: '2026-11-10', period_from: '2
   { employee_id: await E('EMP-T1'), days: 0.5, project_id: prj, item_id: item2, stage_id: stage.cast },
   { employee_id: await E('EMP-T2'), days: 1 }] }, null, U);
 near(sheet.total, 200 + 100 + 150, 'إجمالي اليومية (أجر واحد للعامل على كل أسطره)');
-near(await cl(`cost_type='labor' AND stage_id=${stage.cast}`), 300, 'عمالة مرحلة الصب'); near(await glBal('5100'), 150, 'أجور غير مباشرة');
+near(await cl(`cost_type='labor' AND stage_id=${stage.cast}`), 300, 'عمالة مرحلة الصب'); near(await glBal('5110'), 150, 'أجور غير مباشرة (المباشرة بتتصفّر عبر 5110)');
 near(await glBal('2130'), -450, 'أجور مستحقة');
 const sheet2 = await saveDoc('labor_sheet', { date: '2026-11-20', period_from: '2026-11-07', period_to: '2026-11-20', lines: [{ employee_id: await E('EMP-T2'), days: 2, ot_days: 1, rate: 100, other_additions: 50, other_deductions: 20, advance: 30 }] }, null, U);
 near(sheet2.total, 300, 'صافي المنصرف = أساسي + سهرات + إضافات − خصومات − سلفة');
@@ -233,7 +233,7 @@ await run(`UPDATE fiscal_periods SET status='open'`);
 const tb = (await all(`SELECT COALESCE(SUM(debit),0) d, COALESCE(SUM(credit),0) c FROM journal_lines`))[0];
 near(tb.d, tb.c, 'ميزان المراجعة متزن (إجمالي المدين = الدائن)');
 near(await stockTotal(), await glBal('1221'), 'مخزون الأصناف = الأستاذ');
-const wipAndCost = await glBal('1223') + await glBal('1224') + await glBal('1225') + await glBal('5200') + await glBal('5300') + await glBal('5100') + await glBal('6100') + await glBal('6200') + await glBal('5400') + await glBal('5500') + await glBal('5600') + await glBal('6300') + await glBal('6400') + await glBal('6500');
+const wipAndCost = await glBal('1223') + await glBal('1224') + await glBal('1225') + await glBal('5200') + await glBal('5300') + await glBal('5110') + await glBal('5120') + await glBal('6100') + await glBal('6200') + await glBal('5400') + await glBal('5500') + await glBal('5600') + await glBal('6300') + await glBal('6400') + await glBal('6500');
 near(await cl('1=1'), r2(wipAndCost), 'مجموع جدول التكلفة = مجموع حسابات التكلفة في الأستاذ');
 ok((await all('SELECT * FROM stock_moves WHERE bal_qty < -0.0000001')).length === 0, 'لا يوجد رصيد سالب في الدفتر');
 // كل صف دفتر: الرصيد التراكمي صحيح

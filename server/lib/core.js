@@ -17,14 +17,12 @@ export const ACC_KEYS = {
   acc_opening_equity: 'أرصدة افتتاحية (حقوق ملكية)',
   acc_site_transfer: 'أصناف محولة للمواقع',
   acc_overhead_materials: 'أصناف تشغيل غير مباشرة',
-  acc_indirect_labor: 'أجور غير مباشرة',
+  acc_indirect_labor: 'أجور مباشرة (أجور عمال ومرتبات تشغيل)',
   acc_admin_labor: 'مرتبات وأجور إدارية',
   acc_fg: 'مخزن المنتجات التامة',
   acc_cogs: 'تكلفة المبيعات',
   acc_revenue: 'إيرادات المبيعات (توريد)',
   acc_vat_out: 'ضريبة القيمة المضافة — مبيعات',
-  acc_overhead_absorbed: 'أعباء غير مباشرة محمّلة على الإنتاج',
-  acc_direct_wages: 'أجور عمال ومرتبات تشغيل (مباشرة)',
   acc_stock_materials: 'مواد مخزنية (مستهلكة في الإنتاج)',
 };
 export async function acc(key) {
