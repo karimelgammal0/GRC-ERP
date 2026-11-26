@@ -203,7 +203,7 @@ export async function allocPage(root, params = {}) {
     const a = await GET('/costs/alloc', { month }); const approved = a.status === 'approved';
     const reload = () => load(month);
     host.replaceChildren(
-      h('div.row', { style: { display: 'flex', gap: '8px', margin: '8px 0' } }, approved ? badge(`معتمد ${a.approved_at || ''}`, 'ok') : badge(a.status === 'new' ? 'لم يُعتمد بعد' : 'مسودة', 'warn')),
+      h('div.row', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px', margin: '8px 0' } }, approved ? badge(`معتمد ${a.approved_at || ''}`, 'ok') : badge(a.status === 'new' ? 'لم يُعتمد بعد' : 'مسودة', 'warn')),
       h('div.note', 'آخر الشهر: التكاليف غير المباشرة (أجور غير مباشرة + مصروفات التشغيل غير المباشرة) بتتوزع على مراحل الصب والتشطيب بنسبة تكلفة كل مرحلة: مدين إنتاج تحت التشغيل للمرحلة ودائن حساب المصروف نفسه. لازم يتعتمد قبل اعتماد سعر المتر. والمواد غير المباشرة بتتوزع وقت الصرف على المرحلة.'),
       ...(a.problems || []).map((p) => h('div.note.bad', '⚠ ' + p)),
       approved && a.drift !== null && a.drift !== undefined ? h('div.note.bad', `تنبيه: التكاليف غير المباشرة اتغيّرت بعد الاعتماد (الحالي ${fmt(a.drift)} مقابل المعتمد ${fmt(a.total)}) — أعد فتح التوزيع لو عايز تحدّثه.`) : null,
@@ -216,7 +216,7 @@ export async function allocPage(root, params = {}) {
         foot: (c) => (c.k === 'name' ? 'الإجمالي' : c.k === 'amount' ? fmt(a.total) : '') })),
       (a.reclass || []).length ? card('المواد المضافة للخلطة (محسوبة بالمعيار وبتتخصم من مواد التشغيل غير المباشر)', table({ name: 'نقل-GRG', search: false, compact: true, rows: a.reclass,
         cols: [{ k: 'kind', l: 'النوع' }, { k: 'name', l: 'الصنف' }, { k: 'to_stage_id', l: 'إلى مرحلة', render: (r) => nameOf('stages', r.to_stage_id), text: (r) => nameOf('stages', r.to_stage_id) }, { k: 'qty', l: 'الكمية', num: true, fmt: (v) => fq(v) }, { k: 'amount', l: 'القيمة', num: true, fmt: (v) => fmt(v) }] })) : null,
-      h('div', { style: { display: 'flex', gap: '8px', margin: '14px 0' } },
+      h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px', margin: '14px 0' } },
         !approved && can('costs.alloc.approve') ? h('button.btn.primary', { onclick: guard(async () => { if (!(await confirmBox(`اعتماد توزيع التكاليف غير المباشرة لشهر ${month}؟ هيتعمل القيد وتدخل التكاليف في تكلفة مراحل الصب والتشطيب.`, 'اعتماد'))) return; await POST('/costs/alloc/approve', { month }); toast('تم اعتماد التوزيع'); await reload(); }) }, '✔ اعتماد التوزيع') : null,
         approved && can('costs.alloc.reopen') ? h('button.btn', { onclick: guard(async () => { if (await confirmBox('إعادة فتح التوزيع بتشيل القيد وتكاليف التوزيع من المراحل. متأكد؟', 'إعادة فتح', true)) { await POST('/costs/alloc/reopen', { month }); await reload(); } }) }, 'إعادة فتح') : null));
   };

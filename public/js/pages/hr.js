@@ -183,7 +183,7 @@ export const payrollPage = docScreen({ perm: 'hr.payroll',
       { k: 'other_additions', blankZero: true, l: 'إضافات أخرى', t: 'number', w: '100px' }, { k: 'other_deductions', blankZero: true, l: 'خصومات أخرى', t: 'number', w: '100px' },
       { l: 'الصافي', calc: (l) => pNet(l), fmt: (v) => fmt(v), w: '110px' },
       { l: 'توزيع التكلفة', render: (l, ctx, ro) => {
-        const box = h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }); const lab = h('span', allocLabel(l)); box.append(lab);
+        const box = h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } }); const lab = h('span', allocLabel(l)); box.append(lab);
         if (!ro && classOf(l.employee_id) === 'direct') box.append(h('button.btn.sm', { onclick: () => allocModal(l, () => { lab.replaceChildren(allocLabel(l)); }) }, 'توزيع'));
         return box; } }] },
     tools: [{ label: 'تحميل كل الشهريين', run: (ctx) => {

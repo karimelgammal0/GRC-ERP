@@ -88,7 +88,7 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .tag { background: var(--brand-l); color: var(--brand-d); border-radius: 6px; padding: 1px 8px; font-size: 12px; font-weight: 700; }
 
 /* ---- النماذج ---- */
-input[type=text], input[type=number], input[type=date], input[type=password], input[type=search], select, textarea, .combo-in {
+input[type=text], input[type=number], input[type=date], input[type=month], input[type=password], input[type=search], select, textarea, .combo-in {
   width: 100%; border: 1px solid #cfcab9; border-radius: 7px; padding: 7px 10px; background: #fff; min-height: 36px; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand-l); border-color: var(--brand); }
 input.ro, select.ro { background: #f1efe8; color: var(--ink2); }
@@ -216,7 +216,7 @@ table.perm td.pg { width: 34%; font-weight: 600; } table.perm label.act { displa
   .fgrid.c2, .fgrid.c3, .fgrid.c4 { grid-template-columns: 1fr; }
   .filters .fgrid.c2 { grid-template-columns: 1fr 1fr; gap: 8px; }
   .filters { padding: 10px; } .filters .fgrid { min-width: 0; width: 100%; }
-  input[type=text], input[type=number], input[type=date], input[type=password], input[type=search], select, textarea, .combo-in { font-size: 16px; min-height: 44px; }
+  input[type=text], input[type=number], input[type=date], input[type=month], input[type=password], input[type=search], select, textarea, .combo-in { font-size: 16px; min-height: 44px; }
   .btn { min-height: 42px; padding: 8px 16px; } .btn.sm { min-height: 34px; }
   .actions .btn, .modal-foot .btn { flex: 1; }
   .tbl-bar .search { min-width: 0; flex: 1; }
@@ -265,3 +265,62 @@ table.perm td.pg { width: 34%; font-weight: 600; } table.perm label.act { displa
 /* محاذاة المنتصف لأعمدة جدول الأسطر (مثلاً الجرد) */
 .lines.ctr th, .lines.ctr td, .lines.ctr td.ro { text-align: center; }
 .lines.ctr td input, .lines.ctr td select, .lines.ctr td .combo-in { text-align: center; }
+
+/* صفوف أشرطة لوحة التحكم (كانت inline) */
+.dash-row { display: grid; grid-template-columns: 130px 1fr 110px; gap: 10px; align-items: center; margin: 8px 0; }
+
+/* ================= موبايل: باقي الصفحات ================= */
+@media (max-width: 900px) {
+  /* رأس الصفحة: العنوان سطر لوحده والأزرار تحته بعرض الشاشة */
+  .page-head { gap: 8px; }
+  .page-head h2 { flex: 1 0 100%; font-size: 17px; }
+  .page-head .grow { display: none; }
+  .page-head > .btn, .page-head > span, .page-head > button { flex: 1 1 auto; }
+  .page-head > span { display: flex; gap: 8px; } .page-head > span .btn { flex: 1; }
+  /* فلاتر: عمودين دايماً + زر عرض بعرض كامل */
+  .filters { flex-direction: column; align-items: stretch; gap: 10px; }
+  .filters .fgrid, .filters .fgrid.c2, .filters .fgrid.c3, .filters .fgrid.c4 { grid-template-columns: 1fr 1fr; gap: 8px; min-width: 0; width: 100%; }
+  .filters .fld.wide { grid-column: 1 / -1; }
+  .filters > .btn { width: 100%; }
+  .fld > span { font-size: 13px; }
+  input[type=checkbox] { width: 22px; height: 22px; flex: none; }
+  /* الجداول: متتضغطش، بتتحرك أفقياً */
+  .tbl-wrap { -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .tbl-wrap .tbl { width: max-content; min-width: 100%; }
+  .tbl td { white-space: nowrap; max-width: 62vw; overflow: hidden; text-overflow: ellipsis; }
+  .tbl th, .tbl td { padding: 9px 10px; }
+  :not(.tbl-wrap) > table.tbl, :not(.lines-scroll) > table.lines { display: block; overflow-x: auto; max-width: 100%; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  .lines td, .lines th { white-space: nowrap; }
+  .lines td input, .lines td select, .lines td .combo-in { min-width: 96px; }
+  .lines td .combo { min-width: 190px; }
+  .lines .combo-list { min-width: 0; max-width: calc(100vw - 16px); }
+  .combo-list { max-height: 40vh; }
+  .combo .opt { padding: 11px 12px; font-size: 15px; }
+  /* حقول بعرض ثابت من الـ JS */
+  .combo, .fld .combo { min-width: 0 !important; }
+  .qty-entry input { width: 72px; }
+  .lines-foot { max-width: none; }
+  /* مؤشرات وأشرطة */
+  .kpi { padding: 10px 12px; } .kpi b { font-size: 18px; overflow-wrap: anywhere; } .kpi em { overflow-wrap: anywhere; }
+  .dash-row { grid-template-columns: 92px 1fr 78px; gap: 8px; font-size: 13px; }
+  .bar-row { grid-template-columns: 92px 1fr 78px; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; } .chip { flex: none; }
+  .chart-grid { grid-template-columns: 1fr; }
+  .donut-wrap { justify-content: center; }
+  /* إجماليات */
+  .totals { gap: 10px 16px; justify-content: space-between; } .totals div { flex: 1 1 40%; text-align: right; }
+  .doc-head { gap: 8px; } .doc-no { font-size: 18px; }
+  .actions { position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); background: var(--bg); padding: 8px 0; z-index: 5; }
+  .modal .actions { position: static; }
+  /* الصلاحيات */
+  table.perm td { display: block; width: 100%; padding: 4px 10px; border: 0; } table.perm tr { display: block; border-bottom: 1px solid var(--line2); padding: 6px 0; }
+  table.perm td.pg { width: 100%; }
+  table.perm label.act { margin-inline-end: 12px; padding: 4px 0; }
+  .perm-editor { max-height: 60vh; }
+  .login .box { padding: 22px; }
+  .tbl-bar { gap: 6px; } .tbl-bar .count { flex: 1 0 100%; }
+}
+@media (max-width: 380px) {
+  .kpis, .cards-hub { grid-template-columns: 1fr; }
+  .mbtn { font-size: 13.5px; min-height: 96px; }
+}

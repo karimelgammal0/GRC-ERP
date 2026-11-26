@@ -24,7 +24,7 @@ function quickAccessCard() {
   if (head && head.appendChild) { head.style.display = 'flex'; head.style.justifyContent = 'space-between'; head.style.alignItems = 'center'; head.appendChild(btn); } else c.append(btn);
   return c;
 }
-const bars = (rows) => { const mx = Math.max(1, ...rows.map((r) => r.amt)); return h('div', rows.length ? rows.map((r) => h('div', { style: { display: 'grid', gridTemplateColumns: '130px 1fr 110px', gap: '10px', alignItems: 'center', margin: '8px 0' } }, h('span', r.name), h('div.bar', h('i', { style: { width: (r.amt / mx * 100) + '%' } })), h('b', { style: { textAlign: 'left' } }, fmt(r.amt)))) : h('div.empty-state', 'لا توجد بيانات بعد')); };
+const bars = (rows) => { const mx = Math.max(1, ...rows.map((r) => r.amt)); return h('div', rows.length ? rows.map((r) => h('div.dash-row', h('span', r.name), h('div.bar', h('i', { style: { width: (r.amt / mx * 100) + '%' } })), h('b', { style: { textAlign: 'left' } }, fmt(r.amt)))) : h('div.empty-state', 'لا توجد بيانات بعد')); };
 function lowStockCard(items) {
   let all = false; const host = h('div');
   const row = (x) => { const col = x.pct <= 25 ? 'var(--bad, #dc2626)' : x.pct <= 60 ? 'var(--warn, #d97706)' : 'var(--ok, #16a34a)';

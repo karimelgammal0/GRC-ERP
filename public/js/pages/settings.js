@@ -92,7 +92,7 @@ function logoCard(canE) {
   const setLogo = guard(async (v) => { await PUT('/settings', { company_logo: v }); await loadMeta(); show(); toast(v ? 'تم حفظ اللوجو' : 'تم حذف اللوجو'); });
   const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', style: { display: 'none' }, onchange: guard(async () => { const f = file.files[0]; file.value = ''; if (f) await setLogo(await shrink(f)); }) });
   show();
-  return card('لوجو المصنع (بيظهر في هيدر المطبوعات)', prev, canE ? h('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } }, file,
+  return card('لوجو المصنع (بيظهر في هيدر المطبوعات)', prev, canE ? h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' } }, file,
     h('button.btn', { onclick: () => file.click() }, 'رفع / تغيير اللوجو'), META.settings?.company_logo ? h('button.btn', { onclick: () => setLogo('') }, 'حذف') : null) : null);
 }
 
