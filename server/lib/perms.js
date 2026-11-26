@@ -26,8 +26,8 @@ export const CATALOG = [
   { id: 'accounts', title: 'الحسابات', pages: [
     P('chart', 'دليل الحسابات', [...CRUD, ['import', 'استيراد CSV']]), P('periods', 'الفترات المالية', [['generate', 'إنشاء فترات سنة'], ['toggle', 'قفل / فتح فترة']]),
     P('journals', 'قيود اليومية', CRUD), P('templates', 'نماذج القيود', CRUD), P('account-links', 'ربط الحسابات', [['edit', 'تعديل الربط']]), P('sequences', 'ترقيم المستندات', [['edit', 'تعديل']])] },
-  { id: 'production', title: 'الإنتاج التام', pages: [P('log', 'سجل الإنتاج التام', DOC), P('quantities', 'كميات الإنتاج التام')] },
-  { id: 'sales', title: 'المبيعات والمستخلصات', pages: [P('deliveries', 'إذونات تسليم للعملاء', DOC), P('certificates', 'مستخلصات العملاء', DOC), P('fg-stock', 'مخزن المنتجات التامة'), P('client-balances', 'أرصدة العملاء وأعمار الديون'), P('client-statement', 'كشف حساب عميل'), P('profitability', 'ربحية المشروعات')] },
+  { id: 'production', title: 'الإنتاج التام', pages: [P('log', 'سجل الإنتاج التام', DOC), P('quantities', 'كميات الإنتاج التام'), P('fg-stock', 'مخزن المنتجات التامة')] },
+  { id: 'sales', title: 'المبيعات والمستخلصات', pages: [P('deliveries', 'إذونات تسليم للعملاء', DOC), P('certificates', 'مستخلصات العملاء', DOC), P('client-balances', 'أرصدة العملاء وأعمار الديون'), P('client-statement', 'كشف حساب عميل'), P('profitability', 'ربحية المشروعات')] },
   { id: 'costs', title: 'تكاليف', pages: [
     P('unit-cost', 'تكلفة المتر', [['save', 'حفظ المدخلات'], ['approve', 'اعتماد الشهر'], ['reopen', 'إعادة فتح شهر معتمد']]), P('alloc', 'توزيع التكاليف غير المباشرة', [['approve', 'اعتماد التوزيع'], ['reopen', 'إعادة فتح توزيع معتمد']]), P('history', 'سجل أسعار المتر'), P('projects-cost', 'تكاليف مشروعات (تكلفة المنتج التام)', [['save', 'حفظ المرحّل'], ['approve', 'اعتماد تكلفة المنتج التام'], ['reopen', 'إعادة فتح تشغيل معتمد']]), P('config', 'ربط المراحل والمواد', [['edit', 'تعديل']])] },
   { id: 'reports', title: 'التقارير', pages: [
@@ -53,7 +53,7 @@ export function userPerms(u) {
   let p = null;
   try { p = u.perms ? JSON.parse(u.perms) : null; } catch { p = null; }
   // الترقيم اتنقل من الإعدادات للحسابات: نحافظ على صلاحيات المستخدمين المحفوظة بالمفتاح القديم
-  if (Array.isArray(p)) return new Set(p.map((k) => k.replace(/^settings\.sequences/, 'accounts.sequences').replace(/^finance\.supplier-payments/, 'finance.expenses').replace(/^finance\.transfers/, 'finance.custody')).filter((k) => ALL_SET.has(k)));
+  if (Array.isArray(p)) return new Set(p.map((k) => k.replace(/^settings\.sequences/, 'accounts.sequences').replace(/^finance\.supplier-payments/, 'finance.expenses').replace(/^finance\.transfers/, 'finance.custody').replace(/^sales\.fg-stock/, 'production.fg-stock')).filter((k) => ALL_SET.has(k)));
   const mods = JSON.parse(u.modules || '[]'); const out = new Set();
   for (const k of ALL_KEYS) if (mods.includes(k.split('.')[0]) && !LEGACY_EXCLUDE.has(k)) out.add(k);
   if (mods.includes('perm_add_items')) out.add('inventory.issues.add_item');

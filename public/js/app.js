@@ -26,8 +26,8 @@ const NAV = [
     ['other', 'سندات المقبوضات', fin.otherVouchersPage, true], ['wages', 'صرف الأجور', fin.wagePaymentsPage],
     ['custody-statement', 'كشف حساب عهد', fin.custodyStatementPage], ['treasury-statement', 'كشف خزينة', fin.treasuryStatementPage, true]] },
   { id: 'accounts', ico: '≡', title: 'الحسابات', items: [['chart', 'دليل الحسابات', acc.chartPage], ['periods', 'الفترات المالية', acc.periodsPage], ['journals', 'قيود اليومية', acc.journalsPage], ['templates', 'نماذج القيود', acc.templatesPage], ['account-links', 'ربط الحسابات', acc.accountLinksPage], ['sequences', 'ترقيم المستندات', sequencesPage]] },
-  { id: 'production', ico: '▤', title: 'الإنتاج التام', items: [['log', 'سجل الإنتاج التام', sal.productionLogPage], ['quantities', 'كميات الإنتاج التام', rep.productionQtyPage]] },
-  { id: 'sales', ico: '⇄', title: 'المبيعات والمستخلصات', items: [['deliveries', 'إذونات التسليم', sal.deliveriesPage], ['certificates', 'مستخلصات العملاء', sal.certificatesPage], ['fg-stock', 'مخزن المنتجات التامة', sal.fgStockPage],
+  { id: 'production', ico: '▤', title: 'الإنتاج التام', items: [['log', 'سجل الإنتاج التام', sal.productionLogPage], ['quantities', 'كميات الإنتاج التام', rep.productionQtyPage], ['fg-stock', 'مخزن المنتجات التامة', sal.fgStockPage]] },
+  { id: 'sales', ico: '⇄', title: 'المبيعات والمستخلصات', items: [['deliveries', 'إذونات التسليم', sal.deliveriesPage], ['certificates', 'مستخلصات العملاء', sal.certificatesPage],
     ['client-balances', 'أرصدة العملاء وأعمار الديون', rep.clientBalancesPage], ['client-statement', 'كشف حساب عميل', rep.clientStatementPage], ['profitability', 'ربحية المشروعات', rep.profitabilityPage]] },
   { id: 'costs', ico: '∑', title: 'تكاليف', items: [['alloc', 'توزيع غير المباشر', cst.allocPage], ['unit-cost', 'تكلفة المتر', cst.unitCostPage], ['history', 'سجل أسعار المتر', cst.historyPage], ['projects-cost', 'تكاليف مشروعات', cst.projectsCostPage], ['config', 'ربط المراحل والمواد', cst.configPage]] },
   { id: 'reports', ico: '◔', title: 'التقارير', direct: true, items: [
@@ -100,7 +100,7 @@ function menuScreen(view, id) {
   view.replaceChildren(h('div.mgrid', g.items.filter(([k, , , hid]) => !hid && pageOk(g, k)).map(([k, t, fn]) => fn ? btn(`#/${g.id}/${k}`, g.ico, t) : h('div.mbtn.soon', h('span.mbtn-ico', g.ico), h('span', t)))));
 }
 function parse() {
-  const [path, qs] = (location.hash.slice(1) || '/dashboard/home').split('?'); const [, mod, page] = path.split('/');
+  const [path, qs] = (location.hash.slice(1) || '/dashboard/home').split('?'); let [, mod, page] = path.split('/'); if (mod === 'sales' && page === 'fg-stock') mod = 'production';
   return { mod: mod || 'dashboard', page: page || NAV.find((g) => g.id === (mod || 'dashboard'))?.items[0][0], params: Object.fromEntries(new URLSearchParams(qs || '')) };
 }
 // فهرس الصفحات والأزرار المتاحة للمستخدم (لوحة الوصول السريع)
