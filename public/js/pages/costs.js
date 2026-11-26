@@ -51,10 +51,11 @@ export async function configPage(root, params = {}) {
     const tbl = h('div'); const warn = h('div');
     const drawRows = () => {
       tbl.replaceChildren(rows.length
-        ? h('table.tbl.compact', h('thead', h('tr', ['', 'الصنف', bm.factor_label].map((x) => h('th', x)))), h('tbody', rows.map((r) => h('tr',
+        ? h('table.tbl.compact', h('thead', h('tr', ['', 'الصنف', bm.factor_label, ''].map((x) => h('th', x)))), h('tbody', rows.map((r) => h('tr',
           h('td', h('input', { type: 'checkbox', checked: r.sel, disabled: !canEdit, onchange: (e) => { r.sel = e.target.checked; } })),
           h('td', r.m.name, r.m.kg_guessed ? h('span.badge.warn', { style: { marginInlineStart: '8px' } }, 'الوزن متخمّن — راجعه') : null),
-          h('td', h('input', { type: 'number', step: 'any', min: 0, value: r.kg, disabled: !canEdit, style: { width: '90px' }, onchange: (e) => { r.kg = Number(e.target.value); } }))))))
+          h('td', h('input', { type: 'number', step: 'any', min: 0, value: r.kg, disabled: !canEdit, style: { width: '90px' }, onchange: (e) => { r.kg = Number(e.target.value); } })),
+          h('td', canEdit ? h('button.btn.sm', { disabled: rows.length <= 1, title: rows.length <= 1 ? 'لازم يفضل صنف واحد على الأقل في الأساس' : '', onclick: () => { if (rows.length <= 1) return toast('لازم يفضل صنف واحد على الأقل في الأساس'); rows.splice(rows.indexOf(r), 1); drawRows(); } }, 'حذف') : null)))))
         : h('div', `مفيش أصناف مرتبطة بأساس ${kind} لسه — ضيف الأصناف من الأسفل.`));
       warn.replaceChildren(...(rows.some((r) => r.m.kg_guessed) ? [h('div.note.bad', `⚠ في أصناف وزنها متخمّن ${bm.std} كجم لأنه مش مكتوب في الاسم ولا محفوظ هنا. لو الوزن مختلف عدّله واضغط حفظ، لأنه بيأثر على عدد الشكاير وسعر المتر.`)] : []));
     };
