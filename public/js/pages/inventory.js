@@ -231,7 +231,15 @@ export async function movesPage(root) {
     const rows = await GET('/reports/stock-moves', v);
     host.replaceChildren(table({ name: 'حركة-المخزون', compact: true, rows, cols: [{ k: 'date', l: 'التاريخ' }, { k: 'material_name', l: 'الصنف' }, { k: 'warehouse_name', l: 'المخزن' }, { k: 'doc_type', l: 'المستند', text: (r) => DOC_LABEL[r.doc_type] || r.doc_type },
       { k: 'party', l: 'الجهة' }, { k: 'direction', l: 'الاتجاه', render: (r) => (r.direction === 'in' ? badge('وارد', 'ok') : badge('صادر', 'warn')) },
-      { k: 'qty', l: 'الكمية', num: true, fmt: fq }, { k: 'unit_cost', l: 'التكلفة', num: true, fmt: (n) => fmt(n, 3) }, { k: 'value', l: 'القيمة', num: true, fmt: (n) => fmt(n) }, { k: 'bal_qty', l: 'الرصيد بعدها', num: true, fmt: fq }] }));
+      { k: 'qty', l: 'الكمية', num: true, fmt: fq }, { k: 'unit_cost', l: 'التكلفة', num: true, fmt: (n) => fmt(n, 3) }, { k: 'value', l: 'القيمة', num: true, fmt: (n) => fmt(n) }, { k: 'bal_qty', l: 'الرصيد بعدها', num: true, fmt: fq }],
+      foot: (c, shown, i) => {
+        const sum = (dir, k) => shown.filter((r) => r.direction === dir).reduce((t, r) => t + (Number(r[k]) || 0), 0);
+        if (i === 0) return `الإجماليات (${shown.length} حركة)`;
+        if (c.k === 'direction') return `وارد ${shown.filter((r) => r.direction === 'in').length} / صادر ${shown.filter((r) => r.direction === 'out').length}`;
+        if (c.k === 'qty') return h('div', h('div', `وارد: ${fq(sum('in', 'qty'))}`), h('div', `صادر: ${fq(sum('out', 'qty'))}`), h('div', `الصافي: ${fq(sum('in', 'qty') - sum('out', 'qty'))}`));
+        if (c.k === 'value') return h('div', h('div', `وارد: ${fmt(sum('in', 'value'))}`), h('div', `صادر: ${fmt(sum('out', 'value'))}`), h('div', `الصافي: ${fmt(sum('in', 'value') - sum('out', 'value'))}`));
+        return '';
+      } }));
   };
   const fb = filterBar([{ k: 'warehouse_id', l: 'المخزن', t: 'fk', ref: 'warehouses' }, { k: 'material_id', l: 'الصنف', t: 'fk', ref: 'materials', combo: true }, { k: 'direction', l: 'الاتجاه', t: 'select', options: [['', 'الكل'], ['in', 'وارد'], ['out', 'صادر']] }, { k: 'from', l: 'من', t: 'date' }, { k: 'to', l: 'إلى', t: 'date' }], run, { from: monthStart() });
   root.replaceChildren(pageHead('حركة المخزون'), fb, host); fb.run();
