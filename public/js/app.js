@@ -56,7 +56,7 @@ function loginView(msg) {
 function changePassword(force) {
   const f = formGrid([{ k: 'old_password', l: 'كلمة المرور الحالية', t: 'text' }, { k: 'new_password', l: 'كلمة المرور الجديدة (6 أحرف+)', t: 'text' }], {}, 1);
   f.el.querySelectorAll('input').forEach((i) => (i.type = 'password'));
-  modal({ title: force ? 'لازم تغيّر كلمة المرور أول مرة' : 'تغيير كلمة المرور', body: f.el, noClose: force, buttons: [{ label: 'حفظ', cls: 'primary', onClick: async () => { await POST('/change-password', f.values()); META.me.must_change = 0; toast('تم تغيير كلمة المرور'); } }] });
+  modal({ title: force ? 'لازم تغيّر كلمة المرور أول مرة' : 'تغيير كلمة المرور', body: f.el, noClose: force, buttons: [{ label: 'حفظ', cls: 'primary', onClick: async () => { await POST('/change-password', f.values()); META.me.must_change = 0; toast('تم تغيير كلمة المرور'); if (force) setTimeout(() => location.reload(), 400); } }] });
 }
 function shell() {
   const nav = h('nav');
@@ -136,6 +136,8 @@ async function route() {
 }
 async function boot() {
   try { META.me = await GET('/me'); } catch { return loginView(); }
+  // مستخدم جديد/اتغيّر باسورده: السيرفر بيقفل باقي الـAPI لحد ما يغيّر الباسورد، فنعرض شاشة التغيير الأول ونعيد التحميل بعدها
+  if (META.me.must_change) { root.replaceChildren(); return changePassword(true); }
   await loadMeta(); META.me = await GET('/me'); await loadLookups();
   S = shell(); route();
   if (META.me.must_change) changePassword(true);

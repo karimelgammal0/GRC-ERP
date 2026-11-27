@@ -23,6 +23,17 @@ await initSchema();
 await ensureBaseData();
 if (await isEmpty()) { await seedAll(); console.log('تمت تهيئة قاعدة البيانات بالبيانات الأساسية. المستخدم: admin / admin123'); }
 await loadOpeningStockSeed();
+// استيراد تسليمات المشروعات الثلاثة (ما قبل 15/11) — مرة واحدة؛ لو فشل جزء بيتعاد في التشغيل الجاي (آمن للتكرار)
+try {
+  const { getSetting, setSetting } = await import('./lib/core.js');
+  if (process.env.NO_LISTEN !== '1' && await getSetting('delivery_import_v1', '0') !== '1') {
+    const { importDeliveries } = await import('./lib/delivery-import.js');
+    const admin = await get(`SELECT id, username FROM users WHERE role='admin' AND active=1 ORDER BY id LIMIT 1`);
+    const rep = await importDeliveries(admin);
+    console.log('استيراد التسليمات:', JSON.stringify(rep));
+    if (!rep.aborted && !rep.failed.length) await setSetting('delivery_import_v1', '1');
+  }
+} catch (e) { console.error('استيراد التسليمات تعذّر:', e.message); }
 
 export const app = express();
 app.set('trust proxy', 1);          // Railway بيمرّر الطلب عبر proxy (للـ IP وSecure)

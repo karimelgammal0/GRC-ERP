@@ -20,11 +20,11 @@ ok(fgq === 281 + 1220 + 23, 'كميات الافتتاح = المسلَّم قب
 ok(Number(await val('SELECT COALESCE(SUM(value),0) FROM opening_fg_stock')) === 0, 'مفيش تكلفة');
 const pre = await val(`SELECT COUNT(*) FROM delivery_notes WHERE date<'2026-11-15'`);
 ok(Number(pre) > 0, 'أذون ما قبل 15/11 اتسجلت: ' + pre);
-// أذون بعد 15/11 مالهاش رصيد → لازم تتبلّغ كفشل (مش تتسجل برصيد سالب)
-ok(r.failed.length > 0 && r.failed.every((f) => /لا يكفي|إنتاج تام/.test(f.error)), 'أذون بدون رصيد اتبلّغت: ' + JSON.stringify(r.failed.slice(0, 2)));
+ok(r.failed.length === 0 && Number(await val(`SELECT COUNT(*) FROM delivery_notes WHERE date>='2026-11-15'`)) === 0, 'أذون ما قبل 15/11 بس: ' + JSON.stringify(r.failed.slice(0, 2)));
+ok(Number(await val(`SELECT COUNT(*) FROM delivery_notes WHERE manual_no IS NOT NULL`)) === 80, 'الرقم اليدوي اتسجل');
 // رصيد المسلَّم قبل 15/11 = صفر بعد الأذون
 const bal = Number(await val(`SELECT COALESCE(SUM(s.qty),0) FROM material_stock s JOIN materials m ON m.id=s.material_id WHERE m.fg_item_id IS NOT NULL`));
-ok(bal >= 0, 'مفيش رصيد سالب: ' + bal);
+ok(Math.abs(bal) < 1e-6, 'رصيد التام صفر بعد الأذون: ' + bal);
 // إعادة التشغيل: مفيش بنود ولا أذون مكررة
 const n1 = Number(await val('SELECT COUNT(*) FROM delivery_notes')), i1 = Number(await val('SELECT COUNT(*) FROM project_items'));
 const r2_ = await importDeliveries(U);

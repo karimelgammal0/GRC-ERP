@@ -658,6 +658,7 @@ CREATE TABLE IF NOT EXISTS client_certificate_adjustments (
 );
 CREATE INDEX IF NOT EXISTS ix_ccl_dl ON client_certificate_lines(delivery_line_id);
 
+ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS manual_no TEXT;   -- رقم إذن التسليم اليدوي (الدفتر الورقي)
 ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS vehicle_no TEXT;                      -- رقم السيارة (اختياري)
 ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS driver_name TEXT;                     -- اسم السائق (اختياري)
 ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS site_id INTEGER;                      -- موقع التسليم (لو المشروع له مواقع متكودة)
