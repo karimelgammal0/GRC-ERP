@@ -178,6 +178,10 @@ CREATE INDEX IF NOT EXISTS ix_jl_tre ON journal_lines(treasury_id);
 CREATE INDEX IF NOT EXISTS ix_jl_cus ON journal_lines(custodian_id);
 
 -- ---------- المخزون ----------
+CREATE TABLE IF NOT EXISTS opening_fg_stock (       -- الأرصدة الافتتاحية لمخزن المنتجات التامة (لكل بند مشروع)
+  item_id INTEGER PRIMARY KEY REFERENCES project_items(id),
+  qty NUMERIC NOT NULL DEFAULT 0, value NUMERIC NOT NULL DEFAULT 0, note TEXT
+);
 CREATE TABLE IF NOT EXISTS opening_stock (       -- الأرصدة الافتتاحية القابلة للتعديل قبل القفل
   material_id INTEGER PRIMARY KEY REFERENCES materials(id),
   qty NUMERIC NOT NULL DEFAULT 0, value NUMERIC NOT NULL DEFAULT 0,

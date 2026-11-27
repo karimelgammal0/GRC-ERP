@@ -22,17 +22,30 @@ export async function applyOpening(user) {
     const pairs = [...oldPairs]; let inv = 0;
     // الرصيد الافتتاحي بيتسجّل في المخزن المربوط بفئة الصنف (لو في مخازن بفئات محددة)، وإلا في المخزن الافتراضي
     const whOfCat = {};
-    for (const o of await all('SELECT o.*, m.category_id FROM opening_stock o JOIN materials m ON m.id=o.material_id WHERE o.qty>0 ORDER BY o.material_id')) {
+    for (const o of await all('SELECT o.*, m.category_id FROM opening_stock o JOIN materials m ON m.id=o.material_id WHERE o.qty>0 AND m.fg_item_id IS NULL ORDER BY o.material_id')) {
       const value = r2(o.value);
       if (!(o.category_id in whOfCat)) whOfCat[o.category_id] = o.category_id ? await val(`SELECT w.id FROM warehouse_categories wc JOIN warehouses w ON w.id=wc.warehouse_id WHERE wc.category_id=? AND w.type='raw' AND w.active=1 ORDER BY w.id LIMIT 1`, o.category_id) : null;
       const wh = whOfCat[o.category_id] || await defaultWarehouse();
       await addMove({ date, ord: 0, warehouse_id: wh, material_id: o.material_id, direction: 'in', qty: o.qty, value, doc_type: 'opening', doc_id: 0, line_id: o.material_id, party: 'رصيد افتتاحي', notes: o.note });
       pairs.push([wh, o.material_id]); inv += value;
     }
+    // مخزن المنتجات التامة: رصيد افتتاحي لكل بند مشروع (بالقيمة المدخلة)
+    const { fgWarehouse, fgMaterial } = await import('./phase3.js');
+    let fgInv = 0;
+    const fgRows = await all('SELECT o.*, i.name FROM opening_fg_stock o JOIN project_items i ON i.id=o.item_id WHERE o.qty>0 ORDER BY o.item_id');
+    if (fgRows.length) {
+      const fgWh = await fgWarehouse();
+      for (const o of fgRows) {
+        const mat = await fgMaterial(o.item_id); const value = r2(o.value);
+        await addMove({ date, ord: 0, warehouse_id: fgWh, material_id: mat, direction: 'in', qty: o.qty, value, doc_type: 'opening', doc_id: 0, line_id: mat, party: 'رصيد افتتاحي', notes: o.note });
+        pairs.push([fgWh, mat]); fgInv += value;
+      }
+    }
     await settle(pairs, { type: 'opening', id: 0 });
     const lines = []; let dr = 0, cr = 0;
     const push = (account_id, debit, credit, extra = {}) => { if (debit || credit) { lines.push({ account_id, debit, credit, description: 'رصيد افتتاحي', ...extra }); dr += debit; cr += credit; } };
     push(await acc('acc_inventory_raw'), r2(inv), 0);
+    push(await acc('acc_fg'), r2(fgInv), 0);
     for (const s of await all('SELECT id, opening_balance b FROM suppliers WHERE opening_balance<>0')) s.b > 0 ? push(await acc('acc_ap'), 0, r2(s.b), { supplier_id: s.id }) : push(await acc('acc_ap'), r2(-s.b), 0, { supplier_id: s.id });
     for (const t of await all('SELECT id, account_id, opening_balance b FROM treasuries WHERE opening_balance<>0')) t.b > 0 ? push(t.account_id, r2(t.b), 0, { treasury_id: t.id }) : push(t.account_id, 0, r2(-t.b), { treasury_id: t.id });
     for (const c of await all('SELECT id, opening_balance b FROM custodians WHERE opening_balance<>0')) c.b > 0 ? push(await acc('acc_custody'), r2(c.b), 0, { custodian_id: c.id }) : push(await acc('acc_custody'), 0, r2(-c.b), { custodian_id: c.id });
@@ -41,13 +54,13 @@ export async function applyOpening(user) {
       if (plug > 0) push(await acc('acc_opening_equity'), 0, plug); else if (plug < 0) push(await acc('acc_opening_equity'), -plug, 0);
       await postJournal({ date, type: 'opening', source_type: 'opening', source_id: 0, description: 'الأرصدة الافتتاحية', lines, user });
     }
-    await audit(user, 'apply_opening', 'opening', 0, { stock: r2(inv) });
-    return { date, stock_value: r2(inv), equity: plug };
+    await audit(user, 'apply_opening', 'opening', 0, { stock: r2(inv), fg: r2(fgInv) });
+    return { date, stock_value: r2(inv), fg_value: r2(fgInv), equity: plug };
   });
 }
 
 export async function lockOpening(user) {
-  if (!(await all(`SELECT 1 FROM journal_entries WHERE source_type='opening' LIMIT 1`)).length && await val('SELECT COUNT(*) FROM opening_stock WHERE qty>0') > 0)
+  if (!(await all(`SELECT 1 FROM journal_entries WHERE source_type='opening' LIMIT 1`)).length && await val('SELECT COUNT(*) FROM opening_stock WHERE qty>0') + await val('SELECT COUNT(*) FROM opening_fg_stock WHERE qty>0') > 0)
     throw new AppError('طبّق الأرصدة الافتتاحية أولاً ثم اقفلها');
   await setSetting('opening_locked', '1'); await audit(user, 'lock_opening', 'opening', 0);
 }

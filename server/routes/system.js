@@ -107,7 +107,9 @@ export async function systemRouter() {
     locked: await openingLocked(), date: await getSetting('opening_date'),
     applied: !!await get(`SELECT 1 FROM journal_entries WHERE source_type='opening'`),
     stock: await all(`SELECT m.id material_id, m.code, m.name, u.name unit, COALESCE(o.qty,0) qty, COALESCE(o.value,0) value, o.source, o.note
-                FROM materials m JOIN units u ON u.id=m.unit_id LEFT JOIN opening_stock o ON o.material_id=m.id WHERE m.active=1 ORDER BY m.code`),
+                FROM materials m JOIN units u ON u.id=m.unit_id LEFT JOIN opening_stock o ON o.material_id=m.id WHERE m.active=1 AND m.fg_item_id IS NULL ORDER BY m.code`),
+    fg: await all(`SELECT i.id item_id, i.code, i.name, p.name project_name, u.name unit, COALESCE(o.qty,0) qty, COALESCE(o.value,0) value, o.note
+                FROM project_items i JOIN projects p ON p.id=i.project_id LEFT JOIN units u ON u.id=i.unit_id LEFT JOIN opening_fg_stock o ON o.item_id=i.id WHERE i.active=1 ORDER BY p.name, i.code`),
     suppliers: await all('SELECT id, code, name, opening_balance FROM suppliers WHERE active=1 ORDER BY code'),
     treasuries: await all('SELECT id, code, name, opening_balance FROM treasuries WHERE active=1 ORDER BY code'),
     custodians: await all('SELECT id, code, name, opening_balance FROM custodians WHERE active=1 ORDER BY code'),
@@ -124,6 +126,13 @@ export async function systemRouter() {
         await run(`INSERT INTO opening_stock(material_id,qty,value,source,note) VALUES(?,?,?,?,?)
              ON CONFLICT(material_id) DO UPDATE SET qty=excluded.qty, value=excluded.value, source=COALESCE(excluded.source, opening_stock.source), note=COALESCE(excluded.note, opening_stock.note)`,
           s.material_id, qty, r2(value), s.source ?? 'معدّل يدوياً', s.note ?? null);
+      }
+      for (const s of b.fg || []) {
+        const qty = Number(s.qty) || 0, value = Number(s.value) || 0;
+        if (qty < 0 || value < 0) throw new AppError('الكمية والقيمة الافتتاحية لا يمكن أن تكون سالبة');
+        if (qty === 0 && value > 0) throw new AppError('قيمة بدون كمية — صحّح الصف');
+        if (!(await get('SELECT 1 FROM project_items WHERE id=?', s.item_id))) throw new AppError('بند غير موجود');
+        await run(`INSERT INTO opening_fg_stock(item_id,qty,value,note) VALUES(?,?,?,?) ON CONFLICT(item_id) DO UPDATE SET qty=excluded.qty, value=excluded.value, note=COALESCE(excluded.note, opening_fg_stock.note)`, s.item_id, qty, r2(value), s.note ?? null);
       }
       for (const [key, table] of [['suppliers', 'suppliers'], ['treasuries', 'treasuries'], ['custodians', 'custodians']])
         for (const x of b[key] || []) await run(`UPDATE ${table} SET opening_balance=? WHERE id=?`, r2(Number(x.opening_balance) || 0), x.id);

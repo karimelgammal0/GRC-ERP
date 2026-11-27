@@ -121,7 +121,7 @@ export async function sequencesPage(root) {
 // ------------------------------------------------------------
 export async function openingPage(root) {
   let data = await GET('/opening'); const me = META.me;
-  const edits = { stock: {}, suppliers: {}, treasuries: {}, custodians: {} };
+  const edits = { stock: {}, fg: {}, suppliers: {}, treasuries: {}, custodians: {} };
   let tab = 'stock'; let q = ''; let onlyNonZero = false;
   const host = h('div');
   const dateInp = fieldInput({ t: 'date' }, data.date);
@@ -129,6 +129,7 @@ export async function openingPage(root) {
   const collect = () => ({
     date: dateInp.get(),
     stock: Object.entries(edits.stock).map(([material_id, v]) => ({ material_id: Number(material_id), ...v })),
+    fg: Object.entries(edits.fg).map(([item_id, v]) => ({ item_id: Number(item_id), ...v })),
     suppliers: Object.entries(edits.suppliers).map(([id, v]) => ({ id: Number(id), opening_balance: v })),
     treasuries: Object.entries(edits.treasuries).map(([id, v]) => ({ id: Number(id), opening_balance: v })),
     custodians: Object.entries(edits.custodians).map(([id, v]) => ({ id: Number(id), opening_balance: v })),
@@ -154,17 +155,35 @@ export async function openingPage(root) {
               h('td', h('input', { type: 'number', step: 'any', min: 0, value: r.value, disabled: dis, style: { width: '130px' }, oninput: (e) => upd('value', Number(e.target.value) || 0) })),
               uc, h('td', r.source ? badge(r.source, r.source === 'الشيت' ? 'ok' : r.source === 'آخر مشتريات' ? 'warn' : r.source === 'بدون سعر' ? 'bad' : '') : ''), h('td', { style: { maxWidth: '280px', fontSize: '12.5px', color: 'var(--ink2)' } }, r.note || ''));
           })))));
+    } else if (tab === 'fg') {
+      const rows = data.fg.filter((r) => (!q || `${r.code} ${r.name} ${r.project_name}`.toLowerCase().includes(q)) && (!onlyNonZero || r.qty > 0));
+      const sum = () => data.fg.reduce((s, r) => s + (edits.fg[r.item_id]?.value ?? r.value), 0);
+      const totalEl = h('b', fmt(sum()));
+      content = h('div', h('div.note', 'رصيد أول المدة لمخزن المنتجات التامة: اكتب كمية وقيمة كل بند مشروع موجود جاهز في المخزن. التسليم والتكلفة بيكملوا بعد كده على متوسط الكارت.'),
+        h('div.tbl-bar', h('input.search', { type: 'search', placeholder: 'بحث بالبند أو المشروع…', value: q, oninput: (e) => { q = e.target.value.trim().toLowerCase(); draw(); } }),
+        h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('input', { type: 'checkbox', checked: onlyNonZero, onchange: (e) => { onlyNonZero = e.target.checked; draw(); } }), 'البنود ذات الرصيد فقط'),
+        h('span.grow'), h('span', 'إجمالي قيمة التام الافتتاحي: ', totalEl)),
+        h('div.tbl-wrap', h('table.tbl.compact', h('thead', h('tr', ['المشروع', 'الكود', 'البند', 'الوحدة', 'الكمية', 'القيمة', 'تكلفة القطعة', 'ملاحظة'].map((x) => h('th', x)))),
+          h('tbody', rows.map((r) => {
+            const cur = () => edits.fg[r.item_id] || { qty: r.qty, value: r.value, note: r.note };
+            const uc = h('td.num', r.qty > 0 ? fmt(r.value / r.qty, 4) : '');
+            const upd = (k, v) => { edits.fg[r.item_id] = { ...cur(), [k]: v }; const c = cur(); uc.textContent = c.qty > 0 ? fmt(c.value / c.qty, 4) : ''; totalEl.textContent = fmt(sum()); };
+            return h('tr', h('td', r.project_name), h('td', r.code), h('td', r.name), h('td', r.unit || ''),
+              h('td', h('input', { type: 'number', step: 'any', min: 0, value: r.qty, disabled: dis, style: { width: '110px' }, oninput: (e) => upd('qty', Number(e.target.value) || 0) })),
+              h('td', h('input', { type: 'number', step: 'any', min: 0, value: r.value, disabled: dis, style: { width: '130px' }, oninput: (e) => upd('value', Number(e.target.value) || 0) })),
+              uc, h('td', h('input', { type: 'text', value: r.note || '', disabled: dis, style: { width: '180px' }, oninput: (e) => upd('note', e.target.value) })));
+          })))));
     } else {
       const key = tab; const label = { suppliers: 'رصيد مستحق للمورد (دائن)', treasuries: 'رصيد الخزينة/البنك', custodians: 'رصيد العهدة بذمة صاحبها' }[key];
       content = h('div', h('div.note', key === 'suppliers' ? 'الأرصدة المستحقة للموردين أول المدة — موجب = علينا للمورد.' : key === 'treasuries' ? 'الرصيد النقدي أو البنكي أول المدة.' : 'العهد المصروفة ولم تُسوَّ بعد أول المدة.'),
         h('div.tbl-wrap', h('table.tbl', h('thead', h('tr', ['الكود', 'الاسم', label].map((x) => h('th', x)))),
           h('tbody', data[key].map((r) => h('tr', h('td', r.code), h('td', r.name), h('td', h('input', { type: 'number', step: 'any', value: r.opening_balance, disabled: dis, style: { width: '160px' }, oninput: (e) => { edits[key][r.id] = Number(e.target.value) || 0; } }))))))));
     }
-    host.replaceChildren(h('div.chips', [['stock', 'المخزون'], ['suppliers', 'الموردين'], ['treasuries', 'الخزن والبنوك'], ['custodians', 'العهد']].map(([k, l]) => h('button.chip' + (tab === k ? '.on' : ''), { onclick: () => { tab = k; draw(); } }, l))), content);
+    host.replaceChildren(h('div.chips', [['stock', 'المخزون'], ['fg', 'مخزن الإنتاج التام'], ['suppliers', 'الموردين'], ['treasuries', 'الخزن والبنوك'], ['custodians', 'العهد']].map(([k, l]) => h('button.chip' + (tab === k ? '.on' : ''), { onclick: () => { tab = k; draw(); } }, l))), content);
   };
   const apply = guard(async () => {
     await saveOnly(); const r = await POST('/opening/apply');
-    toast(`تم تطبيق الأرصدة الافتتاحية بتاريخ ${r.date} — قيمة المخزون ${fmt(r.stock_value)}`); data = await GET('/opening'); top(); draw();
+    toast(`تم تطبيق الأرصدة الافتتاحية بتاريخ ${r.date} — قيمة المخزون ${fmt(r.stock_value)}${r.fg_value ? ' + التام ' + fmt(r.fg_value) : ''}`); data = await GET('/opening'); top(); draw();
   });
   const lock = guard(async () => {
     if (!(await confirmBox('قفل الأرصدة الافتتاحية نهائي ولن تقدر تعدّلها بعد كده (إلا بفك القفل من المدير). متأكد إنك راجعت الكميات والقيم؟', 'قفل الأرصدة', true))) return;
