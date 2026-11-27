@@ -26,10 +26,13 @@ async function findProject(sheetName) {
   throw new AppError(hits.length ? `أكتر من مشروع بيطابق «${sheetName}»: ${hits.map((h) => h.name).join('، ')}` : `مشروع «${sheetName}» غير موجود في قاعدة البيانات (الكلمات: ${kws.join('، ')})`);
 }
 
+const SITE_NAME = { 'ميادين طريق السويس': 'التوابل عام' };   // الموقع المحدد لو المشروع له أكتر من موقع
 async function siteFor(project, sheetName) {
   const sites = await all('SELECT id, name FROM sites WHERE project_id=? AND active=1 ORDER BY id', project.id);
   if (!sites.length) return null;
   if (sites.length === 1) return sites[0].id;
+  const exact = SITE_NAME[sheetName] && sites.filter((x) => norm(x.name) === norm(SITE_NAME[sheetName]));
+  if (exact?.length === 1) return exact[0].id;
   const kws = (KEYS[sheetName] || []).map(norm);
   const hit = sites.filter((s) => kws.some((k) => norm(s.name).includes(k)));
   if (hit.length === 1) return hit[0].id;
