@@ -240,7 +240,7 @@ export function filterBar(fields, onRun, init = {}) {
 export const tag = (txt) => h('span.tag', txt);
 
 /** طباعة مستند بشكل رسمي (رأس الشركة + بيانات + جدول بنود + إمضاءات) عبر iframe مخفي */
-export function printSheet({ title, no, date, meta = [], cols = [], rows = [], totals = [], notes = '', sign = [], by = '', module = '', landscape = false, foot = null, sections = [] }) {
+export function printSheet({ title, no, date, meta = [], cols = [], rows = [], totals = [], notes = '', sign = [], actual = null, by = '', module = '', landscape = false, foot = null, sections = [] }) {
   const e = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${e(title)} ${e(no)}</title><style>
     body{font-family:Tahoma,Arial,sans-serif;font-size:13px;color:#111;margin:24px}
@@ -262,7 +262,7 @@ export function printSheet({ title, no, date, meta = [], cols = [], rows = [], t
     ${totals.length ? `<div class="tot">${totals.map(([k, v]) => `<span>${e(k)}: ${e(v)}</span>`).join('')}</div>` : ''}
     ${sections.map((x) => `<div class="sec">${e(x.title)}</div><table class="sumt"><thead><tr>${x.cols.map((c) => `<th>${e(c)}</th>`).join('')}</tr></thead><tbody>${x.rows.map((r) => `<tr>${r.map((c, i) => `<td${i ? ' class="n"' : ''}>${e(c)}</td>`).join('')}</tr>`).join('')}</tbody>${x.foot ? `<tfoot><tr>${x.foot.map((c, i) => `<td${i ? ' class="n"' : ''}>${e(c)}</td>`).join('')}</tr></tfoot>` : ''}</table>`).join('')}
     ${notes ? `<div><b>ملاحظات:</b> ${e(notes)}</div>` : ''}
-    <div class="sig">${((module && META.jobs_order && Object.prototype.hasOwnProperty.call(META.jobs_order, module)) ? META.jobs_order[module] : sign).map((s) => { const names = META.signers?.[module]?.[s] || []; const nm = by && names.includes(by) ? by : names.join(' / '); return `<div><div class="jb">${e(s)}</div><div class="nm">${e(nm)}</div></div>`; }).join('')}</div>
+    <div class="sig">${((module && META.jobs_order && Object.prototype.hasOwnProperty.call(META.jobs_order, module)) ? META.jobs_order[module] : sign).map((s) => { const names = actual ? [] : (META.signers?.[module]?.[s] || []); const nm = actual ? (actual[s] || '') : (by && names.includes(by) ? by : names.join(' / ')); return `<div><div class="jb">${e(s)}</div><div class="nm">${e(nm)}</div></div>`; }).join('')}</div>
     <div class="pby">طُبع بواسطة: ${e(META.me?.employee_name || META.me?.name || META.me?.username || '')} — ${e(new Date().toLocaleString('en-GB'))}</div></body></html>`;
   const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.append(f); const d = f.contentWindow.document; d.open(); d.write(html); d.close();

@@ -1,4 +1,4 @@
-import { h, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, modal, can, printSheet, confirmBox } from '../core.js';
+import { h, META, GET, POST, PUT, L, fmt, fq, today, monthStart, yearStart, table, filterBar, pageHead, card, kpi, badge, nameOf, byId, codeName, statusBadge, labelOf, toast, guard, modal, can, printSheet, confirmBox } from '../core.js';
 import { docScreen, dateF, notesF, total, qtyCol, matChange } from '../docs-ui.js';
 
 const defaultWh = () => (L.warehouses.find((w) => w.type === 'raw' && w.active) || {}).id;
@@ -34,10 +34,14 @@ const lineRows = (doc, withPrice) => (doc.lines || []).map((l) => [nameOf('mater
 export const requestsPage = docScreen({ perm: 'purchases.requests',
   print: (doc) => printSheet({ title: 'طلب شراء', no: doc.no, date: doc.date,
     meta: [['مقدم الطلب', nameOf('employees', doc.requested_by_id) || doc.requested_by], ['المورد', nameOf('suppliers', doc.supplier_id)], ['المشروع', nameOf('projects', doc.project_id)], ['مطلوب في', doc.needed_date]],
-    cols: ['الصنف', 'الوحدة', 'الكمية المطلوبة', 'ملاحظة'], rows: lineRows(doc, false), notes: doc.notes, module: 'purchases', by: doc.created_by_name, sign: ['مقدم الطلب', 'مدير المشتريات', 'الاعتماد'] }),
+    cols: ['الصنف', 'الوحدة', 'الكمية المطلوبة', 'ملاحظة'], rows: lineRows(doc, false), notes: doc.notes, module: 'purchases', by: doc.created_by_name, actual: { 'مقدم الطلب': nameOf('employees', doc.requested_by_id) || doc.requested_by || doc.created_by_name || '', 'مدير المشتريات': doc.approved_by_name || '' }, sign: ['مقدم الطلب', 'مدير المشتريات', 'الاعتماد'] }),
   type: 'purchase_request', title: 'طلبات الشراء', noun: 'طلب شراء', newLabel: 'طلب شراء جديد', defaultFrom: monthStart, defaultTo: today, statuses: [['open', 'مفتوح'], ['ordered', 'تم الأمر']],
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
-  listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'requested_by', l: 'مقدم الطلب' }, { k: 'supplier_name', l: 'المورد' }, { k: 'project_name', l: 'المشروع' }, { k: 'n_lines', l: 'البنود', num: true }, { k: 'needed_date', l: 'مطلوب في' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
+  listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'requested_by', l: 'مقدم الطلب' }, { k: 'supplier_name', l: 'المورد' }, { k: 'project_name', l: 'المشروع' }, { k: 'n_lines', l: 'البنود', num: true }, { k: 'needed_date', l: 'مطلوب في' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) },
+    { k: 'approved_by_name', l: 'الاعتماد', render: (r) => r.status === 'void' ? '—' : (r.approved_at ? h('span', { title: r.approved_at }, '✔ ' + r.approved_by_name) : h('span.muted', 'بانتظار اعتماد مدير المشتريات')) }],
+  rowActions: (r, refresh) => (r.status === 'void' || !META.me.request_approver ? [] : [r.approved_at
+    ? (r.status === 'open' ? h('button.btn.sm', { onclick: guard(async (ev) => { ev.stopPropagation(); if (!(await confirmBox('سحب اعتماد الطلب؟', 'سحب الاعتماد', true))) return; await POST(`/doc/purchase_request/${r.id}/unapprove`); toast('تم سحب الاعتماد'); refresh(); }) }, 'سحب الاعتماد') : null)
+    : h('button.btn.sm.primary', { onclick: guard(async (ev) => { ev.stopPropagation(); await POST(`/doc/purchase_request/${r.id}/approve`); toast('تم اعتماد الطلب'); refresh(); }) }, 'اعتماد')].filter(Boolean)),
   editor: {
     cols: 3, header: [dateF, { k: 'requested_by_id', l: 'مقدم الطلب', t: 'fk', ref: 'employees', combo: true }, { k: 'supplier_id', l: 'المورد (اختياري)', t: 'fk', ref: 'suppliers', combo: true }, { k: 'project_id', l: 'المشروع (اختياري)', t: 'fk', ref: 'projects', combo: true }, { k: 'needed_date', l: 'مطلوب في تاريخ', t: 'date' }, { ...notesF, wide: false }],
     lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المطلوبة', w: '170px' }), unitCol, { l: 'تم أمر توريد بـ', calc: (l) => l.ordered_qty ?? 0, fmt: fq }, { k: 'notes', l: 'ملاحظة', t: 'text' }] },

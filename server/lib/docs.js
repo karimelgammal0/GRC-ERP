@@ -9,6 +9,7 @@ import { postJournal, replaceJournal, deleteJournals } from './gl.js';
 import { addMove, settle, removeMoves, stockOf, stockAsOf, lastKnownCost, onRecost } from './stock.js';
 
 export const DOCS = {};
+export const REQUEST_APPROVER_JOB = 'مدير المشتريات';   // وظيفة (في موديول المشتريات) اللي بتعتمد طلب الشراء
 const posQty = (l, label = 'الكمية') => { if (!(num(l.qty) > 0)) throw new AppError(`${label} لازم تكون أكبر من صفر`); };
 const nm = async (t, id) => await val(`SELECT name FROM ${t} WHERE id=?`, id);
 const must = async (t, id, label) => { if (!id || !await get(`SELECT 1 FROM ${t} WHERE id=?`, id)) throw new AppError(`${label} غير موجود`); };
@@ -98,6 +99,7 @@ DOCS.purchase_request = {
   async unpost(cur) {
     if (await val('SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=? AND ordered_qty>0', cur.id))
       throw new AppError('تم إصدار أمر توريد على هذا الطلب — ألغِ أمر التوريد أولاً');
+    await run('UPDATE purchase_requests SET approved_by=NULL, approved_by_name=NULL, approved_at=NULL WHERE id=?', cur.id);   // أي تعديل/إلغاء بيسحب الاعتماد
   },
 };
 async function refreshRequestStatus(request_id) {
@@ -119,6 +121,7 @@ DOCS.purchase_order = {
   enrich(h) { h.total = r2(h.lines.reduce((s, l) => s + l.qty * l.unit_price, 0)); },
   async validate(p, lines) {
     await must('suppliers', p.supplier_id, 'المورد');
+    if (p.request_id && !await val('SELECT approved_at FROM purchase_requests WHERE id=?', p.request_id)) throw new AppError('طلب الشراء لم يُعتمد بعد من مدير المشتريات');
     for (const l of lines) {
       await must('materials', l.material_id, 'الصنف'); posQty(l);
       if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً');

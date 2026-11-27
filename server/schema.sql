@@ -256,6 +256,9 @@ CREATE TABLE IF NOT EXISTS purchase_requests (
   status TEXT NOT NULL DEFAULT 'open',           -- open | ordered | closed | void
   created_by INTEGER, created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI:SS'))
 );
+ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS approved_by INTEGER;      -- اعتماد مدير المشتريات (فعلي)
+ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS approved_by_name TEXT;
+ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS approved_at TEXT;
 CREATE TABLE IF NOT EXISTS purchase_request_lines (
   id SERIAL PRIMARY KEY,
   request_id INTEGER NOT NULL REFERENCES purchase_requests(id) ON DELETE CASCADE,
