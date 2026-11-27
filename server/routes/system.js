@@ -104,7 +104,7 @@ export async function systemRouter() {
 
   // ----- الأرصدة الافتتاحية -----
   r.get('/opening', async (req, res) => res.json({
-    locked: await openingLocked(), date: await getSetting('opening_date'),
+    locked: await openingLocked(), date: await getSetting('opening_date'), import_status: await getSetting('delivery_import_status'),
     applied: !!await get(`SELECT 1 FROM journal_entries WHERE source_type='opening'`),
     stock: await all(`SELECT m.id material_id, m.code, m.name, u.name unit, COALESCE(o.qty,0) qty, COALESCE(o.value,0) value, o.source, o.note
                 FROM materials m JOIN units u ON u.id=m.unit_id LEFT JOIN opening_stock o ON o.material_id=m.id WHERE m.active=1 AND m.fg_item_id IS NULL ORDER BY m.code`),

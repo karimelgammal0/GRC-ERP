@@ -31,9 +31,14 @@ try {
     const admin = await get(`SELECT id, username FROM users WHERE role='admin' AND active=1 ORDER BY id LIMIT 1`);
     const rep = await importDeliveries(admin);
     console.log('استيراد التسليمات:', JSON.stringify(rep));
+    const ok = !rep.aborted && !rep.failed.length;
+    await setSetting('delivery_import_status', ok ? '' : JSON.stringify({ errors: rep.errors || [], failed: rep.failed.map((f) => `${f.project} إذن ${f.no}: ${f.error}`).slice(0, 10) }));
     if (!rep.aborted && !rep.failed.length) await setSetting('delivery_import_v1', '1');
   }
-} catch (e) { console.error('استيراد التسليمات تعذّر:', e.message); }
+} catch (e) {
+  console.error('استيراد التسليمات تعذّر:', e.message);
+  try { const { setSetting } = await import('./lib/core.js'); await setSetting('delivery_import_status', JSON.stringify({ errors: [e.message], failed: [] })); } catch { /* مش حرج */ }
+}
 
 export const app = express();
 app.set('trust proxy', 1);          // Railway بيمرّر الطلب عبر proxy (للـ IP وSecure)

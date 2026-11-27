@@ -191,7 +191,13 @@ export async function openingPage(root) {
   });
   const unlock = guard(async () => { if (await confirmBox('فك قفل الأرصدة الافتتاحية؟', 'فك القفل', true)) { await POST('/opening/unlock'); data = await GET('/opening'); top(); draw(); } });
   const head = h('div');
+  const importNote = () => { // استيراد تسليمات المشروعات التلقائي: لو وقف بنعرض السبب هنا
+    let st = null; try { st = data.import_status ? JSON.parse(data.import_status) : null; } catch { /* ignore */ }
+    const msgs = st ? [...(st.errors || []), ...(st.failed || [])] : [];
+    return msgs.length ? h('div.note.bad', h('b', 'استيراد تسليمات المشروعات (3 مشروعات) لم يكتمل: '), h('ul', msgs.map((m) => h('li', m)))) : null;
+  };
   const top = () => head.replaceChildren(
+    importNote(),
     h('div.note', 'عدّل الكمية أو القيمة الافتتاحية لأي صنف (أو رصيد مورد/خزينة/عهدة)، ثم «حفظ وتطبيق» لتوليد حركات المخزون والقيد المحاسبي. تقدر تعيد التطبيق أي عدد مرات لحد ما تقفل الأرصدة. الأصناف المظلّلة قيمتها محتاجة مراجعتك (عمود القيمة في شيت الإكسل بيبوظ بعد أي لحظة الرصيد فيها بيوصل صفر).'),
     h('div.filters', { style: { alignItems: 'center' } }, h('label.fld', h('span', 'تاريخ الأرصدة الافتتاحية'), dateInp), status(), h('span.grow'),
       data.locked ? (can('settings.opening.unlock') ? h('button.btn', { onclick: unlock }, 'فك القفل') : null) : [
