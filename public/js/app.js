@@ -18,7 +18,7 @@ const NAV = [
     ['issues', 'صرف للإنتاج والتشغيل', inv.issuesPage], ['site-transfers', 'تحويلات المواقع', inv.siteTransfersPage], ['returns', 'مرتجع للمخزن', inv.returnsPage], ['adjustments', 'جرد وتسويات', inv.adjustmentsPage],
     ['balances', 'أرصدة المخزون', inv.balancesPage], ['stock-card', 'كارت الصنف', inv.stockCardPage], ['moves', 'حركة المخزون', inv.movesPage]] },
   { id: 'purchases', ico: '⛟', title: 'المشتريات', items: [
-    ['requests', 'طلبات الشراء', pur.requestsPage], ['orders', 'أوامر التوريد', pur.ordersPage], ['receipts', 'إذونات الاستلام', pur.receiptsPage], ['invoices', 'فواتير الشراء', pur.invoicesPage],
+    ['requests', 'طلبات الشراء', pur.requestsPage], ['orders', 'أوامر التوريد', pur.ordersPage], ['receipts', 'إذن استلام مواد', pur.receiptsPage], ['invoices', 'فواتير الشراء', pur.invoicesPage],
     ['returns', 'مرتجعات الشراء', pur.preturnsPage], ['supplier-statement', 'كشف حساب مورد', pur.supplierStatementPage], ['supplier-balances', 'أرصدة الموردين', pur.supplierBalancesPage]] },
   { id: 'hr', ico: '☺', title: 'الموارد البشرية', items: [['labor', 'يوميات العمالة', hr.laborSheetsPage], ['labor-advances', 'سلف عمال يومية', hr.laborAdvancesPage], ['payroll', 'الرواتب الشهرية', hr.payrollPage]] },
   { id: 'finance', ico: '$', title: 'الإدارة المالية', items: [
