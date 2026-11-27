@@ -40,7 +40,7 @@ export async function authRoutes() {
 export async function systemRouter() {
   const r = Router();
   await r.post('/logout', async (req, res) => { await run('DELETE FROM sessions WHERE token=?', req.token); res.setHeader('Set-Cookie', `sid=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secureCookie(req)}`); res.json({ ok: true }); });
-  r.get('/me', async (req, res) => { const { pass_hash, ...u } = req.user; const perms = [...userPerms(req.user)]; res.json({ ...u, request_approver: u.role === 'admin' || !!await get(`SELECT 1 FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id WHERE uj.user_id=? AND m.module='purchases' AND m.name='مدير المشتريات'`, u.id), perms, modules: [...new Set(perms.map((k) => k.split('.')[0]))] }); });
+  r.get('/me', async (req, res) => { const { pass_hash, ...u } = req.user; const perms = [...userPerms(req.user)]; res.json({ ...u, my_jobs: (await all(`SELECT m.module, m.name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id WHERE uj.user_id=?`, u.id)).map((j) => `${j.module}:${j.name}`), perms, modules: [...new Set(perms.map((k) => k.split('.')[0]))] }); });
   // الوصول السريع في لوحة التحكم: قائمة مفاتيح صفحات/أزرار لكل مستخدم (null = الافتراضي)
   await r.put('/me/shortcuts', async (req, res) => {
     const list = req.body?.shortcuts;

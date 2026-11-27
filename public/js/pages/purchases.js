@@ -31,17 +31,22 @@ const sup = (r) => r.supplier_name;
 
 // ---------------- طلبات الشراء ----------------
 const lineRows = (doc, withPrice) => (doc.lines || []).map((l) => [nameOf('materials', l.material_id), unitOf(l.material_id), fq(l.qty), ...(withPrice ? [fmt(l.unit_price), fmt(l.qty * l.unit_price)] : []), l.notes || '']);
+// سلسلة اعتماد طلب الشراء = وظائف المشتريات بترتيبها؛ الأولى = مقدم الطلب، وكل وظيفة بعدها خطوة اعتماد فعلي
+const reqChain = () => (META.jobs_order?.purchases || []);
+const reqState = (r) => { const done = String(r.approvals || '').split('|').filter(Boolean).map((x) => { const i = x.indexOf(':'); return [x.slice(0, i), x.slice(i + 1)]; }); const d = new Set(done.map((x) => x[0])); return { done, pending: reqChain().slice(1).filter((j) => !d.has(j)) }; };
+const reqSigned = (doc) => ({ [reqChain()[0]]: nameOf('employees', doc.requested_by_id) || doc.requested_by || doc.created_by_name || '', ...Object.fromEntries((doc.approvals || []).map((a) => [a.job_name, a.user_name])) });
 export const requestsPage = docScreen({ perm: 'purchases.requests',
   print: (doc) => printSheet({ title: 'طلب شراء', no: doc.no, date: doc.date,
     meta: [['مقدم الطلب', nameOf('employees', doc.requested_by_id) || doc.requested_by], ['المورد', nameOf('suppliers', doc.supplier_id)], ['المشروع', nameOf('projects', doc.project_id)], ['مطلوب في', doc.needed_date]],
-    cols: ['الصنف', 'الوحدة', 'الكمية المطلوبة', 'ملاحظة'], rows: lineRows(doc, false), notes: doc.notes, module: 'purchases', by: doc.created_by_name, actual: { 'مقدم الطلب': nameOf('employees', doc.requested_by_id) || doc.requested_by || doc.created_by_name || '', 'مدير المشتريات': doc.approved_by_name || '' }, sign: ['مقدم الطلب', 'مدير المشتريات', 'الاعتماد'] }),
+    cols: ['الصنف', 'الوحدة', 'الكمية المطلوبة', 'ملاحظة'], rows: lineRows(doc, false), notes: doc.notes, module: 'purchases', by: doc.created_by_name, actual: reqSigned(doc), sign: [] }),
   type: 'purchase_request', title: 'طلبات الشراء', noun: 'طلب شراء', newLabel: 'طلب شراء جديد', defaultFrom: monthStart, defaultTo: today, statuses: [['open', 'مفتوح'], ['ordered', 'تم الأمر']],
   filters: [{ k: 'supplier_id', l: 'المورد', t: 'fk', ref: 'suppliers', combo: true }],
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'requested_by', l: 'مقدم الطلب' }, { k: 'supplier_name', l: 'المورد' }, { k: 'project_name', l: 'المشروع' }, { k: 'n_lines', l: 'البنود', num: true }, { k: 'needed_date', l: 'مطلوب في' }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) },
-    { k: 'approved_by_name', l: 'الاعتماد', render: (r) => r.status === 'void' ? '—' : (r.approved_at ? h('span', { title: r.approved_at }, '✔ ' + r.approved_by_name) : h('span.muted', 'بانتظار اعتماد مدير المشتريات')) }],
-  rowActions: (r, refresh) => (r.status === 'void' || !META.me.request_approver ? [] : [r.approved_at
-    ? (r.status === 'open' ? h('button.btn.sm', { onclick: guard(async (ev) => { ev.stopPropagation(); if (!(await confirmBox('سحب اعتماد الطلب؟', 'سحب الاعتماد', true))) return; await POST(`/doc/purchase_request/${r.id}/unapprove`); toast('تم سحب الاعتماد'); refresh(); }) }, 'سحب الاعتماد') : null)
-    : h('button.btn.sm.primary', { onclick: guard(async (ev) => { ev.stopPropagation(); await POST(`/doc/purchase_request/${r.id}/approve`); toast('تم اعتماد الطلب'); refresh(); }) }, 'اعتماد')].filter(Boolean)),
+    { k: 'approvals', l: 'الاعتماد', render: (r) => { if (r.status === 'void') return '—'; const st = reqState(r); return st.pending.length ? h('span.muted', `بانتظار ${st.pending[0]}`) : h('span', '✔ معتمد'); } }],
+  rowActions: (r, refresh) => { if (r.status === 'void') return []; const st = reqState(r); const mine = (j) => META.me.role === 'admin' || (META.me.my_jobs || []).includes(`purchases:${j}`); const out = [];
+    if (st.pending.length && mine(st.pending[0])) out.push(h('button.btn.sm.primary', { onclick: guard(async (ev) => { ev.stopPropagation(); await POST(`/doc/purchase_request/${r.id}/approve`); toast(`تم الاعتماد (${st.pending[0]})`); refresh(); }) }, `اعتماد (${st.pending[0]})`));
+    if (st.done.length && r.status === 'open' && mine(st.done[st.done.length - 1][0])) out.push(h('button.btn.sm', { onclick: guard(async (ev) => { ev.stopPropagation(); if (!(await confirmBox(`سحب اعتماد «${st.done[st.done.length - 1][0]}»؟`, 'سحب الاعتماد', true))) return; await POST(`/doc/purchase_request/${r.id}/unapprove`); toast('تم سحب الاعتماد'); refresh(); }) }, 'سحب آخر اعتماد'));
+    return out; },
   editor: {
     cols: 3, header: [dateF, { k: 'requested_by_id', l: 'مقدم الطلب', t: 'fk', ref: 'employees', combo: true }, { k: 'supplier_id', l: 'المورد (اختياري)', t: 'fk', ref: 'suppliers', combo: true }, { k: 'project_id', l: 'المشروع (اختياري)', t: 'fk', ref: 'projects', combo: true }, { k: 'needed_date', l: 'مطلوب في تاريخ', t: 'date' }, { ...notesF, wide: false }],
     lines: { blank: () => ({}), cols: [matCol, qtyCol({ l: 'الكمية المطلوبة', w: '170px' }), unitCol, { l: 'تم أمر توريد بـ', calc: (l) => l.ordered_qty ?? 0, fmt: fq }, { k: 'notes', l: 'ملاحظة', t: 'text' }] },

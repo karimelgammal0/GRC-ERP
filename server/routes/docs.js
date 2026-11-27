@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { all, get, run, val, AppError, r2 } from '../db.js';
-import { REQUEST_APPROVER_JOB, DOCS, saveDoc, voidDoc, restoreDoc, getDoc, invoiceOpenAmount, VOUCHER_KINDS } from '../lib/docs.js';
+import { requestPending, DOCS, saveDoc, voidDoc, restoreDoc, getDoc, invoiceOpenAmount, VOUCHER_KINDS } from '../lib/docs.js';
 import { stockOf } from '../lib/stock.js';
 import { nextNo, peekNo, audit } from '../lib/core.js';
 import { can, need, canModule, maskEmployees } from '../lib/perms.js';
@@ -50,7 +50,7 @@ async function attachPartyText(rows) {
 }
 
 const LISTS = {
-  purchase_request: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, sp.name supplier_name, COALESCE(re.name, d.requested_by) requested_by,
+  purchase_request: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, (SELECT string_agg(a.job_name || ':' || COALESCE(a.user_name,''), '|' ORDER BY a.id) FROM purchase_request_approvals a WHERE a.request_id=d.id) approvals, pr.name project_name, sp.name supplier_name, COALESCE(re.name, d.requested_by) requested_by,
       (SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=d.id) n_lines FROM purchase_requests d LEFT JOIN projects pr ON pr.id=d.project_id LEFT JOIN suppliers sp ON sp.id=d.supplier_id LEFT JOIN employees re ON re.id=d.requested_by_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   purchase_order: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, s.name supplier_name,
       (SELECT COALESCE(SUM(qty*unit_price),0) FROM purchase_order_lines WHERE order_id=d.id) total FROM purchase_orders d JOIN suppliers s ON s.id=d.supplier_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
@@ -133,22 +133,26 @@ export async function docRouter() {
     if (MULTI.has(req.params.type) && req.body.kind && req.body.kind !== kind) allow(req, req.params.type, req.body.kind, 'edit');
     res.json(await saveDoc(req.params.type, req.body, id, req.user));
   });
-  // اعتماد طلب الشراء: لازم المستخدم يكون صاحب وظيفة «مدير المشتريات» (أو مدير النظام)
-  const canApproveRequests = async (u) => u.role === 'admin' || !!await get(`SELECT 1 FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id WHERE uj.user_id=? AND m.module='purchases' AND m.name=?`, u.id, REQUEST_APPROVER_JOB);
+  // اعتماد طلب الشراء: خطوة بخطوة بترتيب وظائف موديول المشتريات؛ الخطوة التالية لصاحب الوظيفة دي (أو مدير النظام)
+  const holds = async (u, job) => u.role === 'admin' || !!await get(`SELECT 1 FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id WHERE uj.user_id=? AND m.module='purchases' AND m.name=?`, u.id, job);
   await r.post('/purchase_request/:id/approve', async (req, res) => {
-    if (!await canApproveRequests(req.user)) throw new AppError(`الاعتماد لصاحب وظيفة «${REQUEST_APPROVER_JOB}» فقط`, 403);
     const id = Number(req.params.id); const cur = await get('SELECT * FROM purchase_requests WHERE id=?', id);
     if (!cur) throw new AppError('الطلب غير موجود', 404); if (cur.status === 'void') throw new AppError('الطلب ملغي');
+    const next = (await requestPending(id))[0];
+    if (!next) throw new AppError('الطلب معتمد بالكامل');
+    if (!await holds(req.user, next)) throw new AppError(`الخطوة التالية «${next}» — الاعتماد لصاحب الوظيفة دي فقط`, 403);
     const nm = await val('SELECT COALESCE(e.name, u.name) FROM users u LEFT JOIN employees e ON e.id=u.employee_id WHERE u.id=?', req.user.id);
-    await run(`UPDATE purchase_requests SET approved_by=?, approved_by_name=?, approved_at=to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI') WHERE id=?`, req.user.id, nm, id);
-    await audit(req.user, 'approve', 'purchase_request', id, { no: cur.no }); res.json({ ok: true });
+    await run(`INSERT INTO purchase_request_approvals(request_id, job_name, user_id, user_name, at) VALUES(?,?,?,?, to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI'))`, id, next, req.user.id, nm);
+    await audit(req.user, 'approve', 'purchase_request', id, { no: cur.no, step: next }); res.json({ ok: true });
   });
-  await r.post('/purchase_request/:id/unapprove', async (req, res) => {
-    if (!await canApproveRequests(req.user)) throw new AppError(`سحب الاعتماد لصاحب وظيفة «${REQUEST_APPROVER_JOB}» فقط`, 403);
+  await r.post('/purchase_request/:id/unapprove', async (req, res) => {   // بيسحب آخر خطوة اعتماد بس
     const id = Number(req.params.id);
+    const last = await get('SELECT * FROM purchase_request_approvals WHERE request_id=? ORDER BY id DESC LIMIT 1', id);
+    if (!last) throw new AppError('مفيش اعتماد لسحبه');
+    if (!await holds(req.user, last.job_name)) throw new AppError(`سحب الاعتماد لصاحب وظيفة «${last.job_name}» فقط`, 403);
     if (await val('SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=? AND ordered_qty>0', id)) throw new AppError('تم إصدار أمر توريد على الطلب — ألغِ أمر التوريد أولاً');
-    await run('UPDATE purchase_requests SET approved_by=NULL, approved_by_name=NULL, approved_at=NULL WHERE id=?', id);
-    await audit(req.user, 'unapprove', 'purchase_request', id, {}); res.json({ ok: true });
+    await run('DELETE FROM purchase_request_approvals WHERE id=?', last.id);
+    await audit(req.user, 'unapprove', 'purchase_request', id, { step: last.job_name }); res.json({ ok: true });
   });
   await r.post('/:type/:id/void', async (req, res) => { known(req.params.type); const id = Number(req.params.id); allow(req, req.params.type, await kindOf(req.params.type, id), 'void'); res.json(await voidDoc(req.params.type, id, req.user)); });
   await r.post('/:type/:id/restore', async (req, res) => { known(req.params.type); const id = Number(req.params.id); allow(req, req.params.type, await kindOf(req.params.type, id), 'void'); res.json(await restoreDoc(req.params.type, id, req.user)); });
@@ -185,7 +189,7 @@ export function helperRouter() {
   });
   r.get('/request-lines', async (req, res) => res.json(await all(`SELECT l.*, m.name material_name, l.qty-l.ordered_qty remaining FROM purchase_request_lines l JOIN materials m ON m.id=l.material_id
       WHERE l.request_id=? AND l.qty-l.ordered_qty>0.000001`, req.query.request_id)));
-  r.get('/open-requests', async (req, res) => res.json(await all(`SELECT id,no,date FROM purchase_requests WHERE status IN ('open') AND approved_at IS NOT NULL ORDER BY id DESC`)));
+  r.get('/open-requests', async (req, res) => { const rows = await all(`SELECT id,no,date FROM purchase_requests WHERE status IN ('open') ORDER BY id DESC`); const out = []; for (const x of rows) if (!(await requestPending(x.id)).length) out.push(x); res.json(out); });
   r.get('/open-orders', async (req, res) => res.json(await all(`SELECT id,no,date FROM purchase_orders WHERE supplier_id=? AND status IN ('open','partial') ORDER BY id DESC`, req.query.supplier_id)));
   r.get('/order-lines', async (req, res) => res.json(await all(`SELECT l.*, m.name material_name, l.qty-l.received_qty remaining FROM purchase_order_lines l JOIN materials m ON m.id=l.material_id
       WHERE l.order_id=? AND l.qty-l.received_qty>0.000001`, req.query.order_id)));

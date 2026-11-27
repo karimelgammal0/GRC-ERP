@@ -9,7 +9,9 @@ import { postJournal, replaceJournal, deleteJournals } from './gl.js';
 import { addMove, settle, removeMoves, stockOf, stockAsOf, lastKnownCost, onRecost } from './stock.js';
 
 export const DOCS = {};
-export const REQUEST_APPROVER_JOB = 'مدير المشتريات';   // وظيفة (في موديول المشتريات) اللي بتعتمد طلب الشراء
+// سلسلة اعتماد طلب الشراء = وظائف موديول المشتريات بترتيبها (الوظيفة الأولى = مقدم الطلب، وكل وظيفة بعدها خطوة اعتماد فعلي)
+export const requestSteps = async () => (await all(`SELECT name FROM module_jobs WHERE module='purchases' ORDER BY seq, id`)).slice(1).map((j) => j.name);
+export const requestPending = async (id) => { const done = new Set((await all('SELECT job_name FROM purchase_request_approvals WHERE request_id=?', id)).map((a) => a.job_name)); return (await requestSteps()).filter((s) => !done.has(s)); };
 const posQty = (l, label = 'الكمية') => { if (!(num(l.qty) > 0)) throw new AppError(`${label} لازم تكون أكبر من صفر`); };
 const nm = async (t, id) => await val(`SELECT name FROM ${t} WHERE id=?`, id);
 const must = async (t, id, label) => { if (!id || !await get(`SELECT 1 FROM ${t} WHERE id=?`, id)) throw new AppError(`${label} غير موجود`); };
@@ -95,11 +97,12 @@ DOCS.purchase_request = {
   table: 'purchase_requests', lines: 'purchase_request_lines', fk: 'request_id', seq: 'purchase_request',
   cols: ['date', 'requested_by_id', 'supplier_id', 'project_id', 'needed_date', 'notes'], lineCols: ['material_id', 'qty', 'notes'],
   blank: (l) => !l.material_id,
+  async enrich(h) { h.approvals = await all('SELECT job_name, user_name, at FROM purchase_request_approvals WHERE request_id=? ORDER BY id', h.id); h.pending = await requestPending(h.id); },
   async validate(p, lines) { if (p.supplier_id) await must('suppliers', p.supplier_id, 'المورد'); else p.supplier_id = null; for (const l of lines) { await must('materials', l.material_id, 'الصنف'); posQty(l); } },
   async unpost(cur) {
     if (await val('SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=? AND ordered_qty>0', cur.id))
       throw new AppError('تم إصدار أمر توريد على هذا الطلب — ألغِ أمر التوريد أولاً');
-    await run('UPDATE purchase_requests SET approved_by=NULL, approved_by_name=NULL, approved_at=NULL WHERE id=?', cur.id);   // أي تعديل/إلغاء بيسحب الاعتماد
+    await run('DELETE FROM purchase_request_approvals WHERE request_id=?', cur.id);   // أي تعديل/إلغاء بيسحب كل الاعتمادات
   },
 };
 async function refreshRequestStatus(request_id) {
@@ -121,7 +124,7 @@ DOCS.purchase_order = {
   enrich(h) { h.total = r2(h.lines.reduce((s, l) => s + l.qty * l.unit_price, 0)); },
   async validate(p, lines) {
     await must('suppliers', p.supplier_id, 'المورد');
-    if (p.request_id && !await val('SELECT approved_at FROM purchase_requests WHERE id=?', p.request_id)) throw new AppError('طلب الشراء لم يُعتمد بعد من مدير المشتريات');
+    if (p.request_id) { const pend = await requestPending(p.request_id); if (pend.length) throw new AppError(`طلب الشراء لم يكتمل اعتماده — بانتظار: ${pend.join('، ')}`); }
     for (const l of lines) {
       await must('materials', l.material_id, 'الصنف'); posQty(l);
       if (num(l.unit_price) < 0) throw new AppError('السعر لا يمكن أن يكون سالباً');

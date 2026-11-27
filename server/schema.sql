@@ -259,6 +259,11 @@ CREATE TABLE IF NOT EXISTS purchase_requests (
 ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS approved_by INTEGER;      -- اعتماد مدير المشتريات (فعلي)
 ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS approved_by_name TEXT;
 ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS approved_at TEXT;
+CREATE TABLE IF NOT EXISTS purchase_request_approvals (   -- خطوات اعتماد طلب الشراء (بترتيب وظائف موديول المشتريات)
+  id SERIAL PRIMARY KEY, request_id INTEGER NOT NULL REFERENCES purchase_requests(id) ON DELETE CASCADE,
+  job_name TEXT NOT NULL, user_id INTEGER, user_name TEXT, at TEXT,
+  UNIQUE (request_id, job_name)
+);
 CREATE TABLE IF NOT EXISTS purchase_request_lines (
   id SERIAL PRIMARY KEY,
   request_id INTEGER NOT NULL REFERENCES purchase_requests(id) ON DELETE CASCADE,

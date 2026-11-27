@@ -51,7 +51,7 @@ await run(`INSERT INTO materials(code,name,unit_id) VALUES('RM-T1','صنف اخ�
 
 section('3) طلب شراء → أمر توريد → استلام جزئي → فاتورة مطابقة');
 const pr = await saveDoc('purchase_request', { date: '2026-11-02', requested_by: 'المخزن', lines: [{ material_id: T1, qty: 100 }] }, null, U);
-await run("UPDATE purchase_requests SET approved_by=1, approved_by_name='مدير', approved_at='2026-11-02 09:00' WHERE id=?", pr.id);   // اعتماد مدير المشتريات قبل أمر التوريد
+for (const j of await (await import('../server/lib/docs.js')).requestSteps()) await run("INSERT INTO purchase_request_approvals(request_id, job_name, user_id, user_name, at) VALUES(?,?,1,'x','t')", pr.id, j);   // اعتماد كل خطوات السلسلة
 const po = await saveDoc('purchase_order', { date: '2026-11-02', supplier_id: sup, request_id: pr.id, payment_type: 'credit', lines: [{ material_id: T1, qty: 100, unit_price: 10, request_line_id: pr.lines[0].id }] }, null, U);
 ok((await get('SELECT status FROM purchase_requests WHERE id=?', pr.id)).status === 'ordered', 'حالة الطلب بقت «تم الأمر»');
 await throws(async () => await saveDoc('purchase_order', { date: '2026-11-02', supplier_id: sup, request_id: pr.id, lines: [{ material_id: T1, qty: 5, unit_price: 10, request_line_id: pr.lines[0].id }] }, null, U), /المتبقي/, 'أمر توريد زيادة عن الطلب');
