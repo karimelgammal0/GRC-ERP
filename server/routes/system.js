@@ -59,6 +59,8 @@ export async function systemRouter() {
     masters: MASTERS, modules: MODULES, catalog: CATALOG, cost_class: COST_CLASS, voucher_kinds: VOUCHER_KINDS, acc_keys: ACC_KEYS,
     settings: await allSettings(), opening_locked: await openingLocked(),
     // أسماء أصحاب كل وظيفة في كل موديول (للتوقيعات في الطباعة): { module: { job: [names] } }
+    // ترتيب وظائف كل موديول = ترتيب خانات التوقيع في الطباعة (موديول بدون وظائف = مفيش توقيعات)
+    jobs_order: await (async () => { const o = Object.fromEntries(CATALOG.filter((m) => !['settings', 'reports'].includes(m.id)).map((m) => [m.id, []])); for (const j of await all('SELECT module, name FROM module_jobs ORDER BY seq, id')) (o[j.module] ||= []).push(j.name); return o; })(),
     signers: (await all(`SELECT m.module, m.name job, COALESCE(e.name, u.name) name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id JOIN users u ON u.id=uj.user_id LEFT JOIN employees e ON e.id=u.employee_id WHERE u.active=1 ORDER BY u.id`)).reduce((o, x) => { ((o[x.module] ||= {})[x.job] ||= []).push(x.name); return o; }, {}),
   }));
   r.get('/lookups', async (req, res) => {
@@ -175,7 +177,7 @@ export async function systemRouter() {
   };
   r.get('/jobs', async (req, res) => {
     adminOnly(req);
-    const jobs = await all('SELECT id, module, name FROM module_jobs ORDER BY module, id');
+    const jobs = await all('SELECT id, module, name, seq FROM module_jobs ORDER BY module, seq, id');
     const links = await all('SELECT user_id, job_id FROM user_jobs');
     res.json({ modules: CATALOG.filter((m) => JOB_MODULES().includes(m.id)).map((m) => ({ id: m.id, title: m.title })), jobs: jobs.map((j) => ({ ...j, user_ids: links.filter((l) => l.job_id === j.id).map((l) => l.user_id) })) });
   });
@@ -183,7 +185,13 @@ export async function systemRouter() {
     adminOnly(req); const b = req.body; const name = String(b.name || '').trim(); const module = jobModule(b.module);
     if (!name) throw new AppError('اسم الوظيفة مطلوب');
     if (await get('SELECT 1 FROM module_jobs WHERE module=? AND name=?', module, name)) throw new AppError('الوظيفة موجودة بالفعل في الموديول ده');
-    const id = await insertRow('module_jobs', { module, name }, ['module', 'name']); await setJobUsers(id, b.user_ids); res.json({ id });
+    const seq = Number(await val('SELECT COALESCE(MAX(seq),0)+1 FROM module_jobs WHERE module=?', module));
+    const id = await insertRow('module_jobs', { module, name, seq }, ['module', 'name', 'seq']); await setJobUsers(id, b.user_ids); res.json({ id });
+  });
+  r.put('/jobs/order', async (req, res) => {   // ترتيب وظائف موديول: ids بالترتيب الجديد
+    adminOnly(req); const module = jobModule(req.body.module); const ids = (req.body.ids || []).map(Number);
+    await tx(async () => { let i = 1; for (const id of ids) await run('UPDATE module_jobs SET seq=? WHERE id=? AND module=?', i++, id, module); });
+    res.json({ ok: true });
   });
   r.put('/jobs/:id', async (req, res) => {
     adminOnly(req); const id = Number(req.params.id); const b = req.body; const cur = await get('SELECT * FROM module_jobs WHERE id=?', id);

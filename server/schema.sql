@@ -451,6 +451,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES employ
 CREATE TABLE IF NOT EXISTS module_jobs (
   id SERIAL PRIMARY KEY, module TEXT NOT NULL, name TEXT NOT NULL, UNIQUE (module, name)
 );
+ALTER TABLE module_jobs ADD COLUMN IF NOT EXISTS seq INTEGER NOT NULL DEFAULT 0;   -- ترتيب الوظيفة في خانات التوقيع
+UPDATE module_jobs SET seq=id WHERE seq=0;
 CREATE TABLE IF NOT EXISTS user_jobs (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   job_id INTEGER NOT NULL REFERENCES module_jobs(id) ON DELETE CASCADE,

@@ -263,7 +263,7 @@ export async function jobsPage(root) {
   const names = (ids) => ids.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean);
   const open = (module, j) => {
     const sel = new Set(j?.user_ids || []);
-    const fg = formGrid([{ k: 'name', l: 'اسم الوظيفة', t: 'text', req: 1, help: 'لازم يكون نفس عنوان خانة التوقيع في المستند المطبوع (مثلاً: أمين المخزن، المحاسب)' }], j || {}, 1);
+    const fg = formGrid([{ k: 'name', l: 'اسم الوظيفة', t: 'text', req: 1, help: 'بتظهر كخانة توقيع في طباعة مستندات الموديول (مثلاً: أمين المخزن، المحاسب)' }], j || {}, 1);
     const boxes = active.map((u) => { const c = h('input', { type: 'checkbox', checked: sel.has(u.id), onchange: () => { c.checked ? sel.add(u.id) : sel.delete(u.id); } }); return h('label.chk', c, ' ' + u.name); });
     modal({ title: j ? `تعديل وظيفة ${j.name}` : `وظيفة جديدة — ${data.modules.find((m) => m.id === module)?.title}`, body: h('div', fg.el, h('h4', { style: { margin: '14px 0 4px' } }, 'المستخدمون اللي بيشغلوا الوظيفة دي في الموديول'), h('div.multi', boxes.length ? boxes : h('div.muted', 'لا يوجد مستخدمون نشطون'))),
       buttons: [{ label: 'حفظ', cls: 'primary', onClick: async () => {
@@ -272,8 +272,11 @@ export async function jobsPage(root) {
         await loadMeta(); toast('تم'); jobsPage(root); } },
       j ? { label: 'حذف الوظيفة', close: true, onClick: async () => { if (!(await confirmBox(`حذف وظيفة ${j.name} من الموديول؟`, 'حذف', true))) return; await DEL(`/jobs/${j.id}`); await loadMeta(); toast('تم الحذف'); jobsPage(root); } } : null].filter(Boolean) });
   };
-  root.replaceChildren(pageHead('الوظائف'), h('div.note', 'كل موديول ليه وظائفه (أمين المخزن، المحاسب، مدير المشتريات…). اختار مين بيشغل كل وظيفة، وبعدها اسمه بيظهر فوق خانة التوقيع بنفس اسم الوظيفة في المستندات المطبوعة بتاعة الموديول ده. المستخدم الواحد ممكن يكون ليه وظيفة مختلفة في كل موديول.'),
-    ...data.modules.map((m) => card(m.title, table({ cols: [{ k: 'name', l: 'الوظيفة', render: (r) => h('b', r.name) }, { k: 'user_ids', l: 'المستخدمون', text: (r) => names(r.user_ids).join('، ') || '—' }],
+  root.replaceChildren(pageHead('الوظائف'), h('div.note', 'ترتيب الوظائف في كل كارت = ترتيب خانات التوقيع في الطباعة (من اليمين لليسار)، والوظائف اللي بتمسحها بتختفي من الطباعة. كل موديول ليه وظائفه (أمين المخزن، المحاسب، مدير المشتريات…). اختار مين بيشغل كل وظيفة، وبعدها اسمه بيظهر فوق خانة التوقيع بنفس اسم الوظيفة في المستندات المطبوعة بتاعة الموديول ده. المستخدم الواحد ممكن يكون ليه وظيفة مختلفة في كل موديول.'),
+    ...data.modules.map((m) => card(m.title, table({ cols: [{ k: 'name', l: 'الوظيفة', render: (r) => h('b', r.name) }, { k: 'user_ids', l: 'المستخدمون', text: (r) => names(r.user_ids).join('، ') || '—' },
+      { k: 'seq', l: 'الترتيب', render: (r) => { const list = data.jobs.filter((j) => j.module === m.id); const i = list.findIndex((x) => x.id === r.id);
+        const mv = (d) => async (e) => { e.stopPropagation(); const ids = list.map((x) => x.id); [ids[i], ids[i + d]] = [ids[i + d], ids[i]]; await PUT('/jobs/order', { module: m.id, ids }); await loadMeta(); jobsPage(root); };
+        return h('span', h('button.btn.sm', { disabled: i === 0, onclick: mv(-1), title: 'أعلى' }, '▲'), ' ', h('button.btn.sm', { disabled: i === list.length - 1, onclick: mv(1), title: 'أسفل' }, '▼')); } }],
       rows: data.jobs.filter((j) => j.module === m.id), onRow: (r) => open(m.id, r), search: false, empty: 'لا توجد وظائف' }), h('div.actions', h('button.btn.sm', { onclick: () => open(m.id, null) }, '＋ وظيفة')))));
 }
 
