@@ -249,12 +249,18 @@ onRecost.delivery = buildDelivery;
 
 DOCS.delivery_note = {
   table: 'delivery_notes', lines: 'delivery_note_lines', fk: 'note_id', seq: 'delivery_note',
-  cols: ['date', 'project_id', 'client_id', 'profit_pct', 'notes'], lineCols: ['item_id', 'qty', 'notes'], blank: (l) => !l.item_id,
+  cols: ['date', 'project_id', 'client_id', 'site_id', 'profit_pct', 'notes'], lineCols: ['item_id', 'qty', 'notes'], blank: (l) => !l.item_id,
   async validate(p, lines, id) {
     const prj = await get('SELECT * FROM projects WHERE id=?', p.project_id);
     if (!prj) throw new AppError('اختر المشروع');
     if (!prj.client_id) throw new AppError('المشروع ده مش مربوط بعميل — حدد العميل في الإعدادات ← المشروعات');
     p.client_id = prj.client_id;
+    // الموقع: بيفتح بس لو المشروع له مواقع متكودة، وساعتها إجباري ولازم يتبع المشروع
+    const siteIds = (await all('SELECT id FROM sites WHERE project_id=? AND active=1', prj.id)).map((x) => Number(x.id));
+    if (siteIds.length) {
+      if (!p.site_id) throw new AppError('اختر الموقع — المشروع ده متكود له مواقع');
+      if (!siteIds.includes(Number(p.site_id))) throw new AppError('الموقع المختار لا يتبع المشروع');
+    } else p.site_id = null;
     if (p.profit_pct === undefined || p.profit_pct === null || p.profit_pct === '' || !id) p.profit_pct = await profitPct();
     const seen = new Set();
     for (const l of lines) {
