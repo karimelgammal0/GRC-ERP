@@ -185,6 +185,14 @@ export async function openingPage(root) {
     await saveOnly(); const r = await POST('/opening/apply');
     toast(`تم تطبيق الأرصدة الافتتاحية بتاريخ ${r.date} — قيمة المخزون ${fmt(r.stock_value)}${r.fg_value ? ' + التام ' + fmt(r.fg_value) : ''}`); data = await GET('/opening'); top(); draw();
   });
+  const importDel = guard(async () => {
+    if (!(await confirmBox('هيتم: إضافة بنود المشروعات الثلاثة الناقصة، وتسجيل كميات المسلَّم قبل 15/11 كرصيد افتتاحي للإنتاج التام (بدون تكلفة)، وتطبيق الأرصدة، وتسجيل أذون التسليم. اللي اتسجل قبل كده بيتخطى. نكمل؟', 'استيراد'))) return;
+    await saveOnly(); const r = await POST('/opening/import-deliveries'); data = await GET('/opening'); top(); draw();
+    const lines = [...r.projects.map((p) => `${p.sheet} ← ${p.project || 'لم يُطابق'}${p.error ? ' ✗ ' + p.error : `: بنود جديدة ${p.items_added} / موجودة ${p.items_existing}`}`),
+      r.opening_date ? `تاريخ الأرصدة: ${r.opening_date}` : '', `أذون اتسجلت: ${r.notes_created} — اتخطت (موجودة): ${r.notes_skipped} — فشلت: ${r.failed.length}`,
+      ...r.failed.map((f) => `✗ ${f.project} إذن ${f.no} (${f.date}): ${f.error}`)].filter(Boolean);
+    modal({ title: 'نتيجة الاستيراد', wide: true, body: h('pre', { style: { whiteSpace: 'pre-wrap', direction: 'rtl' } }, lines.join('\n')), buttons: [] });
+  });
   const lock = guard(async () => {
     if (!(await confirmBox('قفل الأرصدة الافتتاحية نهائي ولن تقدر تعدّلها بعد كده (إلا بفك القفل من المدير). متأكد إنك راجعت الكميات والقيم؟', 'قفل الأرصدة', true))) return;
     await saveOnly(); await POST('/opening/lock'); data = await GET('/opening'); top(); draw(); toast('تم قفل الأرصدة الافتتاحية');
@@ -197,6 +205,7 @@ export async function openingPage(root) {
       data.locked ? (can('settings.opening.unlock') ? h('button.btn', { onclick: unlock }, 'فك القفل') : null) : [
         can('settings.opening.edit') ? h('button.btn', { onclick: guard(async () => { await saveOnly(); toast('تم الحفظ'); draw(); }) }, 'حفظ فقط') : null,
         can('settings.opening.edit') ? h('button.btn.primary', { onclick: apply }, 'حفظ وتطبيق') : null,
+        can('settings.opening.edit') ? h('button.btn', { onclick: importDel }, 'استيراد تسليمات المشروعات') : null,
         can('settings.opening.lock') ? h('button.btn.warnb', { onclick: lock }, 'قفل نهائي') : null]));
   if (data.locked) dateInp.setAttribute('disabled', '');
   root.replaceChildren(pageHead('الأرصدة الافتتاحية'), head, host); top(); draw();

@@ -240,7 +240,7 @@ async function buildDelivery(id) {
   totalCost = r2(totalCost); total = r2(total);
   await run('UPDATE delivery_notes SET total_cost=?, total=? WHERE id=?', totalCost, total, id);
   jl.push(dc(ar, total, { client_id: h.client_id, project_id: h.project_id }));
-  await replaceJournal({ date: h.date, source_type: 'delivery', source_id: id, description: `إذن تسليم ${h.no} — ${await val('SELECT name FROM projects WHERE id=?', h.project_id)}`, lines: jl });
+  await replaceJournal({ date: h.date, source_type: 'delivery', source_id: id, description: `إذن تسليم ${h.no} — ${await val('SELECT name FROM projects WHERE id=?', h.project_id)}`, lines: jl, allowZero: true });
   // أي مستخلص فيه بنود من الإذن ده لازم يتحدّث بالأسعار الجديدة
   for (const c of await all(`SELECT DISTINCT c.id FROM client_certificates c JOIN client_certificate_lines cl ON cl.cert_id=c.id
     JOIN delivery_note_lines dl ON dl.id=cl.delivery_line_id WHERE dl.note_id=? AND c.status='posted'`, id)) await buildCertificate(c.id);

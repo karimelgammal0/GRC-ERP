@@ -141,6 +141,7 @@ export async function systemRouter() {
     res.json({ ok: true });
   });
   await r.post('/opening/apply', async (req, res) => { need(req.user, 'settings.opening.edit'); res.json(await applyOpening(req.user)); });
+  await r.post('/opening/import-deliveries', async (req, res) => { need(req.user, 'settings.opening.edit'); const { importDeliveries } = await import('../lib/delivery-import.js'); res.json(await importDeliveries(req.user)); });
   await r.post('/opening/lock', async (req, res) => { need(req.user, 'settings.opening.lock'); await lockOpening(req.user); res.json({ ok: true }); });
   await r.post('/opening/unlock', async (req, res) => { need(req.user, 'settings.opening.unlock'); await unlockOpening(req.user); res.json({ ok: true }); });
 
