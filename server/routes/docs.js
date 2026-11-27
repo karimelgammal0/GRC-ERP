@@ -5,7 +5,7 @@ import { stockOf } from '../lib/stock.js';
 import { nextNo, peekNo, audit } from '../lib/core.js';
 import { can, need, canModule, maskEmployees } from '../lib/perms.js';
 import { insertRow } from '../db.js';
-import '../lib/phase3.js';
+import { notePending, noteStartJob } from '../lib/phase3.js';
 
 const MODULE_OF = {
   purchase_request: 'purchases', purchase_order: 'purchases', goods_receipt: 'purchases', purchase_invoice: 'purchases', purchase_return: 'purchases',
@@ -81,7 +81,7 @@ const LISTS = {
   production_log: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, (SELECT COALESCE(SUM(qty),0) FROM production_log_lines WHERE log_id=d.id) qty,
       (SELECT COALESCE(SUM(qty*area_m2),0) FROM production_log_lines WHERE log_id=d.id) meters, (SELECT COUNT(*) FROM production_log_lines WHERE log_id=d.id) n_lines
       FROM production_logs d JOIN projects pr ON pr.id=d.project_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
-  delivery_note: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, c.name client_name, st.name site_name FROM delivery_notes d JOIN projects pr ON pr.id=d.project_id LEFT JOIN clients c ON c.id=d.client_id LEFT JOIN sites st ON st.id=d.site_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
+  delivery_note: async (q) => { for (const x of await all('SELECT id FROM delivery_notes WHERE start_job IS NULL')) await noteStartJob(x.id); const { sql, p } = where(q); return await all(`SELECT d.*, (SELECT string_agg(a.job_name || ':' || COALESCE(a.user_name,''), '|' ORDER BY a.id) FROM delivery_note_approvals a WHERE a.note_id=d.id) approvals, pr.name project_name, c.name client_name, st.name site_name FROM delivery_notes d JOIN projects pr ON pr.id=d.project_id LEFT JOIN clients c ON c.id=d.client_id LEFT JOIN sites st ON st.id=d.site_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   client_certificate: async (q) => { const { sql, p } = where(q); return await all(`SELECT d.*, pr.name project_name, c.name client_name FROM client_certificates d JOIN projects pr ON pr.id=d.project_id JOIN clients c ON c.id=d.client_id ${sql} ORDER BY d.date DESC, d.id DESC LIMIT 1000`, ...p); },
   voucher: async (q) => { const base = []; if (q.only === 'expenses') base.push(`d.kind IN ('disbursement','expense','supplier_payment','payment_other')`); if (q.only === 'receipts') base.push(`d.kind IN ('collection','receipt')`); if (q.only === 'custody') base.push(`d.kind IN ('custody_issue','custody_return','transfer')`);
     const { sql, p } = where(q, base); const rows = await all(`SELECT d.*, s.name supplier_name, t.name treasury_name, t2.name to_treasury_name, c.name custodian_name, ec.name category_name, a.name account_name
@@ -153,6 +153,27 @@ export async function docRouter() {
     if (await val('SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=? AND ordered_qty>0', id)) throw new AppError('تم إصدار أمر توريد على الطلب — ألغِ أمر التوريد أولاً');
     await run('DELETE FROM purchase_request_approvals WHERE id=?', last.id);
     await audit(req.user, 'unapprove', 'purchase_request', id, { step: last.job_name }); res.json({ ok: true });
+  });
+  // اعتماد إذن التسليم: نفس فكرة طلب الشراء بوظائف موديول المبيعات
+  const holdsSales = async (u, job) => u.role === 'admin' || !!await get(`SELECT 1 FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id WHERE uj.user_id=? AND m.module='sales' AND m.name=?`, u.id, job);
+  await r.post('/delivery_note/:id/approve', async (req, res) => {
+    const id = Number(req.params.id); const cur = await get('SELECT * FROM delivery_notes WHERE id=?', id);
+    if (!cur) throw new AppError('الإذن غير موجود', 404); if (cur.status === 'void') throw new AppError('الإذن ملغي');
+    const next = (await notePending(id))[0];
+    if (!next) throw new AppError('الإذن معتمد بالكامل');
+    if (!await holdsSales(req.user, next)) throw new AppError(`الخطوة التالية «${next}» — الاعتماد لصاحب الوظيفة دي فقط`, 403);
+    const nm = await val('SELECT COALESCE(e.name, u.name) FROM users u LEFT JOIN employees e ON e.id=u.employee_id WHERE u.id=?', req.user.id);
+    await run(`INSERT INTO delivery_note_approvals(note_id, job_name, user_id, user_name, at) VALUES(?,?,?,?, to_char(now() AT TIME ZONE 'Africa/Cairo','YYYY-MM-DD HH24:MI'))`, id, next, req.user.id, nm);
+    await audit(req.user, 'approve', 'delivery_note', id, { no: cur.no, step: next }); res.json({ ok: true });
+  });
+  await r.post('/delivery_note/:id/unapprove', async (req, res) => {
+    const id = Number(req.params.id);
+    const last = await get('SELECT * FROM delivery_note_approvals WHERE note_id=? ORDER BY id DESC LIMIT 1', id);
+    if (!last) throw new AppError('مفيش اعتماد لسحبه');
+    if (!await holdsSales(req.user, last.job_name)) throw new AppError(`سحب الاعتماد لصاحب وظيفة «${last.job_name}» فقط`, 403);
+    if (await get(`SELECT 1 FROM client_certificate_lines cl JOIN client_certificates c ON c.id=cl.cert_id JOIN delivery_note_lines dl ON dl.id=cl.delivery_line_id WHERE dl.note_id=? AND c.status='posted' LIMIT 1`, id)) throw new AppError('الإذن داخل في مستخلص — ألغِ المستخلص أولاً');
+    await run('DELETE FROM delivery_note_approvals WHERE id=?', last.id);
+    await audit(req.user, 'unapprove', 'delivery_note', id, { step: last.job_name }); res.json({ ok: true });
   });
   await r.post('/:type/:id/void', async (req, res) => { known(req.params.type); const id = Number(req.params.id); allow(req, req.params.type, await kindOf(req.params.type, id), 'void'); res.json(await voidDoc(req.params.type, id, req.user)); });
   await r.post('/:type/:id/restore', async (req, res) => { known(req.params.type); const id = Number(req.params.id); allow(req, req.params.type, await kindOf(req.params.type, id), 'void'); res.json(await restoreDoc(req.params.type, id, req.user)); });

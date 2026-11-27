@@ -223,6 +223,24 @@ export async function monthOverview(month) {
 // ============================================================
 //  إذن التسليم للعميل
 // ============================================================
+// ---- دورة اعتماد إذن التسليم: وظائف موديول المبيعات بترتيبها؛ الإذن بيبدأ من وظيفة منشئه وكل وظيفة بعدها خطوة اعتماد فعلي ----
+export const salesJobs = async () => (await all(`SELECT name FROM module_jobs WHERE module='sales' ORDER BY seq, id`)).map((j) => j.name);
+export async function noteStartJob(id) {
+  const n = await get('SELECT start_job, created_by FROM delivery_notes WHERE id=?', id);
+  if (!n || n.start_job) return n?.start_job || null;
+  const jobs = await salesJobs();
+  const mine = n.created_by ? (await all(`SELECT m.name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id WHERE uj.user_id=? AND m.module='sales'`, n.created_by)).map((x) => x.name) : [];
+  const start = jobs.filter((j) => mine.includes(j)).pop() || jobs[0] || null;
+  if (start) await run('UPDATE delivery_notes SET start_job=? WHERE id=?', start, id);
+  return start;
+}
+export async function notePending(id) {
+  const n = await get('SELECT legacy_ok FROM delivery_notes WHERE id=?', id);
+  if (!n || Number(n.legacy_ok)) return [];
+  const start = await noteStartJob(id); const jobs = await salesJobs();
+  const done = new Set((await all('SELECT job_name FROM delivery_note_approvals WHERE note_id=?', id)).map((a) => a.job_name));
+  return jobs.slice(Math.max(jobs.indexOf(start), 0) + 1).filter((j) => !done.has(j));
+}
 async function buildDelivery(id) {
   const h = await get('SELECT * FROM delivery_notes WHERE id=?', id);
   if (!h || h.status === 'void') return;
@@ -281,15 +299,17 @@ DOCS.delivery_note = {
     }
     await settle(pairs, { type: 'delivery', id: doc.id });
     await buildDelivery(doc.id);
+    await noteStartJob(doc.id);
   },
   async unpost(cur) {
     const used = await get(`SELECT c.no FROM client_certificate_lines cl JOIN client_certificates c ON c.id=cl.cert_id JOIN delivery_note_lines dl ON dl.id=cl.delivery_line_id
       WHERE dl.note_id=? AND c.status='posted' LIMIT 1`, cur.id);
     if (used) throw new AppError(`الإذن داخل في المستخلص ${used.no} — ألغِ المستخلص أولاً`);
+    await run('DELETE FROM delivery_note_approvals WHERE note_id=?', cur.id);   // أي تعديل/إلغاء بيسحب الاعتمادات
     await deleteJournals('delivery', cur.id);
     await removeMoves('delivery', cur.id);
   },
-  async enrich(h) { h.project_name = await val('SELECT name FROM projects WHERE id=?', h.project_id); h.client_name = await val('SELECT name FROM clients WHERE id=?', h.client_id); },
+  async enrich(h) { h.start_job = await noteStartJob(h.id); h.approvals = await all('SELECT job_name, user_name, at FROM delivery_note_approvals WHERE note_id=? ORDER BY id', h.id); h.pending = await notePending(h.id); h.project_name = await val('SELECT name FROM projects WHERE id=?', h.project_id); h.client_name = await val('SELECT name FROM clients WHERE id=?', h.client_id); },
 };
 /** رصيد المنتج التام المتاح للتسليم لبنود مشروع (بتاريخ معيّن) */
 export async function fgAvailability(projectId, date = null) {
@@ -339,6 +359,7 @@ DOCS.client_certificate = {
     for (const l of lines) {
       const dl = await get(`SELECT dl.*, n.project_id, n.status, n.no FROM delivery_note_lines dl JOIN delivery_notes n ON n.id=dl.note_id WHERE dl.id=?`, l.delivery_line_id);
       if (!dl || dl.status === 'void') throw new AppError('بند تسليم غير موجود أو إذنه ملغي');
+      { const pend = await notePending(dl.note_id); if (pend.length) throw new AppError(`إذن التسليم ${dl.no} لم يكتمل اعتماده — بانتظار: ${pend.join('، ')}`); }
       if (dl.project_id !== Number(p.project_id)) throw new AppError(`بند الإذن ${dl.no} لا يتبع المشروع`);
       if (seen.has(dl.id)) throw new AppError('بند تسليم مكرر'); seen.add(dl.id);
       const other = await get(`SELECT c.no FROM client_certificate_lines cl JOIN client_certificates c ON c.id=cl.cert_id WHERE cl.delivery_line_id=? AND c.status='posted' ${id ? 'AND c.id<>?' : ''} LIMIT 1`, ...[dl.id, ...(id ? [id] : [])]);
@@ -373,11 +394,14 @@ DOCS.client_certificate = {
 export async function certifiableLines(projectId, { from, to, certId } = {}) {
   const w = []; const p = [projectId];
   if (from) { w.push('n.date>=?'); p.push(from); } if (to) { w.push('n.date<=?'); p.push(to); }
-  return await all(`SELECT dl.id delivery_line_id, dl.item_id, i.name item_name, u.name unit_name, n.no note_no, n.date note_date, dl.qty, dl.unit_price, dl.amount
+  const rows = await all(`SELECT dl.id delivery_line_id, dl.note_id, dl.item_id, i.name item_name, u.name unit_name, n.no note_no, n.date note_date, dl.qty, dl.unit_price, dl.amount
     FROM delivery_note_lines dl JOIN delivery_notes n ON n.id=dl.note_id JOIN project_items i ON i.id=dl.item_id LEFT JOIN units u ON u.id=i.unit_id
     WHERE n.project_id=? AND n.status='posted' ${w.length ? 'AND ' + w.join(' AND ') : ''}
       AND NOT EXISTS (SELECT 1 FROM client_certificate_lines cl JOIN client_certificates c ON c.id=cl.cert_id WHERE cl.delivery_line_id=dl.id AND c.status='posted' ${certId ? 'AND c.id<>' + Number(certId) : ''})
     ORDER BY n.date, dl.id`, ...p);
+  const ok = new Map(); const out = [];
+  for (const r of rows) { if (!ok.has(r.note_id)) ok.set(r.note_id, !(await notePending(r.note_id)).length); if (ok.get(r.note_id)) out.push(r); }
+  return out;   // الأذون المكتمل اعتمادها بس
 }
 
 /** كميات الإنتاج التام: المطلوب (تعاقدي) / منتج في الشهر / منتج حتى الآن / مسلّم / مستخلص / رصيد المخزن */

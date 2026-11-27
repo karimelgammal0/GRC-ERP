@@ -619,6 +619,10 @@ CREATE TABLE IF NOT EXISTS costing_run_items (   -- قيمة كل بند تام 
   item_id INTEGER NOT NULL REFERENCES project_items(id),
   qty NUMERIC NOT NULL DEFAULT 0, meters NUMERIC NOT NULL DEFAULT 0, value NUMERIC NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS delivery_note_approvals (   -- خطوات اعتماد إذن التسليم (بترتيب وظائف موديول المبيعات)
+  id SERIAL PRIMARY KEY, note_id INTEGER NOT NULL, job_name TEXT NOT NULL, user_id INTEGER, user_name TEXT, at TEXT,
+  UNIQUE (note_id, job_name)
+);
 CREATE TABLE IF NOT EXISTS delivery_notes (      -- إذن تسليم للعميل (الإيراد + التكلفة بيتسجلوا مع كل إذن)
   id SERIAL PRIMARY KEY,
   no TEXT NOT NULL UNIQUE, date TEXT NOT NULL,
@@ -669,6 +673,8 @@ CREATE TABLE IF NOT EXISTS client_certificate_adjustments (
 );
 CREATE INDEX IF NOT EXISTS ix_ccl_dl ON client_certificate_lines(delivery_line_id);
 
+ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS start_job TEXT;                 -- وظيفة منشئ الإذن (السلسلة بتكمل من اللي بعدها)
+ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS legacy_ok INTEGER NOT NULL DEFAULT 0;   -- إذن تاريخي/قديم: معتبر معتمد
 ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS manual_no TEXT;   -- رقم إذن التسليم اليدوي (الدفتر الورقي)
 ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS vehicle_no TEXT;                      -- رقم السيارة (اختياري)
 ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS driver_name TEXT;                     -- اسم السائق (اختياري)

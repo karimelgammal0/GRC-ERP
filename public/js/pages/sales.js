@@ -1,7 +1,7 @@
 // ============================================================
 //  المرحلة 3: الإنتاج التام ← التسليم للعميل ← المستخلص
 // ============================================================
-import { h, GET, L, fmt, fq, table, filterBar, pageHead, kpi, nameOf, byId, statusBadge, printSheet, META } from '../core.js';
+import { h, GET, POST, toast, guard, confirmBox, L, fmt, fq, table, filterBar, pageHead, kpi, nameOf, byId, statusBadge, printSheet, META } from '../core.js';
 import { docScreen, dateF, notesF, total } from '../docs-ui.js';
 
 const itemOf = (id) => byId('project_items', id);
@@ -39,15 +39,24 @@ const loadAvail = async (ctx) => {
   const rows = await GET('/p3/availability', { project_id: p, date: ctx.header.date || '' });
   ctx.st.av = Object.fromEntries(rows.map((r) => [r.item_id, r])); ctx.setLines(ctx.lines);
 };
+// دورة اعتماد إذن التسليم = وظائف موديول المبيعات بترتيبها؛ الإذن بيبدأ من وظيفة منشئه وكل وظيفة بعدها خطوة اعتماد فعلي
+const dnChain = () => (META.jobs_order?.sales || []);
+const dnState = (r) => { const done = String(r.approvals || '').split('|').filter(Boolean).map((x) => { const i = x.indexOf(':'); return [x.slice(0, i), x.slice(i + 1)]; }); const d = new Set(done.map((x) => x[0])); const ch = dnChain(); const si = Math.max(ch.indexOf(r.start_job), 0); return { done, pending: ch.slice(si + 1).filter((j) => !d.has(j)) }; };
+const dnSigned = (doc) => ({ [doc.start_job || dnChain()[0]]: doc.created_by_name || '', ...(Number(doc.legacy_ok) ? {} : Object.fromEntries((doc.approvals || []).map((a) => [a.job_name, a.user_name]))) });
 export const deliveriesPage = docScreen({ perm: 'sales.deliveries', type: 'delivery_note', title: 'إذونات التسليم للعملاء', noun: 'إذن تسليم', newLabel: 'إذن تسليم جديد', nextNoKey: 'delivery_note',
   note: 'إذن التسليم بيخرّج المنتج من مخزن المنتجات التامة وبيسجّل الكمية اللي استلمها العميل بس. السعر والقيمة بيتحسبوا في «مستخلصات العملاء». تقدر تعمل أكتر من إذن لنفس المشروع في اليوم.',
   filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'client_id', l: 'العميل', t: 'fk', ref: 'clients', combo: true }],
   print: (doc) => printSheet({ title: 'إذن تسليم', no: doc.no, date: doc.date, meta: [['العميل', doc.client_name], ['المشروع', doc.project_name], ...(doc.site_id ? [['الموقع', nameOf('sites', doc.site_id)]] : []), ...(doc.manual_no ? [['رقم الإذن اليدوي', doc.manual_no]] : []), ...(doc.vehicle_no ? [['رقم السيارة', doc.vehicle_no]] : []), ...(doc.driver_name ? [['السائق', doc.driver_name]] : [])],
     cols: doc.lines.some((l) => l.notes) ? ['البند', 'الوحدة', 'الكمية', 'ملاحظات'] : ['البند', 'الوحدة', 'الكمية'],
     rows: doc.lines.map((l) => [nameOf('project_items', l.item_id), unitOfItem(l.item_id), fq(l.qty), ...(doc.lines.some((x) => x.notes) ? [l.notes || ''] : [])]),
-    totals: [['إجمالي القطع', fq(total(doc.lines, (l) => l.qty))]], notes: doc.notes, module: 'sales', by: doc.created_by_name, sign: ['أمين المخزن', 'المستلم (العميل)', 'مدير المبيعات'] }),
+    totals: [['إجمالي القطع', fq(total(doc.lines, (l) => l.qty))]], notes: doc.notes, module: 'sales', by: doc.created_by_name, actual: dnSigned(doc), sign: [] }),
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'manual_no', l: 'الإذن اليدوي' }, { k: 'date', l: 'التاريخ' }, { k: 'client_name', l: 'العميل' }, { k: 'project_name', l: 'المشروع' }, { k: 'site_name', l: 'الموقع' },
-    { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
+    { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) },
+    { k: 'approvals', l: 'الاعتماد', render: (r) => { if (r.status === 'void') return '—'; if (r.legacy_ok) return h('span.muted', 'تاريخي'); const st = dnState(r); return st.pending.length ? h('span.muted', `بانتظار ${st.pending[0]}`) : h('span', '✔ معتمد'); } }],
+  rowActions: (r, refresh) => { if (r.status === 'void' || r.legacy_ok) return []; const st = dnState(r); const mine = (j) => META.me.role === 'admin' || (META.me.my_jobs || []).includes(`sales:${j}`); const out = [];
+    if (st.pending.length && mine(st.pending[0])) out.push(h('button.btn.sm.primary', { onclick: guard(async (ev) => { ev.stopPropagation(); await POST(`/doc/delivery_note/${r.id}/approve`); toast(`تم الاعتماد (${st.pending[0]})`); refresh(); }) }, `اعتماد (${st.pending[0]})`));
+    if (st.done.length && mine(st.done[st.done.length - 1][0])) out.push(h('button.btn.sm', { onclick: guard(async (ev) => { ev.stopPropagation(); if (!(await confirmBox(`سحب اعتماد «${st.done[st.done.length - 1][0]}»؟`, 'سحب الاعتماد', true))) return; await POST(`/doc/delivery_note/${r.id}/unapprove`); toast('تم سحب الاعتماد'); refresh(); }) }, 'سحب آخر اعتماد'));
+    return out; },
   editor: {
     cols: 3, rebuildOn: ['project_id'],
     header: (ctx) => [dateF, prjF, sitesOf(ctx.header.project_id).length > 0 && { k: 'site_id', l: 'الموقع', t: 'fk', ref: 'sites', combo: true, req: 1, filter: (x) => Number(x.project_id) === Number(ctx.header.project_id) },

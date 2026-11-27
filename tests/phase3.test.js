@@ -68,6 +68,14 @@ near(d1.total_cost, 2976.44, 'تكلفة التسليم من متوسط الكا
 near(await bal('5900'), 2976.44, 'تكلفة المبيعات'); near(await bal('4100'), -3274.08, 'الإيراد'); near(await bal('1240'), 3274.08, 'العملاء'); near(await bal('1222'), 11905.77, 'مخزن التام بعد التسليم');
 await throws(() => P3.reopenRun('2026-06', prj), /./, 'إعادة فتح التشغيل بعد تسليم جزء بيرفض لو الرصيد هيبقى سالب').catch(() => {});
 const d2 = await saveDoc('delivery_note', { date: '2026-07-05', project_id: prj, lines: [{ item_id: itA, qty: 2 }, { item_id: itB, qty: 1 }] }, null, U);
+// دورة اعتماد إذن التسليم: قبل اكتمال السلسلة مينفعش يدخل مستخلص
+{
+  const { notePending } = P3;
+  ok((await notePending(d1.id)).length > 0, 'إذن التسليم بانتظار اعتماد وظائف المبيعات');
+  ok((await P3.certifiableLines(prj, {})).length === 0, 'الأذون غير المعتمدة مبتظهرش للمستخلص');
+  for (const d of [d1, d2]) for (const j of await notePending(d.id)) await run("INSERT INTO delivery_note_approvals(note_id, job_name, user_id, user_name, at) VALUES(?,?,1,'x','t')", d.id, j);
+  ok((await notePending(d1.id)).length === 0, 'بعد اعتماد كل الخطوات مفيش معلّق');
+}
 near(d2.total_cost, 2083.51, 'إذن تاني في نفس اليوم'); 
 
 console.log('▶ المستخلص');

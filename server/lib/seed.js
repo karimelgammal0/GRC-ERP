@@ -102,6 +102,8 @@ export async function ensureBaseData() {
   await run(`UPDATE sequences SET label='كشوف الرواتب' WHERE key='payroll' AND label LIKE '%مسير%'`);
   // ترحيل التسمية: «أوامر الشراء» ← «أوامر التوريد» (اسم الترقيم)
   await run(`UPDATE sequences SET label='أوامر التوريد' WHERE key='purchase_order' AND label='أوامر الشراء'`);
+  // دورة اعتماد إذن التسليم: الأذون الموجودة وقت التفعيل معتبرة معتمدة (تاريخية) — مرة واحدة
+  if (!await getSetting('dn_approvals_v1')) { await run('UPDATE delivery_notes SET legacy_ok=1'); await setSetting('dn_approvals_v1', '1'); }
   // ترحيل التسمية: «إذون الاستلام» ← «إذن استلام مواد» (اسم الترقيم)
   await run(`UPDATE sequences SET label='إذن استلام مواد' WHERE key='goods_receipt' AND label LIKE '%إذون الاستلام%'`);
   // ترحيل التسمية: «الخامات» ← «الأصناف» (اسم الترقيم)

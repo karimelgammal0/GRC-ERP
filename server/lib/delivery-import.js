@@ -102,6 +102,7 @@ export async function importDeliveries(user, { upTo = CUTOFF } = {}) {   // upTo
           date: n.date, project_id: prj.id, site_id, manual_no: n.no, vehicle_no: n.vehicle || null,
           lines: n.lines.map((l) => ({ item_id: idOf.get(norm(l.name)), qty: l.qty, notes: l.notes || null })),
         }, null, user);
+        await run(`UPDATE delivery_notes SET legacy_ok=1 WHERE project_id=? AND manual_no=? AND date=?`, prj.id, n.no, n.date);   // أذون تاريخية: معتبرة معتمدة
         report.notes_created++;
       } catch (e) {
         if (!(e instanceof AppError)) throw e;
