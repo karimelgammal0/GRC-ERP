@@ -249,7 +249,7 @@ onRecost.delivery = buildDelivery;
 
 DOCS.delivery_note = {
   table: 'delivery_notes', lines: 'delivery_note_lines', fk: 'note_id', seq: 'delivery_note',
-  cols: ['date', 'project_id', 'client_id', 'site_id', 'profit_pct', 'notes'], lineCols: ['item_id', 'qty', 'notes'], blank: (l) => !l.item_id,
+  cols: ['date', 'project_id', 'client_id', 'site_id', 'vehicle_no', 'driver_name', 'profit_pct', 'notes'], lineCols: ['item_id', 'qty', 'notes'], blank: (l) => !l.item_id,
   async validate(p, lines, id) {
     const prj = await get('SELECT * FROM projects WHERE id=?', p.project_id);
     if (!prj) throw new AppError('اختر المشروع');

@@ -654,6 +654,8 @@ CREATE TABLE IF NOT EXISTS client_certificate_adjustments (
 );
 CREATE INDEX IF NOT EXISTS ix_ccl_dl ON client_certificate_lines(delivery_line_id);
 
+ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS vehicle_no TEXT;                      -- رقم السيارة (اختياري)
+ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS driver_name TEXT;                     -- اسم السائق (اختياري)
 ALTER TABLE delivery_notes ADD COLUMN IF NOT EXISTS site_id INTEGER;                      -- موقع التسليم (لو المشروع له مواقع متكودة)
 ALTER TABLE labor_sheets ADD COLUMN IF NOT EXISTS reopened INTEGER NOT NULL DEFAULT 0;   -- كشف اليومية المعتمد بيتقفل؛ reopened=1 معناها اتفتح بصلاحية للتعديل مرة واحدة
 
