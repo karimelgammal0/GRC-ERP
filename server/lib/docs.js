@@ -13,8 +13,25 @@ export const DOCS = {};
 export const purchaseJobs = async () => (await all(`SELECT name FROM module_jobs WHERE module='purchases' ORDER BY seq, id`)).map((j) => j.name);
 // الطلب بيبدأ من وظيفة منشئه (لو منشئه صاحب وظيفة في المشتريات؛ وإلا الوظيفة الأولى)، والاعتماد المطلوب = الوظائف اللي بعدها بالترتيب
 export const requestSteps = async (startJob = null) => { const jobs = await purchaseJobs(); const i = startJob ? jobs.indexOf(startJob) : -1; return jobs.slice(Math.max(i, 0) + 1); };
+// وظيفة بداية الطلب: المحفوظة، أو (للطلبات القديمة) أبعد وظيفة مشتريات لمنشئ الطلب، وإلا الأولى — وبتتحفظ
+export async function ensureStartJob(id) {
+  const r = await get('SELECT start_job, created_by, requested_by_id FROM purchase_requests WHERE id=?', id);
+  if (!r || r.start_job) return r?.start_job || null;
+  const jobs = await purchaseJobs(); let start = null;
+  // مقدم الطلب (لو مربوط بمستخدم) ثم منشئ المستند: أول واحد له وظيفة في المشتريات تحدد نقطة البداية (أبعد وظيفة له في الترتيب)
+  const cands = [];
+  if (r.requested_by_id) for (const u of await all('SELECT id FROM users WHERE employee_id=? AND active=1', r.requested_by_id)) cands.push(u.id);
+  if (r.created_by) cands.push(r.created_by);
+  for (const uid of cands) {
+    const mine = (await all(`SELECT m.name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id WHERE uj.user_id=? AND m.module='purchases'`, uid)).map((x) => x.name);
+    start = jobs.filter((j) => mine.includes(j)).pop() || null; if (start) break;
+  }
+  start = start || jobs[0] || null;
+  if (start) await run('UPDATE purchase_requests SET start_job=? WHERE id=?', start, id);
+  return start;
+}
 export const requestPending = async (id) => {
-  const start = await val('SELECT start_job FROM purchase_requests WHERE id=?', id);
+  const start = await ensureStartJob(id);
   const done = new Set((await all('SELECT job_name FROM purchase_request_approvals WHERE request_id=?', id)).map((a) => a.job_name));
   return (await requestSteps(start)).filter((s) => !done.has(s));
 };
@@ -103,13 +120,8 @@ DOCS.purchase_request = {
   table: 'purchase_requests', lines: 'purchase_request_lines', fk: 'request_id', seq: 'purchase_request',
   cols: ['date', 'requested_by_id', 'supplier_id', 'project_id', 'needed_date', 'notes'], lineCols: ['material_id', 'qty', 'notes'],
   blank: (l) => !l.material_id,
-  async post(doc, user) {   // عند الإنشاء بس: وظيفة المنشئ = نقطة بداية السلسلة
-    if (doc.start_job) return;
-    const jobs = await purchaseJobs(); const mine = user?.id ? (await all(`SELECT m.name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id WHERE uj.user_id=? AND m.module='purchases'`, user.id)).map((x) => x.name) : [];
-    const start = jobs.filter((j) => mine.includes(j)).pop() || jobs[0] || null;
-    await run('UPDATE purchase_requests SET start_job=? WHERE id=?', start, doc.id);
-  },
-  async enrich(h) { h.approvals = await all('SELECT job_name, user_name, at FROM purchase_request_approvals WHERE request_id=? ORDER BY id', h.id); h.pending = await requestPending(h.id); },
+  async post(doc) { await ensureStartJob(doc.id); },   // عند الإنشاء: وظيفة المنشئ = نقطة بداية السلسلة
+  async enrich(h) { h.start_job = await ensureStartJob(h.id); h.approvals = await all('SELECT job_name, user_name, at FROM purchase_request_approvals WHERE request_id=? ORDER BY id', h.id); h.pending = await requestPending(h.id); },
   async validate(p, lines) { if (p.supplier_id) await must('suppliers', p.supplier_id, 'المورد'); else p.supplier_id = null; for (const l of lines) { await must('materials', l.material_id, 'الصنف'); posQty(l); } },
   async unpost(cur) {
     if (await val('SELECT COUNT(*) FROM purchase_request_lines WHERE request_id=? AND ordered_qty>0', cur.id))
