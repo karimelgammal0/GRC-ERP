@@ -12,7 +12,7 @@ import './phase3.js';   // بيسجّل DOCS.delivery_note
 import { applyOpening, openingLocked } from './opening.js';
 import { saveDoc } from './docs.js';
 
-const SEED = JSON.parse(readFileSync(new URL('../data/delivery-seed.json', import.meta.url), 'utf8'));
+const SEED = JSON.parse(readFileSync(new URL('../seeds/delivery-seed.json', import.meta.url), 'utf8'));
 export const CUTOFF = '2026-11-15';
 const norm = (s) => String(s ?? '').replace(/[ةه]/g, 'ه').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/\s+/g, ' ').trim().toLowerCase();
 // كلمات تعرّف مشروع كل شيت في قاعدة البيانات
