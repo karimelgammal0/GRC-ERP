@@ -39,26 +39,23 @@ const loadAvail = async (ctx) => {
   ctx.st.av = Object.fromEntries(rows.map((r) => [r.item_id, r])); ctx.setLines(ctx.lines);
 };
 export const deliveriesPage = docScreen({ perm: 'sales.deliveries', type: 'delivery_note', title: 'إذونات التسليم للعملاء', noun: 'إذن تسليم', newLabel: 'إذن تسليم جديد', nextNoKey: 'delivery_note',
-  note: 'التسليم بيخرّج المنتج من مخزن المنتجات التامة بمتوسط الكارت، ويسجّل تكلفة المبيعات والإيراد (التكلفة + نسبة الربح) وبيحمّل العميل. تقدر تعمل أكتر من إذن لنفس المشروع في اليوم.',
+  note: 'إذن التسليم بيخرّج المنتج من مخزن المنتجات التامة وبيسجّل الكمية اللي استلمها العميل بس. السعر والقيمة بيتحسبوا في «مستخلصات العملاء». تقدر تعمل أكتر من إذن لنفس المشروع في اليوم.',
   filters: [{ k: 'project_id', l: 'المشروع', t: 'fk', ref: 'projects', combo: true }, { k: 'client_id', l: 'العميل', t: 'fk', ref: 'clients', combo: true }],
   print: (doc) => printSheet({ title: 'إذن تسليم', no: doc.no, date: doc.date, meta: [['العميل', doc.client_name], ['المشروع', doc.project_name]],
     cols: ['البند', 'الوحدة', 'الكمية'], rows: doc.lines.map((l) => [nameOf('project_items', l.item_id), unitOfItem(l.item_id), fq(l.qty)]),
     totals: [['إجمالي القطع', fq(total(doc.lines, (l) => l.qty))]], notes: doc.notes, module: 'sales', by: doc.created_by_name, sign: ['أمين المخزن', 'المستلم (العميل)', 'مدير المبيعات'] }),
   listCols: [{ k: 'no', l: 'الرقم', render: (r) => h('b', r.no) }, { k: 'date', l: 'التاريخ' }, { k: 'client_name', l: 'العميل' }, { k: 'project_name', l: 'المشروع' },
-    { k: 'total_cost', l: 'التكلفة', num: true, fmt: (v) => fmt(v) }, { k: 'total', l: 'قيمة التسليم', num: true, fmt: (v) => fmt(v) }, { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
+    { k: 'status', l: 'الحالة', render: (r) => statusBadge(r.status) }],
   editor: {
-    cols: 3, header: [dateF, prjF, { k: 'profit_pct', l: 'نسبة الربح %', t: 'number', readonly: true }, { ...notesF }],
-    defaults: () => ({ profit_pct: pct() }),
+    cols: 3, header: [dateF, prjF, { ...notesF }],
     onHeader: (k, v, ctx) => { if (k === 'project_id') { ctx.header.client_id = byId('projects', v)?.client_id || null; ctx.setLines([{}]); } if (k === 'project_id' || k === 'date') loadAvail(ctx); },
     afterOpen: loadAvail,
     lines: { blank: () => ({}), cols: [
       { k: 'item_id', l: 'البند', t: 'fk', ref: 'project_items', req: 1, combo: true, w: '36%', filter: (x, l, ctx) => itemsOfPrj(ctx)(x) && (!ctx.st.av || ctx.st.av[x.id]), onChange: (v, l, ctx) => ctx.setLines(ctx.lines) },
       { l: 'الوحدة', calc: (l) => unitOfItem(l.item_id), w: '80px' },
       { k: 'qty', l: 'الكمية', t: 'number', w: '120px' },
-      { l: 'المتاح بالمخزن', calc: (l, ctx) => (l.item_id && ctx.st.av?.[l.item_id] ? fq(ctx.st.av[l.item_id].qty) : ''), w: '120px' },
-      { l: 'سعر القطعة', calc: (l, ctx) => (l.unit_price ? fmt(l.unit_price) : ctx.st.av?.[l.item_id] ? `≈ ${fmt(ctx.st.av[l.item_id].avg_cost * (1 + pct() / 100))}` : ''), w: '120px' },
-      { l: 'القيمة', calc: (l, ctx) => (l.amount ? fmt(l.amount) : ctx.st.av?.[l.item_id] ? `≈ ${fmt(Number(l.qty || 0) * ctx.st.av[l.item_id].avg_cost * (1 + pct() / 100))}` : ''), w: '130px' }] },
-    totals: (ctx) => (ctx.doc ? [['تكلفة المبيعات', fmt(ctx.doc.total_cost)], ['قيمة التسليم', fmt(ctx.doc.total), 'big']] : [['إجمالي القطع', fq(total(ctx.lines, (l) => l.qty))]]),
+      { l: 'المتاح بالمخزن', calc: (l, ctx) => (l.item_id && ctx.st.av?.[l.item_id] ? fq(ctx.st.av[l.item_id].qty) : ''), w: '120px' }] },
+    totals: (ctx) => [['إجمالي القطع', fq(total(ctx.lines, (l) => l.qty)), 'big']],
   },
 });
 
