@@ -10,8 +10,14 @@ import { addMove, settle, removeMoves, stockOf, stockAsOf, lastKnownCost, onReco
 
 export const DOCS = {};
 // سلسلة اعتماد طلب الشراء = وظائف موديول المشتريات بترتيبها (الوظيفة الأولى = مقدم الطلب، وكل وظيفة بعدها خطوة اعتماد فعلي)
-export const requestSteps = async () => (await all(`SELECT name FROM module_jobs WHERE module='purchases' ORDER BY seq, id`)).slice(1).map((j) => j.name);
-export const requestPending = async (id) => { const done = new Set((await all('SELECT job_name FROM purchase_request_approvals WHERE request_id=?', id)).map((a) => a.job_name)); return (await requestSteps()).filter((s) => !done.has(s)); };
+export const purchaseJobs = async () => (await all(`SELECT name FROM module_jobs WHERE module='purchases' ORDER BY seq, id`)).map((j) => j.name);
+// الطلب بيبدأ من وظيفة منشئه (لو منشئه صاحب وظيفة في المشتريات؛ وإلا الوظيفة الأولى)، والاعتماد المطلوب = الوظائف اللي بعدها بالترتيب
+export const requestSteps = async (startJob = null) => { const jobs = await purchaseJobs(); const i = startJob ? jobs.indexOf(startJob) : -1; return jobs.slice(Math.max(i, 0) + 1); };
+export const requestPending = async (id) => {
+  const start = await val('SELECT start_job FROM purchase_requests WHERE id=?', id);
+  const done = new Set((await all('SELECT job_name FROM purchase_request_approvals WHERE request_id=?', id)).map((a) => a.job_name));
+  return (await requestSteps(start)).filter((s) => !done.has(s));
+};
 const posQty = (l, label = 'الكمية') => { if (!(num(l.qty) > 0)) throw new AppError(`${label} لازم تكون أكبر من صفر`); };
 const nm = async (t, id) => await val(`SELECT name FROM ${t} WHERE id=?`, id);
 const must = async (t, id, label) => { if (!id || !await get(`SELECT 1 FROM ${t} WHERE id=?`, id)) throw new AppError(`${label} غير موجود`); };
@@ -97,6 +103,12 @@ DOCS.purchase_request = {
   table: 'purchase_requests', lines: 'purchase_request_lines', fk: 'request_id', seq: 'purchase_request',
   cols: ['date', 'requested_by_id', 'supplier_id', 'project_id', 'needed_date', 'notes'], lineCols: ['material_id', 'qty', 'notes'],
   blank: (l) => !l.material_id,
+  async post(doc, user) {   // عند الإنشاء بس: وظيفة المنشئ = نقطة بداية السلسلة
+    if (doc.start_job) return;
+    const jobs = await purchaseJobs(); const mine = user?.id ? (await all(`SELECT m.name FROM user_jobs uj JOIN module_jobs m ON m.id=uj.job_id WHERE uj.user_id=? AND m.module='purchases'`, user.id)).map((x) => x.name) : [];
+    const start = jobs.filter((j) => mine.includes(j)).pop() || jobs[0] || null;
+    await run('UPDATE purchase_requests SET start_job=? WHERE id=?', start, doc.id);
+  },
   async enrich(h) { h.approvals = await all('SELECT job_name, user_name, at FROM purchase_request_approvals WHERE request_id=? ORDER BY id', h.id); h.pending = await requestPending(h.id); },
   async validate(p, lines) { if (p.supplier_id) await must('suppliers', p.supplier_id, 'المورد'); else p.supplier_id = null; for (const l of lines) { await must('materials', l.material_id, 'الصنف'); posQty(l); } },
   async unpost(cur) {

@@ -23,4 +23,12 @@ const req2 = await saveDoc('purchase_request', { date: '2026-11-20', lines: [{ m
 await approveAll(req2.id);
 await saveDoc('purchase_request', { date: '2026-11-20', lines: [{ material_id: mat, qty: 5 }] }, req2.id, U);
 ok(Number(await val('SELECT COUNT(*) FROM purchase_request_approvals WHERE request_id=?', req2.id)) === 0, 'التعديل سحب الاعتمادات');
+// البداية من وظيفة منشئ الطلب: مستخدم بوظيفة تالتة في السلسلة → الخطوات بعدها بس
+const jobs = (await all(`SELECT id, name FROM module_jobs WHERE module='purchases' ORDER BY seq, id`));
+const u2 = await insertRow('users', { username: 'mgr', name: 'مدير', pass_hash: 'x', role: 'user', modules: '[]' }, ['username', 'name', 'pass_hash', 'role', 'modules']);
+await run('INSERT INTO user_jobs(user_id, job_id) VALUES(?,?)', u2, jobs[2].id);
+const req3 = await saveDoc('purchase_request', { date: '2026-11-22', lines: [{ material_id: mat, qty: 1 }] }, null, { id: u2, username: 'mgr' });
+ok((await val('SELECT start_job FROM purchase_requests WHERE id=?', req3.id)) === jobs[2].name, 'الطلب بدأ من وظيفة المنشئ');
+const { requestPending } = await import('../server/lib/docs.js');
+ok(JSON.stringify(await requestPending(req3.id)) === JSON.stringify(jobs.slice(3).map((j) => j.name)), 'المطلوب الخطوات بعد وظيفة المنشئ بس');
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

@@ -31,10 +31,10 @@ const sup = (r) => r.supplier_name;
 
 // ---------------- طلبات الشراء ----------------
 const lineRows = (doc, withPrice) => (doc.lines || []).map((l) => [nameOf('materials', l.material_id), unitOf(l.material_id), fq(l.qty), ...(withPrice ? [fmt(l.unit_price), fmt(l.qty * l.unit_price)] : []), l.notes || '']);
-// سلسلة اعتماد طلب الشراء = وظائف المشتريات بترتيبها؛ الأولى = مقدم الطلب، وكل وظيفة بعدها خطوة اعتماد فعلي
+// سلسلة اعتماد طلب الشراء = وظائف المشتريات بترتيبها؛ الطلب بيبدأ من وظيفة منشئه (أو الأولى) وكل وظيفة بعدها خطوة اعتماد فعلي
 const reqChain = () => (META.jobs_order?.purchases || []);
-const reqState = (r) => { const done = String(r.approvals || '').split('|').filter(Boolean).map((x) => { const i = x.indexOf(':'); return [x.slice(0, i), x.slice(i + 1)]; }); const d = new Set(done.map((x) => x[0])); return { done, pending: reqChain().slice(1).filter((j) => !d.has(j)) }; };
-const reqSigned = (doc) => ({ [reqChain()[0]]: nameOf('employees', doc.requested_by_id) || doc.requested_by || doc.created_by_name || '', ...Object.fromEntries((doc.approvals || []).map((a) => [a.job_name, a.user_name])) });
+const reqState = (r) => { const done = String(r.approvals || '').split('|').filter(Boolean).map((x) => { const i = x.indexOf(':'); return [x.slice(0, i), x.slice(i + 1)]; }); const d = new Set(done.map((x) => x[0])); const ch = reqChain(); const si = Math.max(ch.indexOf(r.start_job), 0); return { done, pending: ch.slice(si + 1).filter((j) => !d.has(j)) }; };
+const reqSigned = (doc) => ({ [doc.start_job || reqChain()[0]]: nameOf('employees', doc.requested_by_id) || doc.requested_by || doc.created_by_name || '', ...Object.fromEntries((doc.approvals || []).map((a) => [a.job_name, a.user_name])) });
 export const requestsPage = docScreen({ perm: 'purchases.requests',
   print: (doc) => printSheet({ title: 'طلب شراء', no: doc.no, date: doc.date,
     meta: [['مقدم الطلب', nameOf('employees', doc.requested_by_id) || doc.requested_by], ['المورد', nameOf('suppliers', doc.supplier_id)], ['المشروع', nameOf('projects', doc.project_id)], ['مطلوب في', doc.needed_date]],
