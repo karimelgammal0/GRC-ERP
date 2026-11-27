@@ -79,6 +79,17 @@ export async function ensureBaseData() {
       for (const name of names) await run('INSERT INTO module_jobs(module,name) VALUES(?,?) ON CONFLICT DO NOTHING', module, name);
     await setSetting('jobs_seeded', '1');
   }
+  // وظائف التوقيع المستخدمة فعلاً في مطبوعات كل موديول (من الكود) — بتتضاف الناقص مرة واحدة؛ لو اتمسحت بعدها مبترجعش
+  if (!await getSetting('jobs_seeded_v2')) {
+    for (const [module, names] of [
+      ['hr', ['معدّ الكشف', 'مسؤول الموارد البشرية', 'المدير المالي', 'المدير العام']],
+      ['purchases', ['مقدم الطلب', 'مدير المشتريات', 'أمين المخزن', 'المحاسب', 'الاعتماد']],
+      ['inventory', ['أمين المخزن', 'المستلم', 'الاعتماد']],
+      ['production', ['مسؤول الإنتاج', 'مراقب الجودة', 'مدير المصنع']],
+      ['sales', ['أمين المخزن', 'مدير المبيعات', 'المحاسب', 'المراجع']]])
+      for (const name of names) await run('INSERT INTO module_jobs(module,name) VALUES(?,?) ON CONFLICT DO NOTHING', module, name);
+    await setSetting('jobs_seeded_v2', '1');
+  }
   if (!Number(await val('SELECT COUNT(*) FROM payment_types'))) {
     for (const [name, link] of [['موردين', 'supplier'], ['مصروفات', 'expense']]) await run('INSERT INTO payment_types(code,name,link) VALUES(?,?,?)', await nextNo('payment_type'), name, link);
   }
